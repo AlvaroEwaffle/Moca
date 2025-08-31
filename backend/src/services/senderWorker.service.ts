@@ -2,104 +2,87 @@ import OutboundQueue from '../models/outboundQueue.model';
 import Message from '../models/message.model';
 import Conversation from '../models/conversation.model';
 import InstagramAccount from '../models/instagramAccount.model';
-import InstagramApiService from './instagramApi.service';
 import { IOutboundQueue } from '../models/outboundQueue.model';
+import instagramService from './instagramApi.service';
 
-// Rate limiting configuration
-interface RateLimitConfig {
-  globalRateLimit: number; // Messages per second globally
-  userRateLimit: number; // Messages per second per user
-  processingInterval: number; // How often to check queue (in milliseconds)
-  batchSize: number; // How many messages to process per batch
-}
-
-export class SenderWorkerService {
-  private config: RateLimitConfig;
+class SenderWorkerService {
   private isRunning: boolean = false;
-  private processingInterval: NodeJS.Timeout | null = null;
+  private intervalId: NodeJS.Timeout | null = null;
 
   constructor() {
-    this.config = {
-      globalRateLimit: parseInt(process.env.GLOBAL_RATE_LIMIT || '3'),
-      userRateLimit: parseInt(process.env.USER_RATE_LIMIT || '1'),
-      processingInterval: parseInt(process.env.SENDER_INTERVAL_MS || '250'), // 250ms
-      batchSize: parseInt(process.env.SENDER_BATCH_SIZE || '5')
-    };
+    console.log('🔧 SenderWorkerService: Initializing service');
   }
 
   /**
-   * Start the sender worker
+   * Start the sender worker service
    */
   async start(): Promise<void> {
-    try {
-      if (this.isRunning) {
-        console.log('⚠️ Sender worker is already running');
-        return;
-      }
-
-      console.log('🚀 Starting sender worker service');
-      this.isRunning = true;
-
-      // Start processing loop
-      this.processingInterval = setInterval(async () => {
-        if (this.isRunning) {
-          await this.processOutboundQueue();
-        }
-      }, this.config.processingInterval);
-
-      console.log('✅ Sender worker started successfully');
-    } catch (error) {
-      console.error('❌ Error starting sender worker:', error);
-      this.isRunning = false;
-      throw error;
+    console.log('🚀 SenderWorkerService: Starting sender worker service');
+    
+    if (this.isRunning) {
+      console.log('⚠️ SenderWorkerService: Service is already running');
+      return;
     }
+
+    this.isRunning = true;
+    console.log('✅ SenderWorkerService: Service started successfully');
+
+    // Process immediately on start
+    await this.process();
+
+    // Set up interval for periodic processing
+    this.intervalId = setInterval(async () => {
+      console.log('⏰ SenderWorkerService: Periodic processing triggered');
+      await this.process();
+    }, 2000); // Process every 2 seconds
+
+    console.log('⏰ SenderWorkerService: Periodic processing scheduled every 2 seconds');
   }
 
   /**
-   * Stop the sender worker
+   * Stop the sender worker service
    */
   async stop(): Promise<void> {
-    try {
-      console.log('🛑 Stopping sender worker service');
-      this.isRunning = false;
-
-      if (this.processingInterval) {
-        clearInterval(this.processingInterval);
-        this.processingInterval = null;
-      }
-
-      console.log('✅ Sender worker stopped successfully');
-    } catch (error) {
-      console.error('❌ Error stopping sender worker:', error);
-      throw error;
+    console.log('🛑 SenderWorkerService: Stopping sender worker service');
+    
+    if (!this.isRunning) {
+      console.log('⚠️ SenderWorkerService: Service is not running');
+      return;
     }
+
+    this.isRunning = false;
+    
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+      console.log('⏰ SenderWorkerService: Periodic processing stopped');
+    }
+
+    console.log('✅ SenderWorkerService: Service stopped successfully');
   }
 
   /**
-   * Process the outbound queue
+   * Main processing function
    */
-  async processOutboundQueue(): Promise<void> {
+  async process(): Promise<void> {
+    console.log('📤 SenderWorkerService: Starting outbound queue processing');
+    
     try {
-      // Get items ready to process
-      const queueItems = await OutboundQueue.findReadyToProcess(this.config.batchSize);
-      
-      if (queueItems.length === 0) {
-        return; // No items to process
-      }
-
-      console.log(`📤 Processing ${queueItems.length} outbound queue items`);
+      // Get queue items ready to process
+      const queueItems = await OutboundQueue.findReadyToProcess();
+      console.log(`📤 SenderWorkerService: Processing ${queueItems.length} outbound queue items`);
 
       for (const queueItem of queueItems) {
-        try {
-          await this.processQueueItem(queueItem);
-        } catch (error) {
-          console.error(`❌ Error processing queue item ${queueItem.id}:`, error);
-          await this.handleProcessingError(queueItem, error);
-        }
+        console.log(`📤 SenderWorkerService: Processing queue item: ${queueItem.id}`);
+        await this.processQueueItem(queueItem);
       }
 
+      // Handle retries and cleanup
+      await this.handleRetries();
+      await this.cleanupExpiredItems();
+
     } catch (error) {
-      console.error('❌ Error processing outbound queue:', error);
+      console.error('❌ SenderWorkerService: Error in outbound queue processing:', error);
     }
   }
 
@@ -107,343 +90,332 @@ export class SenderWorkerService {
    * Process a single queue item
    */
   private async processQueueItem(queueItem: IOutboundQueue): Promise<void> {
+    console.log(`📤 SenderWorkerService: Processing queue item: ${queueItem.id}`);
+    
     try {
-      console.log(`📤 Processing queue item: ${queueItem.id}`);
-
-      // Check rate limits before processing
+      // Check rate limits
       const canSend = await this.checkRateLimits(queueItem);
       if (!canSend.canSend) {
-        console.log(`⏰ Rate limit hit for queue item ${queueItem.id}: ${canSend.reason}`);
-        if (canSend.retryAfter) {
-          queueItem.metadata.nextAttempt = canSend.retryAfter;
-          await queueItem.save();
-        }
+        console.log(`⏰ SenderWorkerService: Rate limit hit for queue item ${queueItem.id}: ${canSend.reason}`);
         return;
       }
 
-      // Mark as processing
-      queueItem.status = 'processing';
-      queueItem.metadata.lastAttempt = new Date();
-      await queueItem.save();
-
-      // Get the message to send
-      const message = await Message.findById(queueItem.messageId);
-      if (!message) {
-        throw new Error(`Message not found: ${queueItem.messageId}`);
+      // Initialize Instagram service
+      const initialized = await instagramService.initialize(queueItem.accountId);
+      if (!initialized) {
+        console.log(`❌ SenderWorkerService: Failed to initialize Instagram service for queue item ${queueItem.id}`);
+        await this.handleError(queueItem, 'Instagram service initialization failed');
+        return;
       }
 
-      // Get Instagram account
-      const account = await InstagramAccount.findById(queueItem.accountId);
-      if (!account) {
-        throw new Error(`Instagram account not found: ${queueItem.accountId}`);
+      // Get contact information
+      const contact = await this.getContact(queueItem.contactId);
+      if (!contact) {
+        console.log(`❌ SenderWorkerService: Contact not found for queue item ${queueItem.id}`);
+        await this.handleError(queueItem, 'Contact not found');
+        return;
       }
 
-      // Initialize Instagram API service
-      const instagramService = new InstagramApiService(account.accountId);
+      console.log(`📤 SenderWorkerService: Sending message to PSID: ${contact.psid}`);
 
-      // Send message via Instagram API
-      const startTime = Date.now();
-      const response = await instagramService.sendMessage(
-        queueItem.contactId, // PSID
-        queueItem.content.text,
-        {
-          quickReplies: queueItem.content.quickReplies,
-          buttons: queueItem.content.buttons as any
-        }
-      );
-      const processingTime = Date.now() - startTime;
+      // Send the message
+      let response;
+      try {
+        // For now, just send text messages
+        response = await instagramService.sendTextMessage(contact.psid, queueItem.content.text);
 
-      // Update queue item status
-      queueItem.status = 'sent';
-      queueItem.metadata.totalProcessingTime += processingTime;
-      await queueItem.save();
+        console.log(`✅ SenderWorkerService: Message sent successfully: ${response.message_id}`);
+        
+        // Update message status
+        await this.updateMessageStatus(queueItem.messageId, 'sent', response.message_id);
+        
+        // Update queue item status
+        await this.updateQueueItemStatus(queueItem.id, 'sent');
+        
+        // Update conversation metadata
+        await this.updateConversationMetadata(queueItem.conversationId);
 
-      // Update message status
-      message.status = 'sent';
-      message.metadata.instagramResponse = {
-        messageId: response.message_id,
-        status: 'sent',
-        timestamp: new Date()
-      };
-      await message.save();
-
-      // Update conversation metadata
-      await this.updateConversationMetadata(queueItem.conversationId, message.id);
-
-      console.log(`✅ Message sent successfully: ${response.message_id}`);
+      } catch (error) {
+        console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error);
+        await this.handleError(queueItem, error instanceof Error ? error.message : 'Unknown error');
+      }
 
     } catch (error) {
-      console.error(`❌ Error processing queue item ${queueItem.id}:`, error);
-      throw error;
+      console.error(`❌ SenderWorkerService: Error processing queue item ${queueItem.id}:`, error);
+      await this.handleError(queueItem, error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
   /**
    * Check rate limits before sending
    */
-  private async checkRateLimits(queueItem: IOutboundQueue): Promise<{
-    canSend: boolean;
-    reason?: string;
-    retryAfter?: Date;
-  }> {
+  private async checkRateLimits(queueItem: IOutboundQueue): Promise<{ canSend: boolean; reason?: string }> {
+    console.log(`⏰ SenderWorkerService: Checking rate limits for queue item: ${queueItem.id}`);
+    
     try {
+      // Get account rate limits
+      const account = await InstagramAccount.findOne({ accountId: queueItem.accountId });
+      if (!account) {
+        console.log(`❌ SenderWorkerService: Account not found for rate limit check: ${queueItem.accountId}`);
+        return { canSend: false, reason: 'Account not found' };
+      }
+
+      // Check global rate limit (simplified implementation)
       const now = new Date();
       const oneSecondAgo = new Date(now.getTime() - 1000);
-
-      // Check global rate limit
-      if (this.config.globalRateLimit > 0) {
-        const globalMessagesInLastSecond = await OutboundQueue.countDocuments({
+      
+      // This is a simplified check - in production you'd want more sophisticated rate limiting
+      if (account.rateLimits.messagesPerSecond > 0) {
+        // Check if we've sent a message in the last second
+        const recentMessages = await OutboundQueue.countDocuments({
+          accountId: queueItem.accountId,
           status: 'sent',
           'metadata.lastAttempt': { $gte: oneSecondAgo }
         });
 
-        if (globalMessagesInLastSecond >= this.config.globalRateLimit) {
-          return {
-            canSend: false,
-            reason: 'Global rate limit exceeded',
-            retryAfter: new Date(now.getTime() + 1000)
-          };
+        if (recentMessages >= account.rateLimits.messagesPerSecond) {
+          console.log(`⏰ SenderWorkerService: Global rate limit exceeded for account: ${queueItem.accountId}`);
+          return { canSend: false, reason: 'Global rate limit exceeded' };
         }
       }
 
-      // Check user rate limit
-      if (this.config.userRateLimit > 0) {
-        const userMessagesInLastSecond = await OutboundQueue.countDocuments({
+      // Check user cooldown
+      if (account.rateLimits.userCooldown > 0) {
+        const cooldownEnd = new Date(now.getTime() - (account.rateLimits.userCooldown * 1000));
+        const recentUserMessages = await OutboundQueue.countDocuments({
           contactId: queueItem.contactId,
           status: 'sent',
-          'metadata.lastAttempt': { $gte: oneSecondAgo }
+          'metadata.lastAttempt': { $gte: cooldownEnd }
         });
 
-        if (userMessagesInLastSecond >= this.config.userRateLimit) {
-          return {
-            canSend: false,
-            reason: 'User rate limit exceeded',
-            retryAfter: new Date(now.getTime() + 1000)
-          };
+        if (recentUserMessages > 0) {
+          console.log(`⏰ SenderWorkerService: User cooldown active for contact: ${queueItem.contactId}`);
+          return { canSend: false, reason: 'User cooldown active' };
         }
       }
 
+      console.log(`✅ SenderWorkerService: Rate limits check passed for queue item: ${queueItem.id}`);
       return { canSend: true };
+
     } catch (error) {
-      console.error('❌ Error checking rate limits:', error);
-      return { canSend: false, reason: 'Error checking rate limits' };
+      console.error(`❌ SenderWorkerService: Error checking rate limits:`, error);
+      return { canSend: false, reason: 'Rate limit check error' };
     }
   }
 
   /**
-   * Handle processing errors
+   * Get contact information
    */
-  private async handleProcessingError(queueItem: IOutboundQueue, error: any): Promise<void> {
+  private async getContact(contactId: string): Promise<any> {
+    console.log(`👤 SenderWorkerService: Getting contact information: ${contactId}`);
+    
     try {
-      console.log(`🔄 Handling error for queue item: ${queueItem.id}`);
-
-      // Increment attempt count
-      queueItem.metadata.attempts += 1;
-      queueItem.metadata.lastAttempt = new Date();
+      const Contact = (await import('../models/contact.model')).default;
+      const contact = await Contact.findById(contactId);
       
-      // Calculate next attempt time
-      const delayMs = queueItem.retryStrategy === 'immediate' ? 0 : 
-                     queueItem.retryStrategy === 'fixed' ? queueItem.metadata.baseDelayMs :
-                     queueItem.retryStrategy === 'custom' && queueItem.customRetryDelays ? 
-                       queueItem.customRetryDelays[Math.min(queueItem.metadata.attempts, queueItem.customRetryDelays.length - 1)] || queueItem.metadata.baseDelayMs :
-                     queueItem.metadata.baseDelayMs * Math.pow(queueItem.metadata.backoffMultiplier, queueItem.metadata.attempts);
-      queueItem.metadata.nextAttempt = new Date(Date.now() + delayMs);
-
-      // Determine if we should retry
-      if (queueItem.metadata.attempts < queueItem.metadata.maxAttempts) {
-        // Add error to history
-        queueItem.metadata.errorHistory.push({
-          attempt: queueItem.metadata.attempts,
-          timestamp: new Date(),
-          errorCode: error.code || 'UNKNOWN',
-          errorMessage: error.message || 'Unknown error',
-          retryAfter: queueItem.metadata.nextAttempt
-        });
-
-        // Set status to failed (will be retried)
-        queueItem.status = 'failed';
-        await queueItem.save();
-
-        console.log(`⏰ Queue item ${queueItem.id} marked for retry at ${queueItem.metadata.nextAttempt}`);
-      } else {
-        // Max attempts reached, mark as permanently failed
-        queueItem.status = 'failed';
-        queueItem.notes.push(`Max retry attempts (${queueItem.metadata.maxAttempts}) reached`);
-        await queueItem.save();
-
-        // Update message status
-        await Message.findByIdAndUpdate(queueItem.messageId, {
-          status: 'failed',
-          'metadata.errorDetails': {
-            code: error.code || 'UNKNOWN',
-            message: error.message || 'Max retry attempts reached'
-          }
-        });
-
-        console.log(`❌ Queue item ${queueItem.id} permanently failed after ${queueItem.metadata.maxAttempts} attempts`);
+      if (!contact) {
+        console.log(`❌ SenderWorkerService: Contact not found: ${contactId}`);
+        return null;
       }
 
-    } catch (saveError) {
-      console.error('❌ Error saving error state for queue item:', saveError);
+      console.log(`✅ SenderWorkerService: Contact found: ${contact.psid}`);
+      return contact;
+    } catch (error) {
+      console.error(`❌ SenderWorkerService: Error getting contact:`, error);
+      return null;
     }
   }
 
   /**
-   * Update conversation metadata after successful send
+   * Handle errors for queue items
    */
-  private async updateConversationMetadata(conversationId: string, messageId: string): Promise<void> {
+  private async handleError(queueItem: IOutboundQueue, errorMessage: string): Promise<void> {
+    console.log(`🔄 SenderWorkerService: Handling error for queue item: ${queueItem.id}`);
+    
     try {
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation) return;
+      // Increment attempt count
+      const attempts = queueItem.metadata.attempts + 1;
+      const maxAttempts = queueItem.metadata.maxAttempts || 3;
+      
+      console.log(`🔄 SenderWorkerService: Attempt ${attempts}/${maxAttempts} for queue item: ${queueItem.id}`);
 
-      // Update bot message timestamp
-      conversation.timestamps.lastBotMessage = new Date();
-      conversation.timestamps.lastActivity = new Date();
+      if (attempts >= maxAttempts) {
+        // Mark as permanently failed
+        await this.updateQueueItemStatus(queueItem.id, 'failed');
+        console.log(`❌ SenderWorkerService: Queue item ${queueItem.id} permanently failed after ${maxAttempts} attempts`);
+      } else {
+        // Schedule retry
+        const retryDelay = this.calculateRetryDelay(attempts, 'exponential');
+        const nextAttempt = new Date(Date.now() + retryDelay);
+        
+        await OutboundQueue.findByIdAndUpdate(queueItem.id, {
+          'metadata.attempts': attempts,
+          'metadata.lastAttempt': new Date(),
+          'metadata.nextAttempt': nextAttempt,
+          'metadata.errorHistory': [
+            ...(queueItem.metadata.errorHistory || []),
+            {
+              timestamp: new Date(),
+              error: errorMessage,
+              attempt: attempts
+            }
+          ]
+        });
 
-      // Update metrics
-      conversation.metrics.totalMessages += 1;
-      conversation.metrics.botMessages += 1;
-      conversation.metrics.responseRate = Math.round(
-        (conversation.metrics.botMessages / conversation.metrics.userMessages) * 100
-      );
-
-      // Update message count
-      conversation.messageCount += 1;
-
-      await conversation.save();
-      console.log(`✅ Updated conversation metadata: ${conversationId}`);
+        console.log(`⏰ SenderWorkerService: Queue item ${queueItem.id} marked for retry at ${nextAttempt.toISOString()}`);
+      }
 
     } catch (error) {
-      console.error('❌ Error updating conversation metadata:', error);
+      console.error(`❌ SenderWorkerService: Error handling error for queue item ${queueItem.id}:`, error);
     }
   }
 
   /**
-   * Get queue statistics
+   * Calculate retry delay based on strategy
    */
-  async getQueueStats(): Promise<{
-    total: number;
-    pending: number;
-    processing: number;
-    sent: number;
-    failed: number;
-    cancelled: number;
-  }> {
+  private calculateRetryDelay(attempt: number, strategy: string = 'exponential'): number {
+    console.log(`⏰ SenderWorkerService: Calculating retry delay for attempt ${attempt}, strategy: ${strategy}`);
+    
+    let delay: number;
+    
+    switch (strategy) {
+      case 'exponential':
+        delay = Math.min(1000 * Math.pow(2, attempt - 1), 30000); // Max 30 seconds
+        break;
+      case 'linear':
+        delay = 5000 * attempt; // 5s, 10s, 15s...
+        break;
+      case 'fixed':
+        delay = 10000; // 10 seconds
+        break;
+      default:
+        delay = 5000; // Default 5 seconds
+    }
+
+    console.log(`⏰ SenderWorkerService: Calculated retry delay: ${delay}ms`);
+    return delay;
+  }
+
+  /**
+   * Update message status
+   */
+  private async updateMessageStatus(messageId: string, status: string, externalId?: string): Promise<void> {
+    console.log(`📝 SenderWorkerService: Updating message status: ${messageId} -> ${status}`);
+    
     try {
-      const stats = await OutboundQueue.aggregate([
-        {
-          $group: {
-            _id: '$status',
-            count: { $sum: 1 }
-          }
-        }
-      ]);
+      const updateData: any = { status };
+      if (externalId) {
+        updateData['metadata.externalId'] = externalId;
+        updateData['metadata.deliveryConfirmed'] = true;
+      }
 
-      const result = {
-        total: 0,
-        pending: 0,
-        processing: 0,
-        sent: 0,
-        failed: 0,
-        cancelled: 0
-      };
+      await Message.findByIdAndUpdate(messageId, updateData);
+      console.log(`✅ SenderWorkerService: Message status updated: ${messageId}`);
+    } catch (error) {
+      console.error(`❌ SenderWorkerService: Error updating message status:`, error);
+    }
+  }
 
-      stats.forEach(stat => {
-        result[stat._id as keyof typeof result] = stat.count;
-        result.total += stat.count;
+  /**
+   * Update queue item status
+   */
+  private async updateQueueItemStatus(queueItemId: string, status: string): Promise<void> {
+    console.log(`📝 SenderWorkerService: Updating queue item status: ${queueItemId} -> ${status}`);
+    
+    try {
+      await OutboundQueue.findByIdAndUpdate(queueItemId, {
+        status,
+        'metadata.lastAttempt': new Date()
       });
-
-      return result;
+      console.log(`✅ SenderWorkerService: Queue item status updated: ${queueItemId}`);
     } catch (error) {
-      console.error('❌ Error getting queue stats:', error);
-      return {
-        total: 0,
-        pending: 0,
-        processing: 0,
-        sent: 0,
-        failed: 0,
-        cancelled: 0
-      };
+      console.error(`❌ SenderWorkerService: Error updating queue item status:`, error);
     }
   }
 
   /**
-   * Retry failed messages
+   * Update conversation metadata
    */
-  async retryFailedMessages(): Promise<number> {
+  private async updateConversationMetadata(conversationId: string): Promise<void> {
+    console.log(`📝 SenderWorkerService: Updating conversation metadata: ${conversationId}`);
+    
     try {
-      console.log('🔄 Starting retry of failed messages');
+      await Conversation.findByIdAndUpdate(conversationId, {
+        'timestamps.lastActivity': new Date(),
+        'metrics.responseCount': { $inc: 1 }
+      });
+      console.log(`✅ SenderWorkerService: Updated conversation metadata: ${conversationId}`);
+    } catch (error) {
+      console.error(`❌ SenderWorkerService: Error updating conversation metadata:`, error);
+    }
+  }
 
+  /**
+   * Handle retries of failed messages
+   */
+  private async handleRetries(): Promise<void> {
+    console.log('🔄 SenderWorkerService: Starting retry of failed messages');
+    
+    try {
       const failedItems = await OutboundQueue.findNeedingRetry();
-      console.log(`📋 Found ${failedItems.length} failed items to retry`);
+      console.log(`📋 SenderWorkerService: Found ${failedItems.length} failed items to retry`);
 
       let retryCount = 0;
       for (const item of failedItems) {
-        try {
+        if (item.metadata.nextAttempt && item.metadata.nextAttempt <= new Date()) {
+          console.log(`🔄 SenderWorkerService: Retrying failed item: ${item.id}`);
+          
           // Reset status to pending for retry
-          item.status = 'pending';
-          await item.save();
+          await OutboundQueue.findByIdAndUpdate(item.id, {
+            status: 'pending',
+            'metadata.nextAttempt': null
+          });
+          
           retryCount++;
-        } catch (error) {
-          console.error(`❌ Error resetting failed item ${item.id}:`, error);
         }
       }
 
-      console.log(`✅ Reset ${retryCount} failed items for retry`);
-      return retryCount;
+      if (retryCount > 0) {
+        console.log(`✅ SenderWorkerService: Reset ${retryCount} failed items for retry`);
+      }
 
     } catch (error) {
-      console.error('❌ Error retrying failed messages:', error);
-      return 0;
+      console.error('❌ SenderWorkerService: Error handling retries:', error);
     }
   }
 
   /**
    * Clean up expired queue items
    */
-  async cleanupExpiredItems(): Promise<number> {
+  private async cleanupExpiredItems(): Promise<void> {
+    console.log('🧹 SenderWorkerService: Starting cleanup of expired queue items');
+    
     try {
-      console.log('🧹 Starting cleanup of expired queue items');
-
       const expiredItems = await OutboundQueue.findExpired();
-      console.log(`📋 Found ${expiredItems.length} expired items to clean up`);
+      console.log(`📋 SenderWorkerService: Found ${expiredItems.length} expired items to clean up`);
 
       let cleanupCount = 0;
       for (const item of expiredItems) {
-        try {
-          // Mark as cancelled
-          item.status = 'cancelled';
-          item.notes.push(`Expired at ${new Date().toISOString()}`);
-          await item.save();
-          cleanupCount++;
-        } catch (error) {
-          console.error(`❌ Error cleaning up expired item ${item.id}:`, error);
-        }
+        console.log(`🧹 SenderWorkerService: Cleaning up expired item: ${item.id}`);
+        
+        // Mark as cancelled
+        await OutboundQueue.findByIdAndUpdate(item.id, {
+          status: 'cancelled',
+          'metadata.cancelledAt': new Date(),
+          'metadata.cancelReason': 'Expired'
+        });
+        
+        cleanupCount++;
       }
 
-      console.log(`✅ Cleaned up ${cleanupCount} expired items`);
-      return cleanupCount;
+      if (cleanupCount > 0) {
+        console.log(`✅ SenderWorkerService: Cleaned up ${cleanupCount} expired items`);
+      }
 
     } catch (error) {
-      console.error('❌ Error cleaning up expired items:', error);
-      return 0;
+      console.error('❌ SenderWorkerService: Error cleaning up expired items:', error);
     }
-  }
-
-  /**
-   * Get worker status
-   */
-  getStatus(): {
-    isRunning: boolean;
-    config: RateLimitConfig;
-    uptime: number;
-  } {
-    return {
-      isRunning: this.isRunning,
-      config: this.config,
-      uptime: this.isRunning ? Date.now() - (this.processingInterval ? Date.now() : 0) : 0
-    };
   }
 }
 
-export default SenderWorkerService;
+export default new SenderWorkerService();

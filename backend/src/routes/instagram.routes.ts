@@ -1,6 +1,6 @@
 import express from 'express';
 import InstagramWebhookService from '../services/instagramWebhook.service';
-import InstagramApiService from '../services/instagramApi.service';
+import instagramApiService from '../services/instagramApi.service';
 import Contact from '../models/contact.model';
 import Conversation from '../models/conversation.model';
 import Message from '../models/message.model';
@@ -395,8 +395,7 @@ router.get('/test-connection', async (req, res) => {
       });
     }
 
-    const instagramService = new InstagramApiService(account.accountId);
-    const isValid = await instagramService.validateToken();
+    const isValid = await instagramApiService.testConnection();
 
     res.json({
       success: true,

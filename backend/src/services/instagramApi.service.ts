@@ -32,400 +32,304 @@ interface InstagramAccountInfo {
   media_count?: number;
 }
 
-export class InstagramApiService {
-  private baseUrl = 'https://graph.facebook.com/v18.0';
+class InstagramApiService {
   private accessToken: string = '';
-  private accountId: string;
 
-  constructor(accountId: string) {
-    this.accountId = accountId;
+  constructor() {
+    console.log('🔧 InstagramApiService: Initializing service');
   }
 
   /**
    * Initialize the service with account credentials
    */
-  async initialize(): Promise<void> {
+  async initialize(accountId: string): Promise<boolean> {
+    console.log(`🔧 InstagramApiService: Initializing for account: ${accountId}`);
+    
     try {
-      const account = await InstagramAccount.findOne({ accountId: this.accountId, isActive: true });
+      const account = await InstagramAccount.findOne({ accountId, isActive: true });
+      
       if (!account) {
-        throw new Error(`Instagram account not found or inactive: ${this.accountId}`);
+        console.log(`❌ InstagramApiService: No active account found for ID: ${accountId}`);
+        return false;
       }
 
+      console.log(`✅ InstagramApiService: Found account: ${account.accountName}`);
+
       if (account.tokenExpiry <= new Date()) {
-        throw new Error(`Instagram access token expired for account: ${this.accountId}`);
+        console.log(`⚠️ InstagramApiService: Token expired for account: ${account.accountName}`);
+        return false;
       }
 
       this.accessToken = account.accessToken;
+      console.log(`✅ InstagramApiService: Token valid for account: ${account.accountName}`);
+      return true;
     } catch (error) {
-      console.error('Failed to initialize Instagram API service:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Send a message to a user via Instagram DM
-   */
-  async sendMessage(psid: string, message: string, options?: {
-    quickReplies?: Array<{ text: string; payload?: string }>;
-    buttons?: Array<{
-      type: 'web_url' | 'postback' | 'phone_number';
-      title: string;
-      url?: string;
-      payload?: string;
-      phoneNumber?: string;
-    }>;
-  }): Promise<InstagramMessageResponse> {
-    try {
-      await this.initialize();
-
-      const messageData: any = {
-        recipient: { id: psid },
-        message: { text: message }
-      };
-
-      // Add quick replies if provided
-      if (options?.quickReplies && options.quickReplies.length > 0) {
-        messageData.message.quick_replies = options.quickReplies;
-      }
-
-      // Add buttons if provided
-      if (options?.buttons && options.buttons.length > 0) {
-        messageData.message.attachment = {
-          type: 'template',
-          payload: {
-            template_type: 'button',
-            text: message,
-            buttons: options.buttons
-          }
-        };
-        // Remove text when using buttons template
-        delete messageData.message.text;
-      }
-
-      const response: AxiosResponse<InstagramMessageResponse> = await axios.post(
-        `${this.baseUrl}/me/messages`,
-        messageData,
-        {
-          params: {
-            access_token: this.accessToken
-          },
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      // Update account metadata
-      await this.updateAccountMetadata('messageSent');
-
-      return response.data;
-    } catch (error: any) {
-      await this.handleApiError(error, 'sendMessage');
-      throw error;
-    }
-  }
-
-  /**
-   * Send a message with attachments (image, video, etc.)
-   */
-  async sendMessageWithAttachment(psid: string, attachment: {
-    type: 'image' | 'video' | 'audio' | 'file';
-    url: string;
-    caption?: string;
-  }): Promise<InstagramMessageResponse> {
-    try {
-      await this.initialize();
-
-      const messageData = {
-        recipient: { id: psid },
-        message: {
-          attachment: {
-            type: attachment.type,
-            payload: {
-              url: attachment.url
-            }
-          }
-        }
-      };
-
-              // Add caption if provided
-        if (attachment.caption) {
-          (messageData.message.attachment.payload as any).caption = attachment.caption;
-        }
-
-      const response: AxiosResponse<InstagramMessageResponse> = await axios.post(
-        `${this.baseUrl}/me/messages`,
-        messageData,
-        {
-          params: {
-            access_token: this.accessToken
-          },
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      // Update account metadata
-      await this.updateAccountMetadata('messageSent');
-
-      return response.data;
-    } catch (error: any) {
-      await this.handleApiError(error, 'sendMessageWithAttachment');
-      throw error;
-    }
-    }
-
-  /**
-   * Get user information by PSID
-   */
-  async getUserInfo(psid: string): Promise<InstagramUserInfo> {
-    try {
-      await this.initialize();
-
-      const response: AxiosResponse<InstagramUserInfo> = await axios.get(
-        `${this.baseUrl}/${psid}`,
-        {
-          params: {
-            access_token: this.accessToken,
-            fields: 'id,name,profile_picture_url'
-          }
-        }
-      );
-
-      return response.data;
-    } catch (error: any) {
-      await this.handleApiError(error, 'getUserInfo');
-      throw error;
-    }
-  }
-
-  /**
-   * Get account information
-   */
-  async getAccountInfo(): Promise<InstagramAccountInfo> {
-    try {
-      await this.initialize();
-
-      const response: AxiosResponse<InstagramAccountInfo> = await axios.get(
-        `${this.baseUrl}/me`,
-        {
-          params: {
-            access_token: this.accessToken,
-            fields: 'id,name,username,profile_picture_url,followers_count,media_count'
-          }
-        }
-      );
-
-      return response.data;
-    } catch (error: any) {
-      await this.handleApiError(error, 'getAccountInfo');
-      throw error;
-    }
-  }
-
-  /**
-   * Validate access token
-   */
-  async validateToken(): Promise<boolean> {
-    try {
-      await this.initialize();
-
-      const response = await axios.get(
-        `${this.baseUrl}/me`,
-        {
-          params: {
-            access_token: this.accessToken
-          }
-        }
-      );
-
-      return response.status === 200;
-    } catch (error: any) {
-      console.error('Token validation failed:', error.message);
+      console.error(`❌ InstagramApiService: Error initializing account ${accountId}:`, error);
       return false;
     }
   }
 
   /**
-   * Refresh access token (if refresh token is available)
+   * Send a message via Instagram Graph API
    */
-  async refreshToken(): Promise<void> {
-    try {
-      const account = await InstagramAccount.findOne({ accountId: this.accountId });
-      if (!account?.refreshToken) {
-        throw new Error('No refresh token available for this account');
-      }
+  async sendMessage(psid: string, message: any): Promise<any> {
+    console.log(`📤 InstagramApiService: Sending message to PSID: ${psid}`);
+    console.log(`📤 InstagramApiService: Message content:`, JSON.stringify(message, null, 2));
 
-      // Instagram doesn't provide direct token refresh like some other platforms
-      // This would typically involve re-authenticating the user
-      // For now, we'll mark the token as needing refresh
-      account.metadata.lastSync = new Date();
-      await account.save();
-
-      throw new Error('Manual re-authentication required for Instagram token refresh');
-    } catch (error) {
-      console.error('Failed to refresh Instagram token:', error);
-      throw error;
+    if (!this.accessToken) {
+      console.log(`❌ InstagramApiService: No access token available`);
+      throw new Error('No access token available');
     }
-  }
 
-  /**
-   * Handle Instagram API errors and update account metadata
-   */
-  private async handleApiError(error: any, operation: string): Promise<void> {
+    const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${this.accessToken}`;
+    
+    const payload = {
+      recipient: { id: psid },
+      message: message
+    };
+
+    console.log(`📤 InstagramApiService: Sending to URL: ${url}`);
+    console.log(`📤 InstagramApiService: Payload:`, JSON.stringify(payload, null, 2));
+
     try {
-      const account = await InstagramAccount.findOne({ accountId: this.accountId });
-      if (!account) return;
-
-      let errorCode = 'UNKNOWN';
-      let errorMessage = error.message;
-      let retryAfter: Date | undefined;
-
-      if (error.response?.data?.error) {
-        const instagramError = error.response.data.error as InstagramErrorResponse['error'];
-        errorCode = instagramError.code.toString();
-        errorMessage = instagramError.message;
-
-        // Handle specific Instagram error codes
-        switch (instagramError.code) {
-          case 100: // Invalid parameter
-            errorMessage = `Invalid parameter: ${instagramError.message}`;
-            break;
-          case 190: // Invalid access token
-            errorMessage = 'Access token is invalid or expired';
-            retryAfter = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-            break;
-          case 429: // Rate limit exceeded
-            errorMessage = 'Rate limit exceeded';
-            retryAfter = new Date(Date.now() + 60 * 1000); // 1 minute
-            break;
-          case 613: // User limit exceeded
-            errorMessage = 'User limit exceeded (24-hour window)';
-            retryAfter = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-            break;
-          default:
-            errorMessage = `Instagram API error ${instagramError.code}: ${instagramError.message}`;
-        }
-      }
-
-      // Update account metadata
-      account.metadata.errorCount += 1;
-
-      await account.save();
-
-      console.error(`Instagram API error in ${operation}:`, {
-        accountId: this.accountId,
-        errorCode,
-        errorMessage,
-        retryAfter
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
       });
-    } catch (metadataError) {
-      console.error('Failed to update account metadata after API error:', metadataError);
-    }
-  }
 
-  /**
-   * Update account metadata after successful operations
-   */
-  private async updateAccountMetadata(operation: 'messageSent' | 'messageReceived' | 'sync'): Promise<void> {
-    try {
-      const account = await InstagramAccount.findOne({ accountId: this.accountId });
-      if (!account) return;
+      console.log(`📤 InstagramApiService: Response status: ${response.status}`);
+      console.log(`📤 InstagramApiService: Response headers:`, Object.fromEntries(response.headers.entries()));
 
-      switch (operation) {
-        case 'messageSent':
-          account.metadata.responseCount += 1;
-          break;
-        case 'messageReceived':
-          account.metadata.messageCount += 1;
-          break;
-        case 'sync':
-          account.metadata.lastSync = new Date();
-          break;
+      const responseData = await response.json();
+      console.log(`📤 InstagramApiService: Response data:`, JSON.stringify(responseData, null, 2));
+
+      if (!response.ok) {
+        console.error(`❌ InstagramApiService: API error - Status: ${response.status}, Data:`, responseData);
+        throw new Error(`Instagram API error: ${response.status} - ${JSON.stringify(responseData)}`);
       }
 
-      await account.save();
+      console.log(`✅ InstagramApiService: Message sent successfully to PSID: ${psid}`);
+      return responseData;
     } catch (error) {
-      console.error('Failed to update account metadata:', error);
+      console.error(`❌ InstagramApiService: Error sending message to PSID ${psid}:`, error);
+      throw error;
     }
   }
 
   /**
-   * Check if we can send a message to a user (rate limiting and cooldown)
+   * Send a text message
    */
-  async canSendMessage(psid: string): Promise<{
-    canSend: boolean;
-    reason?: string;
-    retryAfter?: Date;
-  }> {
-    try {
-      const account = await InstagramAccount.findOne({ accountId: this.accountId });
-      if (!account) {
-        return { canSend: false, reason: 'Account not found' };
-      }
+  async sendTextMessage(psid: string, text: string): Promise<any> {
+    console.log(`📝 InstagramApiService: Sending text message to PSID: ${psid}`);
+    console.log(`📝 InstagramApiService: Text content: "${text}"`);
+    
+    return this.sendMessage(psid, { text });
+  }
 
-      // Check global rate limit
-      const now = new Date();
-      const oneSecondAgo = new Date(now.getTime() - 1000);
-      
-      if (account.rateLimits.messagesPerSecond > 0) {
-        // This is a simplified check - in production you'd want more sophisticated rate limiting
-        if (account.metadata.responseCount > 0) {
-          const lastResponse = account.metadata.lastSync;
-          if (lastResponse && lastResponse > oneSecondAgo) {
-            return { 
-              canSend: false, 
-              reason: 'Global rate limit exceeded',
-              retryAfter: new Date(now.getTime() + 1000)
-            };
-          }
+  /**
+   * Send a message with quick replies
+   */
+  async sendQuickReplies(psid: string, text: string, quickReplies: any[]): Promise<any> {
+    console.log(`⚡ InstagramApiService: Sending quick replies to PSID: ${psid}`);
+    console.log(`⚡ InstagramApiService: Text: "${text}"`);
+    console.log(`⚡ InstagramApiService: Quick replies:`, JSON.stringify(quickReplies, null, 2));
+    
+    return this.sendMessage(psid, {
+      text,
+      quick_replies: quickReplies
+    });
+  }
+
+  /**
+   * Send a message with buttons
+   */
+  async sendButtons(psid: string, text: string, buttons: any[]): Promise<any> {
+    console.log(`🔘 InstagramApiService: Sending buttons to PSID: ${psid}`);
+    console.log(`🔘 InstagramApiService: Text: "${text}"`);
+    console.log(`🔘 InstagramApiService: Buttons:`, JSON.stringify(buttons, null, 2));
+    
+    return this.sendMessage(psid, {
+      attachment: {
+        type: 'template',
+        payload: {
+          template_type: 'button',
+          text,
+          buttons
         }
       }
+    });
+  }
 
-      // Check user cooldown
-      if (account.rateLimits.userCooldown > 0) {
-        // This would need to be implemented with conversation tracking
-        // For now, we'll return true
+  /**
+   * Send a generic template
+   */
+  async sendGenericTemplate(psid: string, elements: any[]): Promise<any> {
+    console.log(`📋 InstagramApiService: Sending generic template to PSID: ${psid}`);
+    console.log(`📋 InstagramApiService: Elements:`, JSON.stringify(elements, null, 2));
+    
+    return this.sendMessage(psid, {
+      attachment: {
+        type: 'template',
+        payload: {
+          template_type: 'generic',
+          elements
+        }
+      }
+    });
+  }
+
+  /**
+   * Send a media message
+   */
+  async sendMediaMessage(psid: string, attachment: any): Promise<any> {
+    console.log(`📷 InstagramApiService: Sending media message to PSID: ${psid}`);
+    console.log(`📷 InstagramApiService: Attachment:`, JSON.stringify(attachment, null, 2));
+    
+    return this.sendMessage(psid, { attachment });
+  }
+
+  /**
+   * Send a typing indicator
+   */
+  async sendTypingIndicator(psid: string, typing: boolean = true): Promise<any> {
+    console.log(`⌨️ InstagramApiService: Sending typing indicator to PSID: ${psid} - Typing: ${typing}`);
+    
+    const action = typing ? 'typing_on' : 'typing_off';
+    const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${this.accessToken}`;
+    
+    const payload = {
+      recipient: { id: psid },
+      sender_action: action
+    };
+
+    console.log(`⌨️ InstagramApiService: Typing payload:`, JSON.stringify(payload, null, 2));
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      console.log(`⌨️ InstagramApiService: Typing response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`❌ InstagramApiService: Typing indicator error:`, errorData);
+        throw new Error(`Typing indicator error: ${response.status}`);
       }
 
-      return { canSend: true };
+      console.log(`✅ InstagramApiService: Typing indicator sent successfully`);
+      return { success: true };
     } catch (error) {
-      console.error('Failed to check if can send message:', error);
-      return { canSend: false, reason: 'Error checking rate limits' };
+      console.error(`❌ InstagramApiService: Error sending typing indicator:`, error);
+      throw error;
     }
   }
 
   /**
-   * Get rate limit information
+   * Mark message as seen
    */
-  async getRateLimitInfo(): Promise<{
-    globalLimit: number;
-    userCooldown: number;
-    messagesSentToday: number;
-    remainingMessages: number;
-  }> {
+  async markAsSeen(psid: string): Promise<any> {
+    console.log(`👁️ InstagramApiService: Marking message as seen for PSID: ${psid}`);
+    
+    const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${this.accessToken}`;
+    
+    const payload = {
+      recipient: { id: psid },
+      sender_action: 'mark_seen'
+    };
+
+    console.log(`👁️ InstagramApiService: Mark as seen payload:`, JSON.stringify(payload, null, 2));
+
     try {
-      const account = await InstagramAccount.findOne({ accountId: this.accountId });
-      if (!account) {
-        throw new Error('Account not found');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      console.log(`👁️ InstagramApiService: Mark as seen response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`❌ InstagramApiService: Mark as seen error:`, errorData);
+        throw new Error(`Mark as seen error: ${response.status}`);
       }
 
-      // Instagram has a limit of 250 messages per user per day
-      const messagesSentToday = account.metadata.responseCount;
-      const remainingMessages = Math.max(0, 250 - messagesSentToday);
-
-      return {
-        globalLimit: account.rateLimits.messagesPerSecond,
-        userCooldown: account.rateLimits.userCooldown,
-        messagesSentToday,
-        remainingMessages
-      };
+      console.log(`✅ InstagramApiService: Message marked as seen successfully`);
+      return { success: true };
     } catch (error) {
-      console.error('Failed to get rate limit info:', error);
+      console.error(`❌ InstagramApiService: Error marking message as seen:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Get user profile information
+   */
+  async getUserProfile(psid: string): Promise<any> {
+    console.log(`👤 InstagramApiService: Getting user profile for PSID: ${psid}`);
+    
+    const url = `https://graph.facebook.com/v18.0/${psid}?fields=id,name,profile_pic&access_token=${this.accessToken}`;
+    
+    console.log(`👤 InstagramApiService: Profile URL: ${url}`);
+
+    try {
+      const response = await fetch(url);
+      console.log(`👤 InstagramApiService: Profile response status: ${response.status}`);
+      
+      const data = await response.json();
+      console.log(`👤 InstagramApiService: Profile data:`, JSON.stringify(data, null, 2));
+      
+      if (!response.ok) {
+        console.error(`❌ InstagramApiService: Profile error:`, data);
+        throw new Error(`Profile error: ${response.status}`);
+      }
+
+      console.log(`✅ InstagramApiService: User profile retrieved successfully`);
+      return data;
+    } catch (error) {
+      console.error(`❌ InstagramApiService: Error getting user profile:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Test API connection
+   */
+  async testConnection(): Promise<boolean> {
+    console.log(`🧪 InstagramApiService: Testing API connection`);
+    
+    try {
+      const url = `https://graph.facebook.com/v18.0/me?access_token=${this.accessToken}`;
+      console.log(`🧪 InstagramApiService: Test URL: ${url}`);
+      
+      const response = await fetch(url);
+      console.log(`🧪 InstagramApiService: Test response status: ${response.status}`);
+      
+      const data = await response.json();
+      console.log(`🧪 InstagramApiService: Test response data:`, JSON.stringify(data, null, 2));
+      
+      if (!response.ok) {
+        console.error(`❌ InstagramApiService: Connection test failed:`, data);
+        return false;
+      }
+
+      console.log(`✅ InstagramApiService: API connection test successful`);
+      return true;
+    } catch (error) {
+      console.error(`❌ InstagramApiService: Connection test error:`, error);
+      return false;
     }
   }
 }
 
-export default InstagramApiService;
+export default new InstagramApiService();

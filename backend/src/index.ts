@@ -10,6 +10,12 @@ import mongoose from 'mongoose';
 // Import routes
 import instagramRoutes from './routes/instagram.routes';
 
+// Import services
+import debounceWorker from './services/debounceWorker.service';
+import senderWorker from './services/senderWorker.service';
+
+console.log('🚀 Moca Instagram DM Agent: Starting application...');
+
 // Debug: Log environment variables
 console.log('🔧 [Environment Check] Loaded environment variables:', {
   MONGODB_URI: !!process.env.MONGODB_URI,
@@ -23,13 +29,19 @@ console.log('🔧 [Environment Check] Loaded environment variables:', {
 const app = express();
 const PORT = process.env.PORT || 3002;
 
+console.log('🔧 Express app initialized');
+console.log(`🔧 Server will run on port: ${PORT}`);
+
 // Middleware
+console.log('🔧 Setting up middleware...');
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+console.log('✅ Middleware setup completed');
 
 // Basic health check
 app.get('/api/health', (req, res) => {
+  console.log('🏥 Health check requested');
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
@@ -39,11 +51,13 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
+console.log('🔧 Setting up API routes...');
 app.use('/api/instagram', instagramRoutes);
+console.log('✅ API routes setup completed');
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err);
+  console.error('❌ Error handling middleware triggered:', err);
   res.status(500).json({
     success: false,
     error: 'Internal server error'
@@ -52,6 +66,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // 404 middleware
 app.use('*', (req, res) => {
+  console.log(`❌ 404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     error: 'Route not found'
@@ -69,20 +84,85 @@ console.log('🔌 Connecting to MongoDB...');
 console.log('📊 MongoDB URI:', MONGODB_URI);
 
 mongoose.connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('✅ Connected to MongoDB successfully');
     console.log('🗄️  Database:', mongoose.connection.db?.databaseName || 'Unknown');
     
+    // Start background services
+    console.log('🔧 Starting background services...');
+    
+    try {
+      console.log('🔄 Starting debounce worker service...');
+      await debounceWorker.start();
+      console.log('✅ Debounce worker service started successfully');
+      
+      console.log('🔄 Starting sender worker service...');
+      await senderWorker.start();
+      console.log('✅ Sender worker service started successfully');
+      
+      console.log('✅ All background services started successfully');
+    } catch (error) {
+      console.error('❌ Error starting background services:', error);
+      process.exit(1);
+    }
+    
     // Start server
     app.listen(PORT, () => {
+      console.log('🎉 Moca Instagram DM Agent API started successfully!');
       console.log('📱 Moca Instagram DM Agent API running on port', PORT);
       console.log('📊 Health check: http://localhost:' + PORT + '/api/health');
       console.log('📱 Instagram routes: http://localhost:' + PORT + '/api/instagram');
+      console.log('🔄 Debounce worker: Running every 5 seconds');
+      console.log('📤 Sender worker: Running every 2 seconds');
+      console.log('✅ Application ready to receive requests');
     });
   })
   .catch((error) => {
     console.error('❌ MongoDB connection error:', error);
     process.exit(1);
   });
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully...');
+  
+  try {
+    console.log('🛑 Stopping background services...');
+    await debounceWorker.stop();
+    await senderWorker.stop();
+    console.log('✅ Background services stopped');
+    
+    console.log('🛑 Closing MongoDB connection...');
+    await mongoose.connection.close();
+    console.log('✅ MongoDB connection closed');
+    
+    console.log('✅ Graceful shutdown completed');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+});
+
+process.on('SIGINT', async () => {
+  console.log('🛑 SIGINT received, shutting down gracefully...');
+  
+  try {
+    console.log('🛑 Stopping background services...');
+    await debounceWorker.stop();
+    await senderWorker.stop();
+    console.log('✅ Background services stopped');
+    
+    console.log('🛑 Closing MongoDB connection...');
+    await mongoose.connection.close();
+    console.log('✅ MongoDB connection closed');
+    
+    console.log('✅ Graceful shutdown completed');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+});
 
 export default app;

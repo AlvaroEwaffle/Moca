@@ -6,260 +6,213 @@ import InstagramAccount from '../models/instagramAccount.model';
 import { IContact } from '../models/contact.model';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
+import instagramService from './instagramApi.service';
+import * as openaiService from './openai.service';
 
-// Debounce window configuration
-interface DebounceConfig {
-  windowMs: number; // Time window in milliseconds to consolidate messages
-  userCooldown: number; // Seconds between bot responses to same user
-  maxConsolidatedLength: number; // Maximum length of consolidated message
-}
-
-export class DebounceWorkerService {
-  private config: DebounceConfig;
+class DebounceWorkerService {
+  private isRunning: boolean = false;
+  private intervalId: NodeJS.Timeout | null = null;
 
   constructor() {
-    this.config = {
-      windowMs: parseInt(process.env.DEBOUNCE_WINDOW_MS || '4000'), // 4 seconds
-      userCooldown: parseInt(process.env.USER_COOLDOWN_SECONDS || '3'), // 3 seconds
-      maxConsolidatedLength: 1000 // Maximum characters in consolidated message
-    };
+    console.log('🔧 DebounceWorkerService: Initializing service');
   }
 
   /**
-   * Process debounced messages for all active conversations
+   * Start the debounce worker service
    */
-  async processDebouncedMessages(): Promise<void> {
+  async start(): Promise<void> {
+    console.log('🚀 DebounceWorkerService: Starting debounce worker service');
+    
+    if (this.isRunning) {
+      console.log('⚠️ DebounceWorkerService: Service is already running');
+      return;
+    }
+
+    this.isRunning = true;
+    console.log('✅ DebounceWorkerService: Service started successfully');
+
+    // Process immediately on start
+    await this.process();
+
+    // Set up interval for periodic processing
+    this.intervalId = setInterval(async () => {
+      console.log('⏰ DebounceWorkerService: Periodic processing triggered');
+      await this.process();
+    }, 5000); // Process every 5 seconds
+
+    console.log('⏰ DebounceWorkerService: Periodic processing scheduled every 5 seconds');
+  }
+
+  /**
+   * Stop the debounce worker service
+   */
+  async stop(): Promise<void> {
+    console.log('🛑 DebounceWorkerService: Stopping debounce worker service');
+    
+    if (!this.isRunning) {
+      console.log('⚠️ DebounceWorkerService: Service is not running');
+      return;
+    }
+
+    this.isRunning = false;
+    
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+      console.log('⏰ DebounceWorkerService: Periodic processing stopped');
+    }
+
+    console.log('✅ DebounceWorkerService: Service stopped successfully');
+  }
+
+  /**
+   * Main processing function
+   */
+  async process(): Promise<void> {
+    console.log('🔄 DebounceWorkerService: Starting debounce worker process');
+    
     try {
-      console.log('🔄 Starting debounce worker process');
-
-      // Find all active conversations
-      const activeConversations = await Conversation.find({
+      // Get all active conversations
+      const activeConversations = await Conversation.find({ 
         status: 'open',
-        isActive: true
-      });
+        isActive: true 
+      }).populate('contactId');
 
-      console.log(`📋 Found ${activeConversations.length} active conversations to process`);
+      console.log(`📋 DebounceWorkerService: Found ${activeConversations.length} active conversations to process`);
 
       for (const conversation of activeConversations) {
-        try {
-          await this.processConversationDebounce(conversation);
-        } catch (error) {
-          console.error(`❌ Error processing conversation ${conversation.id}:`, error);
-        }
+        console.log(`📋 DebounceWorkerService: Processing conversation: ${conversation.id}`);
+        await this.processConversation(conversation);
       }
 
-      console.log('✅ Debounce worker process completed');
+      console.log('✅ DebounceWorkerService: Debounce worker process completed');
     } catch (error) {
-      console.error('❌ Error in debounce worker process:', error);
-      throw error;
+      console.error('❌ DebounceWorkerService: Error in debounce worker process:', error);
     }
   }
 
   /**
-   * Process debounce for a specific conversation
+   * Process a single conversation
    */
-  private async processConversationDebounce(conversation: IConversation): Promise<void> {
+  private async processConversation(conversation: IConversation): Promise<void> {
+    console.log(`💬 DebounceWorkerService: Processing conversation: ${conversation.id}`);
+    
     try {
-      const contact = await Contact.findById(conversation.contactId);
-      if (!contact) {
-        console.warn(`⚠️ Contact not found for conversation: ${conversation.id}`);
-        return;
-      }
-
       // Check if conversation is in cooldown
-      if (await this.isInCooldown(conversation.id)) {
-        console.log(`⏰ Conversation ${conversation.id} is in cooldown, skipping`);
+      if (conversation.timestamps.cooldownUntil && conversation.timestamps.cooldownUntil > new Date()) {
+        const remainingSeconds = Math.ceil((conversation.timestamps.cooldownUntil.getTime() - Date.now()) / 1000);
+        console.log(`⏰ DebounceWorkerService: Conversation ${conversation.id} is in cooldown, skipping (${remainingSeconds}s remaining)`);
         return;
       }
 
-      // Get recent unprocessed user messages
-      const recentMessages = await this.getRecentUnprocessedMessages(conversation.id);
+      // Get recent unprocessed messages
+      const recentMessages = await Message.find({
+        conversationId: conversation.id,
+        role: 'user',
+        status: 'received',
+        'metadata.processed': { $ne: true }
+      }).sort({ 'metadata.timestamp': 1 });
+
+      console.log(`📨 DebounceWorkerService: Found ${recentMessages.length} unprocessed messages for conversation: ${conversation.id}`);
 
       if (recentMessages.length === 0) {
-        return; // No messages to process
+        console.log(`📭 DebounceWorkerService: No unprocessed messages for conversation: ${conversation.id}`);
+        return;
       }
 
       // Check if we should consolidate messages
-      if (recentMessages.length > 1) {
-        const shouldConsolidate = this.shouldConsolidateMessages(recentMessages);
-        
-        if (shouldConsolidate) {
-          console.log(`🔗 Consolidating ${recentMessages.length} messages for conversation: ${conversation.id}`);
-          await this.consolidateMessages(conversation, recentMessages);
-        } else {
-          console.log(`📝 Processing ${recentMessages.length} individual messages for conversation: ${conversation.id}`);
-          for (const message of recentMessages) {
-            await this.processSingleMessage(conversation, message);
-          }
-        }
+      const debounceWindow = 4000; // 4 seconds
+      const now = Date.now();
+      const messagesInWindow = recentMessages.filter(msg => 
+        now - msg.metadata.timestamp.getTime() < debounceWindow
+      );
+
+      if (messagesInWindow.length > 1) {
+        console.log(`🔗 DebounceWorkerService: Consolidating ${recentMessages.length} messages for conversation: ${conversation.id}`);
+        await this.consolidateMessages(conversation, recentMessages);
       } else {
-        // Single message, process normally
-        await this.processSingleMessage(conversation, recentMessages[0]);
+        console.log(`📝 DebounceWorkerService: Processing ${recentMessages.length} individual messages for conversation: ${conversation.id}`);
+        await this.processIndividualMessages(conversation, recentMessages);
       }
 
-      // Mark messages as processed
-      await this.markMessagesAsProcessed(recentMessages.map(m => m.id));
-
     } catch (error) {
-      console.error(`❌ Error processing conversation debounce: ${conversation.id}`, error);
-      throw error;
+      console.error(`❌ DebounceWorkerService: Error processing conversation ${conversation.id}:`, error);
     }
   }
 
   /**
-   * Check if conversation is in cooldown
-   */
-  private async isInCooldown(conversationId: string): Promise<boolean> {
-    try {
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation) return false;
-
-      if (!conversation.timestamps.cooldownUntil) {
-        return false;
-      }
-
-      const now = new Date();
-      const isInCooldown = now < conversation.timestamps.cooldownUntil;
-
-      if (isInCooldown) {
-        const remainingSeconds = Math.ceil(
-          (conversation.timestamps.cooldownUntil.getTime() - now.getTime()) / 1000
-        );
-        console.log(`⏰ Conversation ${conversationId} in cooldown for ${remainingSeconds} more seconds`);
-      }
-
-      return isInCooldown;
-    } catch (error) {
-      console.error('❌ Error checking cooldown:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get recent unprocessed user messages
-   */
-  private async getRecentUnprocessedMessages(conversationId: string): Promise<IMessage[]> {
-    try {
-      const cutoffTime = new Date(Date.now() - this.config.windowMs);
-      
-      const messages = await Message.find({
-        conversationId,
-        role: 'user',
-        status: 'received',
-        'metadata.timestamp': { $gte: cutoffTime }
-      }).sort({ 'metadata.timestamp': 1 });
-
-      return messages;
-    } catch (error) {
-      console.error('❌ Error getting recent messages:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Determine if messages should be consolidated
-   */
-  private shouldConsolidateMessages(messages: IMessage[]): boolean {
-    if (messages.length < 2) return false;
-
-    const firstMessageTime = messages[0].metadata.timestamp.getTime();
-    const lastMessageTime = messages[messages.length - 1].metadata.timestamp.getTime();
-    const timeSpan = lastMessageTime - firstMessageTime;
-
-    // Consolidate if messages are within the debounce window
-    return timeSpan <= this.config.windowMs;
-  }
-
-  /**
-   * Consolidate multiple messages into one
+   * Consolidate multiple messages into one response
    */
   private async consolidateMessages(conversation: IConversation, messages: IMessage[]): Promise<void> {
+    console.log(`🔗 DebounceWorkerService: Consolidating ${messages.length} messages for conversation: ${conversation.id}`);
+    
     try {
-      // Create consolidated message content
-      const consolidatedText = this.createConsolidatedText(messages);
-      
+      // Combine all message texts
+      const combinedText = messages.map(msg => msg.content.text).join('\n\n');
+      console.log(`🔗 DebounceWorkerService: Combined text: "${combinedText}"`);
+
       // Create a consolidated message record
       const consolidatedMessage = new Message({
-        mid: `consolidated_${Date.now()}_${conversation.id}`,
+        mid: `consolidated_${Date.now()}`,
         conversationId: conversation.id,
         contactId: conversation.contactId,
         accountId: conversation.accountId,
         role: 'user',
         content: {
-          text: consolidatedText,
-          attachments: [],
-          quickReplies: [],
-          buttons: []
+          text: combinedText,
+          type: 'text'
         },
         metadata: {
           timestamp: new Date(),
-          isConsolidated: true,
-          originalMids: messages.map(m => m.mid),
-          aiGenerated: false,
-          processingTime: 0
-        },
-        status: 'received',
-        priority: 'normal',
-        tags: ['consolidated'],
-        notes: [`Consolidated ${messages.length} messages`]
+          consolidated: true,
+          originalMessageIds: messages.map(msg => msg.id),
+          processed: false
+        }
       });
 
       await consolidatedMessage.save();
-      console.log(`✅ Created consolidated message: ${consolidatedMessage.id}`);
+      console.log(`✅ DebounceWorkerService: Created consolidated message: ${consolidatedMessage.id}`);
 
       // Process the consolidated message
-      await this.processSingleMessage(conversation, consolidatedMessage);
+      await this.processMessage(conversation, consolidatedMessage);
+
+      // Mark original messages as processed
+      const messageIds = messages.map(msg => msg.id);
+      await Message.updateMany(
+        { _id: { $in: messageIds } },
+        { 'metadata.processed': true }
+      );
+
+      console.log(`✅ DebounceWorkerService: Marked ${messageIds.length} original messages as processed`);
 
     } catch (error) {
-      console.error('❌ Error consolidating messages:', error);
-      throw error;
+      console.error(`❌ DebounceWorkerService: Error consolidating messages for conversation ${conversation.id}:`, error);
     }
   }
 
   /**
-   * Create consolidated text from multiple messages
+   * Process individual messages
    */
-  private createConsolidatedText(messages: IMessage[]): string {
-    try {
-      const texts = messages
-        .map(m => m.content.text)
-        .filter(text => text && text.trim().length > 0);
-
-      if (texts.length === 0) {
-        return 'Mensaje consolidado';
-      }
-
-      if (texts.length === 1) {
-        return texts[0];
-      }
-
-      // Join messages with separators
-      let consolidated = texts.join(' | ');
-      
-      // Truncate if too long
-      if (consolidated.length > this.config.maxConsolidatedLength) {
-        consolidated = consolidated.substring(0, this.config.maxConsolidatedLength - 3) + '...';
-      }
-
-      return consolidated;
-    } catch (error) {
-      console.error('❌ Error creating consolidated text:', error);
-      return 'Mensaje consolidado';
+  private async processIndividualMessages(conversation: IConversation, messages: IMessage[]): Promise<void> {
+    console.log(`📝 DebounceWorkerService: Processing ${messages.length} individual messages for conversation: ${conversation.id}`);
+    
+    for (const message of messages) {
+      console.log(`📝 DebounceWorkerService: Processing message: ${message.id} for conversation: ${conversation.id}`);
+      await this.processMessage(conversation, message);
     }
   }
 
   /**
-   * Process a single message (consolidated or individual)
+   * Process a single message
    */
-  private async processSingleMessage(conversation: IConversation, message: IMessage): Promise<void> {
+  private async processMessage(conversation: IConversation, message: IMessage): Promise<void> {
+    console.log(`📝 DebounceWorkerService: Processing message: ${message.id} for conversation: ${conversation.id}`);
+    
     try {
-      console.log(`📝 Processing message: ${message.id} for conversation: ${conversation.id}`);
-
       // Check if we should respond to this message
-      const shouldRespond = await this.shouldRespondToMessage(conversation, message);
-      
-      if (!shouldRespond) {
-        console.log(`⏭️ Skipping response for message: ${message.id}`);
+      if (!this.shouldRespondToMessage(message)) {
+        console.log(`⏭️ DebounceWorkerService: Skipping response for message: ${message.id}`);
+        await Message.findByIdAndUpdate(message.id, { 'metadata.processed': true });
         return;
       }
 
@@ -267,287 +220,220 @@ export class DebounceWorkerService {
       const response = await this.generateResponse(conversation, message);
       
       if (response) {
-        // Create bot message
-        const botMessage = await this.createBotMessage(conversation, response, message);
-        
-        // Add to outbound queue
-        await this.addToOutboundQueue(conversation, botMessage);
-        
-        // Update conversation cooldown
-        await this.updateConversationCooldown(conversation.id);
-        
-        console.log(`✅ Response generated and queued for message: ${message.id}`);
+        console.log(`✅ DebounceWorkerService: Response generated and queued for message: ${message.id}`);
+        await this.queueResponse(conversation, response);
       } else {
-        console.log(`⚠️ No response generated for message: ${message.id}`);
+        console.log(`⚠️ DebounceWorkerService: No response generated for message: ${message.id}`);
       }
 
+      // Mark message as processed
+      await Message.findByIdAndUpdate(message.id, { 'metadata.processed': true });
+
     } catch (error) {
-      console.error(`❌ Error processing single message: ${message.id}`, error);
-      throw error;
+      console.error(`❌ DebounceWorkerService: Error processing message ${message.id}:`, error);
     }
   }
 
   /**
-   * Determine if we should respond to a message
+   * Check if we should respond to a message
    */
-  private async shouldRespondToMessage(conversation: IConversation, message: IMessage): Promise<boolean> {
-    try {
-      // Check if auto-respond is enabled
-      if (!conversation.settings.autoRespond) {
-        return false;
-      }
-
-      // Check if message is from user
-      if (message.role !== 'user') {
-        return false;
-      }
-
-      // Check if message has content
-      if (!message.content.text || message.content.text.trim().length === 0) {
-        return false;
-      }
-
-      // Check business hours if enabled
-      if (conversation.settings.businessHoursOnly) {
-        const isBusinessHours = await this.isBusinessHours(conversation);
-        if (!isBusinessHours) {
-          console.log(`🏢 Outside business hours for conversation: ${conversation.id}`);
-          return false;
-        }
-      }
-
-      return true;
-    } catch (error) {
-      console.error('❌ Error checking if should respond:', error);
+  private shouldRespondToMessage(message: IMessage): boolean {
+    console.log(`🔍 DebounceWorkerService: Checking if should respond to message: ${message.id}`);
+    
+    // Don't respond to system messages
+    if (message.role === 'system') {
+      console.log(`⏭️ DebounceWorkerService: Skipping system message: ${message.id}`);
       return false;
+    }
+
+    // Don't respond to bot messages
+    if (message.role === 'assistant') {
+      console.log(`⏭️ DebounceWorkerService: Skipping bot message: ${message.id}`);
+      return false;
+    }
+
+    // Check if message has content
+    if (!message.content?.text || message.content.text.trim() === '') {
+      console.log(`⏭️ DebounceWorkerService: Skipping empty message: ${message.id}`);
+      return false;
+    }
+
+    console.log(`✅ DebounceWorkerService: Should respond to message: ${message.id}`);
+    return true;
+  }
+
+  /**
+   * Generate a response for a message
+   */
+  private async generateResponse(conversation: IConversation, message: IMessage): Promise<string | null> {
+    console.log(`🤖 DebounceWorkerService: Generating response for message: ${message.id}`);
+    
+    try {
+      // Check business hours
+      if (!this.isWithinBusinessHours(conversation)) {
+        console.log(`🏢 DebounceWorkerService: Outside business hours for conversation: ${conversation.id}`);
+        return null;
+      }
+
+      // Get conversation history for context
+      const history = await this.getConversationHistory(conversation.id);
+      console.log(`📚 DebounceWorkerService: Retrieved ${history.length} messages from conversation history`);
+
+      // Generate AI response
+      const response = await openaiService.generateInstagramResponse({
+        conversationHistory: history,
+        userIntent: 'general',
+        conversationTopic: conversation.context?.topic || 'general',
+        userSentiment: 'neutral',
+        businessContext: {
+          company: 'Moca',
+          sector: 'Digital Services',
+          services: ['web', 'marketing', 'consulting']
+        },
+        language: 'es'
+      });
+
+      if (response) {
+        console.log(`✅ DebounceWorkerService: AI response generated: "${response}"`);
+        return response;
+      } else {
+        console.log(`⚠️ DebounceWorkerService: No AI response generated, falling back to rule-based response`);
+        return this.generateFallbackResponse(message.content.text);
+      }
+
+    } catch (error) {
+      console.error(`❌ DebounceWorkerService: Error generating response for message ${message.id}:`, error);
+      console.log('🔄 DebounceWorkerService: Falling back to rule-based response');
+      return this.generateFallbackResponse(message.content.text);
     }
   }
 
   /**
    * Check if current time is within business hours
    */
-  private async isBusinessHours(conversation: IConversation): Promise<boolean> {
-    try {
-      // For now, return true (always business hours)
-      // In production, you'd check the account's business hours configuration
-      return true;
-    } catch (error) {
-      console.error('❌ Error checking business hours:', error);
-      return true; // Default to business hours
-    }
+  private isWithinBusinessHours(conversation: IConversation): boolean {
+    console.log(`🕐 DebounceWorkerService: Checking business hours for conversation: ${conversation.id}`);
+    
+    // For now, always return true - business hours logic can be implemented later
+    console.log(`✅ DebounceWorkerService: Business hours check passed for conversation: ${conversation.id}`);
+    return true;
   }
 
   /**
-   * Generate response using AI or fallback rules
+   * Get conversation history for context
    */
-  private async generateResponse(conversation: IConversation, message: IMessage): Promise<string | null> {
-    try {
-      if (!conversation.settings.aiEnabled) {
-        return this.generateFallbackResponse(message);
-      }
-
-      // Use enhanced OpenAI service for AI responses
-      const { generateInstagramResponse, analyzeUserIntent } = await import('./openai.service');
-      
-      // Get conversation history for context
-      const conversationHistory = await this.getConversationHistory(conversation.id);
-      
-      // Analyze user intent
-      const intentAnalysis = await analyzeUserIntent(message.content.text || '');
-      
-      // Generate AI response
-      const aiResponse = await generateInstagramResponse({
-        conversationHistory,
-        userIntent: intentAnalysis.intent,
-        conversationTopic: conversation.context.topic,
-        userSentiment: intentAnalysis.sentiment,
-        businessContext: {
-          company: conversation.context.category || 'General',
-          sector: conversation.context.category || 'General',
-          services: ['web', 'marketing', 'consulting']
-        },
-        language: conversation.context.language || 'es'
-      });
-
-      // Update conversation context with AI insights
-      await this.updateConversationContext(conversation.id, intentAnalysis);
-
-      return aiResponse;
-
-    } catch (error) {
-      console.error('❌ Error generating AI response:', error);
-      console.log('🔄 Falling back to rule-based response');
-      return this.generateFallbackResponse(message);
-    }
-  }
-
-  /**
-   * Get conversation history for AI context
-   */
-  private async getConversationHistory(conversationId: string): Promise<Array<{
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-  }>> {
+  private async getConversationHistory(conversationId: string): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp: Date }>> {
+    console.log(`📚 DebounceWorkerService: Getting conversation history for: ${conversationId}`);
+    
     try {
       const messages = await Message.find({
         conversationId,
         role: { $in: ['user', 'assistant'] }
       })
-      .sort({ 'metadata.timestamp': 1 })
+      .sort({ 'metadata.timestamp': -1 })
       .limit(10); // Last 10 messages for context
 
-      return messages
-        .filter(msg => msg.role !== 'system')
-        .map(msg => ({
-          role: msg.role as 'user' | 'assistant',
-          content: msg.content.text || '',
-          timestamp: msg.metadata.timestamp
-        }));
+      const history = messages.reverse().map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content.text,
+        timestamp: msg.metadata.timestamp
+      }));
+
+      console.log(`📚 DebounceWorkerService: Retrieved ${history.length} messages from history`);
+      return history;
     } catch (error) {
-      console.error('❌ Error getting conversation history:', error);
+      console.error(`❌ DebounceWorkerService: Error getting conversation history:`, error);
       return [];
     }
   }
 
   /**
-   * Update conversation context with AI insights
+   * Generate a fallback response when AI is not available
    */
-  private async updateConversationContext(conversationId: string, intentAnalysis: any): Promise<void> {
-    try {
-      await Conversation.findByIdAndUpdate(conversationId, {
-        'context.intent': intentAnalysis.intent,
-        'context.sentiment': intentAnalysis.sentiment,
-        'context.urgency': intentAnalysis.urgency,
-        'context.keywords': intentAnalysis.keywords
-      });
-    } catch (error) {
-      console.error('❌ Error updating conversation context:', error);
+  private generateFallbackResponse(userMessage: string): string {
+    console.log('🔄 DebounceWorkerService: Falling back to rule-based response');
+    
+    const message = userMessage.toLowerCase();
+    
+    if (message.includes('hola') || message.includes('hello')) {
+      console.log('🔄 DebounceWorkerService: Generated greeting response');
+      return '¡Hola! Gracias por contactarnos. ¿En qué puedo ayudarte hoy?';
     }
+    
+    if (message.includes('precio') || message.includes('costo') || message.includes('price')) {
+      console.log('🔄 DebounceWorkerService: Generated pricing response');
+      return 'Te ayudo con información sobre nuestros precios. ¿Qué tipo de proyecto tienes en mente?';
+    }
+    
+    if (message.includes('servicio') || message.includes('service')) {
+      console.log('🔄 DebounceWorkerService: Generated service response');
+      return 'Ofrecemos servicios de desarrollo web, móvil y consultoría. ¿Qué te interesa más?';
+    }
+    
+    console.log('🔄 DebounceWorkerService: Generated default response');
+    return 'Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.';
   }
 
   /**
-   * Generate fallback response using simple rules
+   * Queue a response for sending
    */
-  private generateFallbackResponse(message: IMessage): string {
+  private async queueResponse(conversation: IConversation, responseText: string): Promise<void> {
+    console.log(`📬 DebounceWorkerService: Queuing response for conversation: ${conversation.id}`);
+    
     try {
-      const text = message.content.text?.toLowerCase() || '';
-      
-      // Simple keyword-based responses
-      if (text.includes('hola') || text.includes('buenos días') || text.includes('buenas')) {
-        return '¡Hola! Gracias por contactarnos. ¿En qué puedo ayudarte hoy?';
-      }
-      
-      if (text.includes('precio') || text.includes('costo') || text.includes('cotización')) {
-        return 'Te ayudo con información sobre precios. ¿Podrías contarme más sobre tu proyecto?';
-      }
-      
-      if (text.includes('soporte') || text.includes('ayuda') || text.includes('problema')) {
-        return 'Entiendo que necesitas ayuda. Un agente se pondrá en contacto contigo pronto.';
-      }
-      
-      if (text.includes('gracias') || text.includes('thanks')) {
-        return '¡De nada! Estoy aquí para ayudarte. ¿Hay algo más en lo que pueda asistirte?';
-      }
-      
-      // Default response
-      return 'Gracias por tu mensaje. Un agente revisará tu consulta y te responderá pronto.';
-      
-    } catch (error) {
-      console.error('❌ Error generating fallback response:', error);
-      return 'Gracias por contactarnos. Te responderemos pronto.';
-    }
-  }
-
-  /**
-   * Create bot message record
-   */
-  private async createBotMessage(
-    conversation: IConversation, 
-    response: string, 
-    originalMessage: IMessage
-  ): Promise<IMessage> {
-    try {
+      // Create bot message record
       const botMessage = new Message({
-        mid: `bot_${Date.now()}_${conversation.id}`,
+        mid: `bot_${Date.now()}`,
         conversationId: conversation.id,
         contactId: conversation.contactId,
         accountId: conversation.accountId,
         role: 'assistant',
         content: {
-          text: response,
-          attachments: [],
-          quickReplies: [],
-          buttons: []
+          text: responseText,
+          type: 'text'
         },
         metadata: {
           timestamp: new Date(),
-          isConsolidated: false,
-          originalMids: [],
-          aiGenerated: false, // Will be true when AI is implemented
-          processingTime: 0
-        },
-        status: 'queued',
-        priority: 'normal',
-        tags: ['bot_response'],
-        notes: [`Response to message: ${originalMessage.id}`]
+          aiGenerated: true,
+          processed: false
+        }
       });
 
       await botMessage.save();
-      console.log(`✅ Created bot message: ${botMessage.id}`);
+      console.log(`✅ DebounceWorkerService: Created bot message: ${botMessage.id}`);
 
-      return botMessage;
-    } catch (error) {
-      console.error('❌ Error creating bot message:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Add message to outbound queue
-   */
-  private async addToOutboundQueue(conversation: IConversation, message: IMessage): Promise<void> {
-    try {
+      // Add to outbound queue
       const queueItem = new OutboundQueue({
-        messageId: message.id,
+        messageId: botMessage.id,
         conversationId: conversation.id,
         contactId: conversation.contactId,
         accountId: conversation.accountId,
-        priority: message.priority,
-        status: 'pending',
+        priority: 'normal',
         content: {
-          text: message.content.text,
-          attachments: message.content.attachments,
-          quickReplies: message.content.quickReplies,
-          buttons: message.content.buttons
+          type: 'text',
+          text: responseText
         },
-        tags: ['auto_response'],
-        notes: ['Automatically generated response']
+        metadata: {
+          scheduledFor: new Date(),
+          attempts: 0,
+          maxAttempts: 3
+        }
       });
 
       await queueItem.save();
-      console.log(`✅ Added message to outbound queue: ${message.id}`);
+      console.log(`✅ DebounceWorkerService: Added message to outbound queue: ${queueItem.id}`);
 
-    } catch (error) {
-      console.error('❌ Error adding to outbound queue:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update conversation cooldown
-   */
-  private async updateConversationCooldown(conversationId: string): Promise<void> {
-    try {
-      const cooldownEnd = new Date(Date.now() + (this.config.userCooldown * 1000));
-      
-      await Conversation.findByIdAndUpdate(conversationId, {
-        'timestamps.cooldownUntil': cooldownEnd
+      // Update conversation cooldown
+      const cooldownEnd = new Date(Date.now() + 3000); // 3 second cooldown
+      await Conversation.findByIdAndUpdate(conversation.id, {
+        'timestamps.cooldownUntil': cooldownEnd,
+        'timestamps.lastActivity': new Date()
       });
 
-      console.log(`⏰ Updated cooldown for conversation: ${conversationId} until ${cooldownEnd.toISOString()}`);
+      console.log(`⏰ DebounceWorkerService: Updated cooldown for conversation: ${conversation.id} until ${cooldownEnd.toISOString()}`);
+
     } catch (error) {
-      console.error('❌ Error updating conversation cooldown:', error);
+      console.error(`❌ DebounceWorkerService: Error queuing response for conversation ${conversation.id}:`, error);
     }
   }
 
@@ -555,17 +441,21 @@ export class DebounceWorkerService {
    * Mark messages as processed
    */
   private async markMessagesAsProcessed(messageIds: string[]): Promise<void> {
+    console.log(`✅ DebounceWorkerService: Marking ${messageIds.length} messages as processed`);
+    
     try {
       await Message.updateMany(
         { _id: { $in: messageIds } },
-        { status: 'processed' }
+        { 'metadata.processed': true }
       );
-
-      console.log(`✅ Marked ${messageIds.length} messages as processed`);
+      console.log(`✅ DebounceWorkerService: Marked ${messageIds.length} messages as processed`);
     } catch (error) {
-      console.error('❌ Error marking messages as processed:', error);
+      console.error(`❌ DebounceWorkerService: Error marking messages as processed:`, error);
     }
   }
 }
 
-export default DebounceWorkerService;
+export default new DebounceWorkerService();
+
+
+
