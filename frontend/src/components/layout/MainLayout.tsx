@@ -123,7 +123,7 @@ const MainLayout = () => {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">T</span>
               </div>
-              <span className="text-xl font-bold">Tiare</span>
+                              <span className="text-xl font-bold">Moca</span>
             </SheetTitle>
           </SheetHeader>
           
@@ -155,7 +155,7 @@ const MainLayout = () => {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">T</span>
               </div>
-              <span className="text-xl font-bold text-gray-900">Tiare</span>
+                              <span className="text-xl font-bold text-gray-900">Moca</span>
             </div>
           </div>
           

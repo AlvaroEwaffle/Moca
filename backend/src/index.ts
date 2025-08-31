@@ -13,6 +13,7 @@ import patientRoutes from './routes/patient.routes';
 import searchRoutes from './routes/search.routes';
 import calendarRoutes from './routes/calendar.routes';
 import appointmentRoutes from './routes/appointment.routes';
+import instagramRoutes from './routes/instagram.routes';
 
 // Debug: Log environment variables
 console.log('🔧 [Environment Check] Loaded environment variables:', {
@@ -36,7 +37,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    service: 'Tiare Healthcare API',
+          service: 'Moca Instagram DM Agent API',
     version: '1.0.0'
   });
 });
@@ -47,6 +48,7 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/doctors/calendar', calendarRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/instagram', instagramRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -82,13 +84,14 @@ mongoose.connect(MONGODB_URI)
     
     // Start server
     app.listen(PORT, () => {
-      console.log('🏥 Tiare Healthcare API running on port', PORT);
+      console.log('📱 Moca Instagram DM Agent API running on port', PORT);
       console.log('📊 Health check: http://localhost:' + PORT + '/api/health');
       console.log('👨‍⚕️ Doctor routes: http://localhost:' + PORT + '/api/doctors');
       console.log('👶 Patient routes: http://localhost:' + PORT + '/api/patients');
-      console.log('🔍 Search routes: http://localhost:' + PORT + '/api/search');
+      console.log('🔍 Search routes: http://localhost:' + PORT + '/api/appointments');
       console.log('📅 Calendar routes: http://localhost:' + PORT + '/api/doctors/calendar');
       console.log('📅 Appointment routes: http://localhost:' + PORT + '/api/appointments');
+      console.log('📱 Instagram routes: http://localhost:' + PORT + '/api/instagram');
       console.log('📞 Doctor info endpoint: http://localhost:' + PORT + '/api/doctors/info/:id');
     });
   })

@@ -167,7 +167,7 @@ const BillingInterface = () => {
   return (
     <>
       <Helmet>
-        <title>Facturación | Tiare - Gestión de Práctica Médica</title>
+        <title>Facturación | Moca - Instagram DM Agent</title>
         <meta name="description" content="Gestiona la facturación y pagos de tu práctica médica" />
       </Helmet>
       

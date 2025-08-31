@@ -17,6 +17,257 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
+// Instagram DM AI Response Generation
+export async function generateInstagramResponse(context: {
+  conversationHistory: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: Date;
+  }>;
+  userIntent?: string;
+  conversationTopic?: string;
+  userSentiment?: 'positive' | 'neutral' | 'negative';
+  businessContext?: {
+    company: string;
+    sector: string;
+    services: string[];
+  };
+  language?: string;
+}): Promise<string> {
+  try {
+    console.log('🤖 Generating Instagram DM response with AI');
+
+    const systemPrompt = `Eres un asistente virtual profesional y amigable para una empresa de servicios digitales. 
+    
+Tu objetivo es:
+- Proporcionar respuestas útiles y profesionales
+- Mantener un tono amigable pero profesional
+- Ayudar a calificar leads y entender necesidades del cliente
+- Dirigir consultas complejas a agentes humanos cuando sea necesario
+- Responder en el idioma del usuario (español por defecto)
+
+Contexto de la empresa:
+- Somos expertos en desarrollo web, marketing digital y consultoría tecnológica
+- Ayudamos a empresas a crecer digitalmente
+- Ofrecemos servicios personalizados y soluciones a medida
+
+Instrucciones:
+- Responde de manera natural y conversacional
+- Sé útil pero no demasiado largo (máximo 2-3 frases)
+- Si detectas una consulta compleja, sugiere que un agente se pondrá en contacto
+- Mantén el tono profesional pero cercano
+- Usa emojis ocasionalmente para hacer la conversación más amigable`;
+
+    const userPrompt = `Por favor, genera una respuesta natural para este mensaje del cliente:
+
+Contexto de la conversación:
+${context.conversationHistory.map(msg => 
+  `${msg.role === 'user' ? '👤 Cliente' : '🤖 Asistente'}: ${msg.content}`
+).join('\n')}
+
+Información adicional:
+- Intención del usuario: ${context.userIntent || 'No especificada'}
+- Tema de conversación: ${context.conversationTopic || 'General'}
+- Sentimiento: ${context.userSentiment || 'neutral'}
+- Empresa del cliente: ${context.businessContext?.company || 'No especificada'}
+- Sector: ${context.businessContext?.sector || 'No especificado'}
+- Servicios de interés: ${context.businessContext?.services?.join(', ') || 'No especificados'}
+
+Genera una respuesta natural, útil y profesional que:
+1. Responda directamente a la consulta del cliente
+2. Sea apropiada para el contexto de la conversación
+3. Mantenga un tono profesional pero amigable
+4. No sea demasiado larga (máximo 2-3 frases)
+5. Use el idioma ${context.language || 'español'}
+
+Respuesta:`;
+
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4',
+      messages,
+      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '150'),
+      temperature: 0.7,
+      presence_penalty: 0.1,
+      frequency_penalty: 0.1
+    });
+
+    const aiResponse = response.choices[0]?.message?.content || '';
+    
+    console.log('✅ Instagram DM response generated successfully');
+    return aiResponse.trim();
+
+  } catch (error) {
+    console.error('❌ Error generating Instagram DM response:', error);
+    
+    // Fallback to simple rule-based response
+    return generateFallbackResponse(context);
+  }
+}
+
+// Fallback response generation when AI is unavailable
+function generateFallbackResponse(context: any): string {
+  try {
+    const lastUserMessage = context.conversationHistory
+      .filter((msg: any) => msg.role === 'user')
+      .pop()?.content?.toLowerCase() || '';
+
+    // Simple keyword-based responses
+    if (lastUserMessage.includes('hola') || lastUserMessage.includes('buenos días') || lastUserMessage.includes('buenas')) {
+      return '¡Hola! 👋 Gracias por contactarnos. ¿En qué puedo ayudarte hoy?';
+    }
+    
+    if (lastUserMessage.includes('precio') || lastUserMessage.includes('costo') || lastUserMessage.includes('cotización')) {
+      return 'Te ayudo con información sobre precios 💰. ¿Podrías contarme más sobre tu proyecto?';
+    }
+    
+    if (lastUserMessage.includes('soporte') || lastUserMessage.includes('ayuda') || lastUserMessage.includes('problema')) {
+      return 'Entiendo que necesitas ayuda 🆘. Un agente se pondrá en contacto contigo pronto.';
+    }
+    
+    if (lastUserMessage.includes('gracias') || lastUserMessage.includes('thanks')) {
+      return '¡De nada! 😊 Estoy aquí para ayudarte. ¿Hay algo más en lo que pueda asistirte?';
+    }
+    
+    if (lastUserMessage.includes('web') || lastUserMessage.includes('sitio') || lastUserMessage.includes('página')) {
+      return '¡Perfecto! 🌐 Somos expertos en desarrollo web. ¿Qué tipo de sitio necesitas?';
+    }
+    
+    if (lastUserMessage.includes('marketing') || lastUserMessage.includes('publicidad') || lastUserMessage.includes('promocionar')) {
+      return '¡Excelente! 📈 El marketing digital es clave para el crecimiento. ¿Qué objetivos tienes?';
+    }
+    
+    // Default response
+    return 'Gracias por tu mensaje 👍. Un agente revisará tu consulta y te responderá pronto.';
+    
+  } catch (error) {
+    console.error('❌ Error generating fallback response:', error);
+    return 'Gracias por contactarnos. Te responderemos pronto.';
+  }
+}
+
+// Analyze user intent from message
+export async function analyzeUserIntent(message: string): Promise<{
+  intent: string;
+  confidence: number;
+  keywords: string[];
+  sentiment: 'positive' | 'neutral' | 'negative';
+  urgency: 'low' | 'medium' | 'high';
+}> {
+  try {
+    console.log('🔍 Analyzing user intent with AI');
+
+    const systemPrompt = `Eres un experto en análisis de intenciones de usuario. 
+Analiza el mensaje del cliente y determina:
+1. La intención principal (consulta, cotización, soporte, etc.)
+2. El nivel de confianza (0-100)
+3. Palabras clave importantes
+4. El sentimiento (positive, neutral, negative)
+5. La urgencia (low, medium, high)
+
+Responde SOLO con un JSON válido.`;
+
+    const userPrompt = `Analiza este mensaje del cliente:
+"${message}"
+
+Responde con este formato JSON:
+{
+  "intent": "string",
+  "confidence": number,
+  "keywords": ["string"],
+  "sentiment": "positive|neutral|negative",
+  "urgency": "low|medium|high"
+}`;
+
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4',
+      messages,
+      max_tokens: 200,
+      temperature: 0.3
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+    
+    try {
+      const analysis = JSON.parse(content);
+      console.log('✅ User intent analysis completed');
+      return analysis;
+    } catch (parseError) {
+      console.error('❌ Error parsing AI response:', parseError);
+      return generateFallbackIntentAnalysis(message);
+    }
+
+  } catch (error) {
+    console.error('❌ Error analyzing user intent:', error);
+    return generateFallbackIntentAnalysis(message);
+  }
+}
+
+// Fallback intent analysis when AI is unavailable
+function generateFallbackIntentAnalysis(message: string): {
+  intent: string;
+  confidence: number;
+  keywords: string[];
+  sentiment: 'positive' | 'neutral' | 'negative';
+  urgency: 'low' | 'medium' | 'high';
+} {
+  const text = message.toLowerCase();
+  
+  // Simple keyword-based analysis
+  let intent = 'general_inquiry';
+  let sentiment: 'positive' | 'neutral' | 'negative' = 'neutral';
+  let urgency: 'low' | 'medium' | 'high' = 'medium';
+  const keywords: string[] = [];
+
+  // Intent detection
+  if (text.includes('precio') || text.includes('costo') || text.includes('cotización')) {
+    intent = 'pricing_inquiry';
+    keywords.push('precio', 'costo', 'cotización');
+  } else if (text.includes('soporte') || text.includes('ayuda') || text.includes('problema')) {
+    intent = 'support_request';
+    urgency = 'high';
+    keywords.push('soporte', 'ayuda', 'problema');
+  } else if (text.includes('web') || text.includes('sitio') || text.includes('página')) {
+    intent = 'service_inquiry';
+    keywords.push('web', 'sitio', 'página');
+  } else if (text.includes('marketing') || text.includes('publicidad')) {
+    intent = 'service_inquiry';
+    keywords.push('marketing', 'publicidad');
+  }
+
+  // Sentiment detection
+  if (text.includes('gracias') || text.includes('excelente') || text.includes('perfecto')) {
+    sentiment = 'positive';
+  } else if (text.includes('problema') || text.includes('error') || text.includes('urgente')) {
+    sentiment = 'negative';
+    urgency = 'high';
+  }
+
+  // Urgency detection
+  if (text.includes('urgente') || text.includes('asap') || text.includes('inmediato')) {
+    urgency = 'high';
+  } else if (text.includes('cuando') || text.includes('tiempo') || text.includes('planificar')) {
+    urgency = 'low';
+  }
+
+  return {
+    intent,
+    confidence: 70, // Medium confidence for fallback
+    keywords,
+    sentiment,
+    urgency
+  };
+}
+
 //Free Preview
 export async function generateSession(input: any) {
   console.log("--- generateSession ---")

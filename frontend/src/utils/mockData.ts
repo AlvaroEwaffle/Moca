@@ -2,7 +2,7 @@
 export const mockUserData = {
   id: "1a603974-847e-4b35-be60-4bbb2715e870",
   name: "Dr. Álvaro Villena",
-  email: "alvaro@tiare.com",
+  email: "alvaro@moca.com",
   specialization: "Psicología Clínica",
   licenseNumber: "PSI-2024-001",
   phone: "+56920115198"

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 
-// Import our new Tiare components
+// Import our new Moca components
 import Landing from "./pages/Landing";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -93,7 +93,7 @@ function App() {
         <Sonner />
         <Router>
           <Helmet>
-            <title>Tiare - Gestión de Práctica Médica</title>
+            <title>Moca - Instagram DM Agent</title>
             <meta name="description" content="Sistema integral de gestión para prácticas de salud mental" />
           </Helmet>
           

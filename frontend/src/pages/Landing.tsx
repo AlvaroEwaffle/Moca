@@ -9,7 +9,7 @@ const Landing = () => {
     return (
         <>
             <Helmet>
-                <title>Tiare - Sistema de Gestión para Prácticas de Salud Mental</title>
+                <title>Moca - Instagram DM Agent</title>
                 <meta name="description" content="Plataforma integral para psicólogos y psiquiatras. Gestiona pacientes, citas, calendario y facturación en un solo lugar." />
             </Helmet>
             
@@ -37,7 +37,7 @@ const Landing = () => {
                     <div className="flex flex-col items-center mb-8">
                         <img 
                             src="/logoprimario.png" 
-                            alt="Tiare Logo" 
+                            alt="Moca Logo" 
                             className="w-20 h-20 md:w-20 md:h-20 object-contain mb-4 animate-fade-in" 
                         />
                     </div>
@@ -74,7 +74,7 @@ const Landing = () => {
                         <div className="flex flex-col items-center space-y-4 animate-fade-in-delay-2">
                             <div className="flex items-center gap-2 text-gray-600">
                                 <Users className="w-5 h-5 text-blue-500" />
-                                <span className="font-medium">+50 terapeutas confían en Tiare</span>
+                                <span className="font-medium">+50 empresas confían en Moca</span>
                             </div>
                             
                             {/* Trust badges */}

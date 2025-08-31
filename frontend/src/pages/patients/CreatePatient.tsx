@@ -220,7 +220,7 @@ const CreatePatient = () => {
     return (
       <>
         <Helmet>
-          <title>Paciente Creado | Tiare - Gestión de Práctica Médica</title>
+          <title>Paciente Creado | Moca - Instagram DM Agent</title>
           <meta name="description" content="Paciente creado exitosamente en el sistema" />
         </Helmet>
         
@@ -334,7 +334,7 @@ const CreatePatient = () => {
   return (
     <>
       <Helmet>
-        <title>Crear Paciente | Tiare - Gestión de Práctica Médica</title>
+        <title>Crear Paciente | Moca - Instagram DM Agent</title>
         <meta name="description" content="Agregar un nuevo paciente al sistema" />
       </Helmet>
       

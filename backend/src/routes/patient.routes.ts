@@ -138,7 +138,7 @@ router.post('/create', authenticateToken, async (req, res) => {
     console.log('✅ Patient created successfully in database:', patient.id);
 
     // Generate WhatsApp link
-    const whatsappMessage = encodeURIComponent(`Hola ${name}! 👋 Soy el asistente virtual de Tiare. ¿En qué puedo ayudarte hoy?`);
+          const whatsappMessage = encodeURIComponent(`Hola ${name}! 👋 Soy el asistente virtual de Moca. ¿En qué puedo ayudarte hoy?`);
     const whatsappLink = `https://wa.me/${phone.replace(/\D/g, '')}?text=${whatsappMessage}`;
     
     console.log('📱 WhatsApp link generated:', whatsappLink);
@@ -156,7 +156,7 @@ router.post('/create', authenticateToken, async (req, res) => {
         createdAt: patient.createdAt
       },
       whatsappLink: whatsappLink,
-      whatsappMessage: `Hola ${name}! 👋 Soy el asistente virtual de Tiare. ¿En qué puedo ayudarte hoy?`
+              whatsappMessage: `Hola ${name}! 👋 Soy el asistente virtual de Moca. ¿En qué puedo ayudarte hoy?`
     });
 
   } catch (error) {

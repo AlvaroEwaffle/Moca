@@ -184,7 +184,7 @@ const Dashboard = () => {
   return (
     <>
       <Helmet>
-        <title>Dashboard | Tiare - Gestión de Práctica Médica</title>
+        <title>Dashboard | Moca - Instagram DM Agent</title>
         <meta name="description" content="Panel principal de gestión de tu práctica médica" />
       </Helmet>
       

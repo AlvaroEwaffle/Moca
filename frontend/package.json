@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "npm run build && wrangler pages deploy ./dist --project-name=tiare"
+    "deploy": "npm run build && wrangler pages deploy ./dist --project-name=moca"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
