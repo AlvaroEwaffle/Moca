@@ -1,139 +1,147 @@
-# Product Design Requirement (PDR) – Tiare (MVP v1.0)
+# PDR – Moca: Instagram DM Agent con Backend y Back Office
 
-## 🎯 Objetivo
+## 1. Propósito
 
-Construir un sistema de gestión de agenda y cobranza para psicólogos/psiquiatras, con integración a Google Calendar y un agente de WhatsApp (Tiare) como interfaz principal de comunicación con pacientes. El doctor tendrá una interfaz básica para configurar agenda, pacientes y procesos de cobranza. 
+Diseñar e implementar un **agente de Instagram DM** que maneje la comunicación con leads de manera ordenada, evitando spam, consolidando mensajes, y permitiendo a un equipo revisar y gestionar conversaciones desde un **back office simple**. Toda la lógica se centraliza en un **backend con base de datos**, eliminando dependencias externas.
 
-Trabajremos aqui la web app.
-La app, sera una app tipo backoffice. 
-Para que el doctor  pueda crear usuarios, setear el agente, revisar el estado de la agenda y de los cobros.
-Ademas disponibilizaremos endpoints para gestionar el calendario de los doctores y manejar el estado de los cobros. Ya que nuestro agente los utilizara.
+Se debe utilizar la estreuctura existente, intentando preservar lo máximo posible.
 
-La interacción con whastsapp la hare por fuera en n8n. Debemos dispoonibilizar los endpoint para que el agente pueda realizar las acciones mencionadas.
+## 2. Funcionalidades Clave
 
-Encuentra el detalle a continuacion:
+### A) Recepción de mensajes (entrantes)
 
-## 👥 Usuarios Principales
+* Recibir mensajes entrantes desde el **webhook de Meta (Instagram Graph API)**.
+* **Responder 200 OK inmediato** para evitar reintentos de Meta.
+* Guardar mensajes en base de datos (conversaciones, leads, histórico).
+* Aplicar **deduplicación** por `mid` (id único de mensaje de Meta).
+* Aplicar **debounce** (ej: si el usuario envía 2–3 mensajes en pocos segundos, consolidarlos en uno solo).
+* Verificar **cooldown**: si el bot ya respondió recientemente (ej: últimos 7s), no enviar otra respuesta.
 
-1. **Doctor (Psicólogo/Psiquiatra)**
+### B) Procesamiento de mensajes
 
-   * Configura su cuenta y agenda.
-   * Administra pacientes y sus datos básicos.
-   * Define políticas de consulta (formato, cancelación, precios).
-   * Configura y revisa estados de cobranza.
-   * Tambien puede interactuar via whatsapp con Tiare.
+* Una vez consolidado el mensaje:
 
-2. **Paciente**
+  * Evaluar si corresponde responder (reglas + decisión de IA).
+  * Si corresponde → generar respuesta (con AI Agent o reglas backend).
+  * Guardar la respuesta planificada en la **cola de salida**.
 
-   * Interactúa solo vía WhatsApp con Tiare.
-   * Agenda, reprograma o cancela citas.
-   * Recibe recordatorios de consultas.
-   * Recibe boletas y recordatorios de pago.
+### C) Envío de respuestas (salientes)
+
+* Gestionar la **cola de salida** (`outbound_queue`).
+* Respetar **rate limits globales** (ej: no más de 3 mensajes por segundo).
+* Respetar **locks por usuario (PSID)** para no intercalar respuestas.
+* En caso de errores 429/613 (rate limits), aplicar **retry con backoff**.
+* Registrar respuestas enviadas en el historial de mensajes.
+
+### D) Gestión de contactos y conversaciones
+
+* Cada `psid` se guarda como **contacto** con información enriquecida (nombre, sector, email si se obtiene, etc.).
+* Cada contacto tiene una **conversación activa** con estado (`open`, `scheduled`, `closed`).
+* Las conversaciones guardan timestamps (`last_user_at`, `last_bot_at`, `cooldown_until`).
+* Se puede buscar, listar y filtrar conversaciones desde el back office.
+
+### E) Back Office (funcionalidades mínimas)
+
+* **Lista de conversaciones**: ver contactos abiertos y última interacción.
+* **Vista de conversación**: timeline de mensajes (usuario/bot), opción de enviar mensaje manual.
+* **Panel de configuración**: editar parámetros básicos (cooldown, debounce, rate, token IG).
+* Autenticación inicial simple (ej: `x-admin-token` en requests).
+
+## 3. Roles de Usuario
+
+* **Bot automático**: Responde según reglas y decisiones de IA.
+* **Administrador** (Back Office): Puede ver conversaciones, enviar mensajes manuales y cambiar configuraciones.
+
+## 4. Reglas de Negocio
+
+* **No duplicar respuestas**: un mismo `mid` no debe generar más de una respuesta.
+* **Debounce**: varios mensajes en menos de 3–4s se consolidan como uno.
+* **Cooldown**: si el bot respondió hace menos de 7s, no responde otra vez.
+* **Pacing**: no más de X mensajes por segundo globalmente.
+* **Retry**: si IG devuelve error de límite, reintentar con backoff.
+* **Idempotencia**: cada acción debe ser repetible sin efectos secundarios.
+
+## 5. Flujo del Sistema
+
+### Entrante
+
+1. Usuario envía DM → llega a **webhook del backend**.
+2. Backend responde 200 OK inmediato a Meta.
+3. Backend:
+
+   * Upsert contacto/conversación.
+   * Guarda mensaje (si `mid` no existe).
+   * Actualiza documento `debounce` (ttl 3–4s).
+
+### Debounce Worker
+
+4. Pasados 3–4s → consolida mensajes de un `psid` en un solo texto.
+5. Verifica cooldown.
+6. Llama a lógica de decisión (IA o reglas simples).
+7. Si `send=true` → guarda mensajes en `outbound_queue`.
+
+### Sender Worker
+
+8. Cada \~250ms revisa `outbound_queue`.
+9. Si hay mensajes pendientes y se cumple pacing:
+
+   * Envía a IG API.
+   * Marca mensaje como enviado y guarda en historial.
+   * Actualiza `last_bot_at` y `cooldown_until` en la conversación.
+
+### Back Office
+
+10. Admin accede vía UI.
+11. Puede:
+
+    * Ver lista de conversaciones activas.
+    * Abrir timeline de un contacto.
+    * Enviar mensaje manual (entra a la `outbound_queue`).
+    * Editar configuraciones (cooldown, debounce, token IG).
+
+## 6. Datos Principales
+
+* **contacts**: info de usuarios (psid único).
+* **conversations**: estado actual de cada contacto.
+* **messages**: historial (rol: user/assistant/system).
+* **outbound\_queue**: mensajes pendientes de enviar.
+* **debounce**: mensajes temporales en ventana de espera.
+* **accounts**: datos de la cuenta IG (token, settings).
+
+## 7. Integraciones
+
+* **Instagram Graph API** para enviar mensajes (`/me/messages`).
+* **MongoDB** como base de datos principal.
+* **OpenAI (u otro modelo IA)** para generación de respuestas.
+
+## 8. Interfaz de Usuario (MVP)
+
+### Pantallas
+
+* **Login simple** (token admin).
+* **Conversations list**: tabla con PSID, última interacción, estado.
+* **Conversation detail**: timeline + input de texto para enviar manual.
+* **Settings**: formularios para editar tokens y parámetros.
+
+### Requisitos UX
+
+* UI limpia, responsive básica.
+* Timeline con roles diferenciados (usuario/bot).
+* Feedback inmediato cuando se envía manual.
+
+## 9. Restricciones
+
+* IG API tiene límites de velocidad y ventanas de 24h para respuestas → respetar.
+* El token de acceso se debe refrescar cada 60 días (planificar job).
+
+## 10. Criterios de Aceptación
+
+* Mensajes duplicados no generan respuestas múltiples.
+* Múltiples mensajes seguidos del mismo usuario en menos de 4s se consolidan.
+* Cooldown evita spam (ej: 2 mensajes en 5s → solo una respuesta).
+* Outbound respetando pacing (<5 msgs/sec) y retry en errores 429.
+* Back office permite listar, ver timeline, enviar manual y cambiar configuraciones.
 
 ---
 
-## 🧭 Journey del Doctor
-
-1. **Registro y Onboarding**
-
-   * Se registra en la plataforma (Nombre, Correo, Especialidad y Contraseña).
-   * Conecta su cuenta de Google Calendar.
-   * Define sus horarios disponibles, duración de consultas y tipos de atención (presencial, remota, domicilio).
-   * Configura políticas de cancelación y frecuencia de cobranza (diaria, semanal o mensual).
-
-2. **Gestión de Pacientes**
-
-   * Ingresa pacientes manualmente en el Backoffice o comparte un link para que el paciente inicie conversación con Tiare en WhatsApp.
-   * Ve historial de pacientes y notas asociadas.
-
-3. **Gestión de Agenda**
-
-   * Visualiza citas en el calendario sincronizado con Google Calendar.
-   * Reagenda o cancela citas desde el Backoffice.
-   * Revisa disponibilidad generada automáticamente por el sistema.
-
-4. **Cobranza y Boletas**
-
-   * Revisa el estado de pagos de sus pacientes (pendiente, pagado, vencido).
-   * Configura recordatorios automáticos de pago.
-   * Sube boletas en formato PDF y Tiare las envía a los pacientes.
-
-5. **Monitoreo**
-
-   * Consulta reportes en Backoffice (estado de agenda, cobranzas realizadas, pacientes atendidos).
-   * Accede a auditoría de eventos en `events_log`.
-
----
-
-## 🧭 Journey del Paciente
-
-1. **Primer Contacto**
-
-   * Recibe un link o QR para iniciar conversación con Tiare en WhatsApp.
-   * Proporciona datos básicos (nombre, teléfono).
-
-2. **Agendar Cita**
-
-   * Solicita disponibilidad a Tiare.
-   * Recibe opciones de horarios libres (calculados desde la configuración del doctor y Google Calendar).
-   * Confirma cita y recibe mensaje de confirmación con políticas de cancelación.
-
-3. **Reagendar/Cancelar**
-
-   * Pide a Tiare reagendar o cancelar.
-   * Recibe nuevas opciones de horarios o confirmación de cancelación.
-   * Si aplica, recibe información sobre penalización por cancelación tardía.
-
-4. **Durante la Consulta**
-
-   * Asiste en formato presencial, remoto o a domicilio, según lo acordado.
-   * Puede recibir recordatorios previos (24h y 2h antes).
-
-5. **Pago y Boleta**
-
-   * Recibe recordatorio de pago vía WhatsApp.
-   * Realiza transferencia o pago según lo indicado.
-   * Recibe boleta en formato PDF enviada automáticamente por Tiare.
-
-6. **Post-Consulta**
-
-   * Recibe agradecimiento o encuesta opcional vía WhatsApp.
-   * Puede consultar historial de citas o próximas citas programadas.
-
----
-
-## 📦 Componentes Técnicos (sin n8n)
-
-* Backend (Node.js con Express o NestJS).
-* MongoDB (Mongoose ODM).
-* React + Tailwind para Backoffice.
-* WhatsApp Cloud API para mensajería.
-* Google Calendar API para agenda.
-
----
-
-## 🛠️ Endpoints a Implementar
-
-Los necesarios para dichas funcionalidades, en la mejor estructura posible. Genera una propuesta en el plan.md
-
----
-
-## 🔁 Workers y Jobs en Backend
-
-* Reminder pre-appointment (24h/2h antes).
-* Reminder post-appointment (pago/encuesta).
-* Billing cycle (diario/semanal/mensual).
-* GCal poll/watch.
-* Invoice send.
-
----
-
-## ✅ Instrucciones para Cursor
-
-Haz un analisis del codigo existente.
-Genera un plan de migracion en plan.md.
-Debe considerar.
-Las funcionalidades y arquitectura objetivos.
-La estrategia para cambiar de lo actual a la nueva app.
-Debes reutilizar componentes mientras sea posible.
-Crea un .env ejemplo
+👉 Este PDR está escrito en clave **funcional**: describe cómo debe comportarse el sistema desde el punto de vista del negocio/usuario. La implementación técnica (Node/Mongo/Next.js) se desprende directamente de este documento.

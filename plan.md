@@ -1,333 +1,522 @@
-# 🏥 **Tiare - Sistema de Gestión de Práctica Médica**
+# 🚀 **Moca - Instagram DM Agent Implementation Plan**
 
-## 📋 **Resumen del Proyecto**
+## 📋 **Project Overview**
 
-**Tiare** es un sistema integral de gestión de práctica médica para psicólogos y psiquiatras. Incluye integración con Google Calendar, WhatsApp para comunicación con pacientes, y gestión completa de citas, facturación y expedientes médicos.
+**Moca** is an Instagram DM agent that handles lead communication intelligently, preventing spam, consolidating messages, and providing a back office for team management. The system centralizes all logic in a backend with database, eliminating external dependencies.
 
----
-
-## 🎯 **Objetivos del Sistema**
-
-1. **Gestión Integral de Práctica Médica** con roles de Doctor y Paciente
-2. **Integración con APIs Externas** (Google Calendar, WhatsApp, MercadoPago)
-3. **Interfaz Moderna y Responsiva** para profesionales de la salud
-4. **Sistema de Autenticación Robusto** y seguro
-5. **Funcionalidades Core** (agenda, facturación, expedientes)
+**Key Goal**: Transform the existing Tiare healthcare system into an Instagram DM management platform while preserving the existing architecture.
 
 ---
 
-## 🏗️ **Arquitectura del Sistema**
+## 🎯 **Core Requirements Analysis**
 
-### **Backend (Node.js + Express + TypeScript)**
-- **Servicios Core**: Doctor, Patient, Appointment, Billing, EventLog
-- **Autenticación**: JWT + Refresh Tokens + bcrypt
-- **Base de Datos**: MongoDB con Mongoose
-- **APIs Externas**: Google Calendar, WhatsApp Cloud, MercadoPago
+### **A) Message Reception (Incoming)**
+- ✅ Receive messages from Meta webhook (Instagram Graph API)
+- ✅ Respond 200 OK immediately to prevent Meta retries
+- ✅ Save messages to database (conversations, leads, history)
+- ✅ Apply deduplication by `mid` (unique Meta message ID)
+- ✅ Apply debounce (consolidate 2-3 messages sent in few seconds)
+- ✅ Verify cooldown (no bot response if replied within 7s)
 
-### **Frontend (React 18 + TypeScript + Tailwind CSS)**
-- **Componentes UI**: shadcn/ui + Radix UI
-- **Estado**: React Query + React Hook Form
-- **Validación**: Zod schemas
-- **Navegación**: React Router DOM
+### **B) Message Processing**
+- ✅ Evaluate if response is needed (rules + AI decision)
+- ✅ Generate response (AI Agent or backend rules)
+- ✅ Save planned response to outbound queue
 
-### **Modelos de Datos**
-- **Doctor**: Perfil profesional, especialización, horarios, configuración
-- **Patient**: Información médica, historial, preferencias de comunicación
-- **Appointment**: Citas, consultas, recordatorios, estado
-- **Billing**: Facturación, pagos, ciclos de cobro
-- **EventLog**: Auditoría, logs de sistema, trazabilidad
+### **C) Response Sending (Outgoing)**
+- ✅ Manage outbound queue
+- ✅ Respect global rate limits (max 3 messages/second)
+- ✅ Respect user locks (PSID) to prevent interleaved responses
+- ✅ Apply retry with backoff for 429/613 errors
+- ✅ Log sent responses in message history
 
----
+### **D) Contact & Conversation Management**
+- ✅ Each PSID saved as contact with enriched info
+- ✅ Active conversation with state (open, scheduled, closed)
+- ✅ Timestamps tracking (last_user_at, last_bot_at, cooldown_until)
+- ✅ Search, list, and filter conversations from back office
 
-## 📅 **Timeline & Estado del Proyecto**
-
-| Fase | Semana | Estado | Descripción |
-|------|--------|--------|-------------|
-| **Phase 1: Foundation** | 1-2 | ✅ **COMPLETED** | Setup inicial, modelos de datos, autenticación |
-| **Phase 2: Backend Services** | 3-4 | ✅ **COMPLETED** | Servicios core, endpoints API, integración DB |
-| **Phase 3: Frontend Transformation** | 5-6 | ✅ **COMPLETED** | UI/UX, componentes, navegación, formularios |
-| **Phase 4: Integration & Testing** | 7-8 | ✅ **COMPLETED** | API Integration, Workers & Automation, Testing & QA |
-| **Phase 5: UI/UX Refinement** | 9-10 | ✅ **COMPLETED** | UI Minimalista, Endpoint Optimization, Form Validation |
-| **Phase 6: Calendar Integration** | 9-10 | ✅ **COMPLETED** | Google Calendar Sync, Working Hours, Appointment Management |
-| **Phase 7: Enhanced API & Agent Support** | 11-12 | ✅ **COMPLETED** | Google Calendar as Source of Truth, Agent-Based Access, Enhanced Logging |
-
----
-
-## 🚀 **Fases Implementadas**
-
-### **Phase 1: Foundation** ✅ **COMPLETED**
-- **Setup del Proyecto**: TypeScript, ESLint, MongoDB, Tailwind CSS
-- **Modelos de Datos**: Doctor, Patient, Appointment, Billing, EventLog
-- **Sistema de Autenticación**: JWT, bcrypt, role-based access control
-
-### **Phase 2: Backend Services** ✅ **COMPLETED**
-- **Servicios Core**: Doctor, Patient, Appointment, Billing, Search
-- **APIs y Endpoints**: Health check, CRUD operations, authentication
-- **Integración de Base de Datos**: MongoDB, Mongoose, indexes, error handling
-
-### **Phase 3: Frontend Transformation** ✅ **COMPLETED**
-- **Componentes de Autenticación**: Login, Register, Onboarding
-- **Dashboard Principal**: Panel de control, estadísticas, acciones rápidas
-- **Gestión de Pacientes**: Formularios, validación, integración WhatsApp
-- **Sistema de Navegación**: MainLayout, sidebar, routing protegido
-
-### **Phase 4: Integration & Testing** ✅ **COMPLETED**
-- **API Integration**: Google Calendar API, Slack webhooks
-- **Appointment Management**: Endpoints funcionales, frontend completo
-- **Patient Management**: CRUD completo, asociación con doctores
-
-### **Phase 5: UI/UX Refinement** ✅ **COMPLETED**
-- **UI Minimalista**: Eliminación de mock data, elementos innecesarios
-- **Endpoint Optimization**: Autenticación JWT, validación robusta
-- **Calendar UI**: Filtros de fecha, indicador de conexión, diseño zebra
-
-### **Phase 6: Calendar Integration** ✅ **COMPLETED**
-- **Google Calendar OAuth**: Autenticación segura, sincronización
-- **Appointment Management**: CRUD con calendar sync, conflict detection
-- **Calendar Features**: Working hours, availability checking, real-time sync
-
-### **Phase 7: Enhanced API & Agent Support** ✅ **COMPLETED**
-- **Google Calendar as Source of Truth**: Real-time data, smart fallback
-- **Agent-Based Access**: Flexible parameter system, external integrations
-- **Enhanced Logging**: Comprehensive debugging, production monitoring
-- **API Improvements**: Better filtering, pagination, error handling
+### **E) Back Office (Minimal Features)**
+- ✅ Conversations list: view open contacts and last interaction
+- ✅ Conversation view: message timeline + manual message input
+- ✅ Configuration panel: edit basic parameters
+- ✅ Simple authentication (x-admin-token)
 
 ---
 
-## 🎨 **Estructura del Sistema**
+## 🏗️ **Architecture Transformation Plan**
 
-### **Frontend Pages**
-- `auth/` - Login, Register, Onboarding
-- `dashboard/` - Panel principal, estadísticas, acciones rápidas
-- `patients/` - Gestión de pacientes, creación, búsqueda
-- `appointments/` - Agenda, programación de citas, gestión
-- `billing/` - Facturación, pagos, reportes
-- `profile/` - Perfil del doctor, configuración
+### **Phase 1: Backend Infrastructure (Week 1-2)** ✅ **READY**
+- **Status**: Existing Tiare backend structure is perfect for this transformation
+- **Actions**: 
+  - Preserve existing Express.js + TypeScript + MongoDB architecture
+  - Reuse authentication middleware and database models
+  - Adapt existing services for Instagram DM functionality
 
-### **Backend Services**
-- `auth.service.ts` - JWT, password hashing, token refresh
-- `doctor.service.ts` - Gestión de perfiles médicos
-- `patient.service.ts` - CRUD de pacientes, búsquedas
-- `appointment.service.ts` - Programación y gestión de citas
-- `billing.service.ts` - Facturación y ciclos de pago
-- `search.service.ts` - Búsqueda de usuarios por teléfono
-- `googleCalendar.service.ts` - Integración con Google Calendar
-- `whatsapp.service.ts` - Integración con WhatsApp Cloud API
+### **Phase 2: Data Model Adaptation (Week 2-3)**
+- **Transform existing models**:
+  - `Doctor` → `InstagramAccount` (token, settings, rate limits)
+  - `Patient` → `Contact` (PSID, name, sector, email)
+  - `Appointment` → `Conversation` (state, timestamps, cooldown)
+  - `Billing` → `Message` (incoming/outgoing, AI responses)
+  - `EventLog` → `OutboundQueue` (pending messages, retry logic)
 
-### **API Endpoints**
-- `/api/health` - Health check del sistema
-- `/api/doctors/*` - Gestión de doctores
-- `/api/patients/*` - Gestión de pacientes
-- `/api/appointments/*` - Gestión de citas
-- `/api/billing/*` - Gestión de facturación
-- `/api/search/*` - Búsquedas de usuarios
-- `/api/doctors/calendar/*` - Integración con Google Calendar
+### **Phase 3: Instagram API Integration (Week 3-4)**
+- **Webhook endpoint**: `/api/instagram/webhook`
+- **Message sending**: `/api/instagram/messages`
+- **Rate limiting**: Global and per-user pacing
+- **Error handling**: 429/613 retry with exponential backoff
 
----
+### **Phase 4: AI Agent Integration (Week 4-5)**
+- **Reuse existing OpenAI service** from Tiare
+- **Decision logic**: When to respond, what to say
+- **Response generation**: Context-aware message creation
+- **Fallback rules**: Simple backend rules when AI unavailable
 
-## 🔒 **Seguridad y Autenticación**
+### **Phase 5: Back Office Development (Week 5-6)**
+- **Transform existing Tiare frontend**:
+  - Dashboard → Conversations Overview
+  - Patients → Contacts Management
+  - Appointments → Conversation Timeline
+  - Billing → Message Queue Management
 
-### **JWT Implementation**
-- **Access Token**: 15 minutos (configurable)
-- **Refresh Token**: 7 días (configurable)
-- **Secret Keys**: Variables de entorno configurables
-- **Token Refresh**: Renovación automática
-
-### **Password Security**
-- **Hashing**: bcrypt con salt rounds configurables
-- **Validation**: Requisitos mínimos de contraseña
-- **Rate Limiting**: Protección contra ataques
-
-### **API Security**
-- **CORS**: Configuración específica para dominios
-- **Rate Limiting**: Protección contra abuso
-- **Input Validation**: Sanitización y validación
-- **Error Handling**: No exposición de información sensible
+### **Phase 6: Testing & Optimization (Week 6-7)**
+- **Integration testing**: Instagram API, webhook handling
+- **Performance testing**: Rate limiting, queue management
+- **Security testing**: Authentication, input validation
+- **User acceptance testing**: Back office usability
 
 ---
 
-## 📱 **Integración con APIs Externas**
+## 🔄 **System Flow Implementation**
 
-### **Google Calendar API**
-- **OAuth 2.0**: Autenticación segura
-- **Calendar Sync**: Sincronización bidireccional
-- **Event Management**: CRUD completo de eventos
-- **Working Hours**: Configuración de horarios laborales
-- **Source of Truth**: Datos en tiempo real como prioridad
+### **1. Incoming Message Flow**
+```
+Instagram Webhook → Backend (200 OK) → Database Upsert → Debounce Worker
+```
 
-### **WhatsApp Cloud API**
-- **Business Account**: Cuenta empresarial verificada
-- **Message Templates**: Plantillas pre-aprobadas
-- **Patient Communication**: Inicio de conversaciones
-- **Appointment Reminders**: Recordatorios automáticos
+**Implementation**:
+- **Route**: `POST /api/instagram/webhook`
+- **Middleware**: Rate limiting, validation, immediate response
+- **Service**: `instagramWebhook.service.ts`
+- **Database**: Upsert contact + conversation + message
 
-### **MercadoPago Integration**
-- **Payment Processing**: Procesamiento de pagos
-- **Subscription Management**: Gestión de suscripciones
-- **Invoice Generation**: Generación automática de facturas
+### **2. Debounce Worker**
+```
+Timer (3-4s) → Message Consolidation → Cooldown Check → AI Decision → Queue
+```
+
+**Implementation**:
+- **Service**: `debounceWorker.service.ts`
+- **Logic**: Consolidate messages by PSID, check cooldown, generate response
+- **Output**: Add to outbound queue if response needed
+
+### **3. Sender Worker**
+```
+Queue Check (250ms) → Rate Limit Check → Instagram API → Update Status
+```
+
+**Implementation**:
+- **Service**: `senderWorker.service.ts`
+- **Rate Limiting**: Global pacing, user locks, retry logic
+- **API Calls**: Instagram Graph API with error handling
+
+### **4. Back Office Flow**
+```
+Admin Login → Conversations List → Conversation Detail → Manual Message → Queue
+```
+
+**Implementation**:
+- **Routes**: Protected admin endpoints
+- **UI**: React components for conversation management
+- **Real-time**: WebSocket updates for live conversation view
 
 ---
 
-## 🧪 **Testing y Calidad**
+## 📊 **Data Model Transformation**
 
-### **Testing Strategy**
-- **Unit Testing**: Servicios, modelos, utilidades
-- **Integration Testing**: API endpoints, base de datos, APIs externas
-- **E2E Testing**: Flujos completos de usuario
+### **InstagramAccount Model** (from Doctor)
+```typescript
+interface InstagramAccount {
+  id: string;
+  accountId: string;           // Instagram account ID
+  accessToken: string;         // Instagram Graph API token
+  refreshToken?: string;       // For token refresh
+  tokenExpiry: Date;          // Token expiration
+  rateLimits: {
+    messagesPerSecond: number; // Global rate limit
+    userCooldown: number;      // Seconds between responses to same user
+    debounceWindow: number;    // Seconds to consolidate messages
+  };
+  settings: {
+    autoRespond: boolean;      // Enable/disable auto-responses
+    aiEnabled: boolean;        // Use AI for responses
+    fallbackRules: string[];   // Simple response rules
+  };
+}
+```
 
-### **Quality Assurance**
-- **Code Quality**: TypeScript, ESLint, Prettier
-- **Performance**: Optimización de queries, caching
-- **Security**: Validación de inputs, autenticación robusta
+### **Contact Model** (from Patient)
+```typescript
+interface Contact {
+  id: string;
+  psid: string;               // Instagram PSID (unique)
+  name?: string;              // Display name
+  sector?: string;            // Business sector
+  email?: string;             // Contact email
+  metadata: {
+    firstSeen: Date;          // First interaction
+    lastSeen: Date;           // Last interaction
+    messageCount: number;     // Total messages
+    responseCount: number;    // Bot responses sent
+  };
+  tags: string[];             // Custom tags for categorization
+}
+```
 
----
+### **Conversation Model** (from Appointment)
+```typescript
+interface Conversation {
+  id: string;
+  contactId: string;          // Reference to Contact
+  accountId: string;          // Reference to InstagramAccount
+  status: 'open' | 'scheduled' | 'closed';
+  timestamps: {
+    createdAt: Date;          // Conversation start
+    lastUserMessage: Date;    // Last user message
+    lastBotMessage: Date;     // Last bot response
+    cooldownUntil: Date;      // When bot can respond again
+  };
+  context: {
+    topic?: string;           // Conversation topic
+    intent?: string;          // User intent
+    sentiment?: 'positive' | 'neutral' | 'negative';
+  };
+}
+```
 
-## 🚀 **Deployment y DevOps**
+### **Message Model** (from Billing)
+```typescript
+interface Message {
+  id: string;
+  mid: string;                // Meta message ID (unique)
+  conversationId: string;     // Reference to Conversation
+  role: 'user' | 'assistant' | 'system';
+  content: string;            // Message text
+  metadata: {
+    timestamp: Date;          // Message timestamp
+    isConsolidated: boolean;  // Multiple messages merged
+    originalMids: string[];   // Original message IDs if consolidated
+    aiGenerated: boolean;     // Generated by AI or rules
+  };
+  status: 'received' | 'queued' | 'sent' | 'failed';
+}
+```
 
-### **Environment Configuration**
-- **Development**: Local con variables de entorno
-- **Staging**: Entorno de pruebas con datos reales
-- **Production**: Railway deployment con MongoDB Atlas
-
-### **Environment Variables**
-```bash
-# Server
-PORT=3002
-NODE_ENV=production
-
-# Database
-MONGODB_URI=mongodb+srv://...
-
-# Authentication
-JWT_SECRET=your-secret-key
-JWT_REFRESH_SECRET=your-refresh-secret
-JWT_EXPIRES_IN=1h
-JWT_REFRESH_EXPIRES_IN=7d
-
-# External APIs
-GOOGLE_CALENDAR_CLIENT_ID=your-client-id
-GOOGLE_CALENDAR_CLIENT_SECRET=your-client-secret
-WHATSAPP_ACCESS_TOKEN=your-whatsapp-token
-MERCADOPAGO_ACCESS_TOKEN=your-mercadopago-token
+### **OutboundQueue Model** (from EventLog)
+```typescript
+interface OutboundQueue {
+  id: string;
+  messageId: string;          // Reference to Message
+  conversationId: string;     // Reference to Conversation
+  priority: 'high' | 'normal' | 'low';
+  scheduledFor: Date;        // When to send
+  retryCount: number;        // Number of retry attempts
+  lastAttempt: Date;         // Last attempt timestamp
+  status: 'pending' | 'processing' | 'sent' | 'failed';
+  errorDetails?: {
+    code: string;             // Instagram API error code
+    message: string;          // Error description
+    retryAfter?: Date;        // When to retry
+  };
+}
 ```
 
 ---
 
-## 📊 **Estado Actual del Proyecto**
+## 🛠️ **Implementation Details**
 
-### **✅ Funcionalidades Completadas**
-- **Sistema de Autenticación**: JWT + Refresh tokens + bcrypt
-- **Gestión de Usuarios**: Doctor registration, login, profile management
-- **Gestión de Pacientes**: Create, search, associate with doctors
-- **Dashboard**: Interfaz funcional con datos reales
-- **Búsqueda**: Find users by phone number
-- **Validación de Formularios**: Robust validation con feedback inmediato
-- **UI/UX**: Diseño minimalista, sin mock data
-- **Navegación**: Sistema de routing completo
-- **Integración de Calendario**: Google Calendar sync, appointment display
-- **Gestión de Citas**: Create appointments, patient association
-- **API Enhancements**: Google Calendar as source of truth, agent support
-- **Enhanced Logging**: Comprehensive debugging capabilities
+### **Backend Services to Create/Adapt**
 
-### **🔄 En Progreso**
-- **Testing Suite**: Unit and integration tests
-- **Advanced Calendar Features**: Working hours, automatic scheduling
-- **Production Deployment**: Environment setup and monitoring
+#### **1. Instagram Webhook Service**
+```typescript
+// src/services/instagramWebhook.service.ts
+class InstagramWebhookService {
+  async handleWebhook(payload: MetaWebhookPayload): Promise<void>
+  async validateSignature(payload: string, signature: string): Promise<boolean>
+  async processMessage(message: InstagramMessage): Promise<void>
+  async upsertContact(psid: string, message: InstagramMessage): Promise<Contact>
+  async createConversation(contactId: string): Promise<Conversation>
+}
+```
 
-### **📋 Pendiente**
-- **Sistema de Facturación**: Complete payment processing
-- **Sistema de Notificaciones**: Automated reminders and alerts
-- **Performance Optimization**: Caching and query optimization
-- **Integración WhatsApp**: Patient communication system
-- **Integración MercadoPago**: Payment processing
+#### **2. Debounce Worker Service**
+```typescript
+// src/services/debounceWorker.service.ts
+class DebounceWorkerService {
+  async processDebouncedMessages(): Promise<void>
+  async consolidateMessages(psid: string, windowMs: number): Promise<string>
+  async checkCooldown(conversationId: string): Promise<boolean>
+  async generateResponse(conversationId: string): Promise<string>
+  async queueResponse(conversationId: string, response: string): Promise<void>
+}
+```
+
+#### **3. Sender Worker Service**
+```typescript
+// src/services/senderWorker.service.ts
+class SenderWorkerService {
+  async processOutboundQueue(): Promise<void>
+  async sendMessage(messageId: string): Promise<boolean>
+  async handleRateLimitError(error: InstagramError): Promise<void>
+  async applyBackoff(messageId: string, retryCount: number): Promise<void>
+  async updateMessageStatus(messageId: string, status: string): Promise<void>
+}
+```
+
+#### **4. Instagram API Service**
+```typescript
+// src/services/instagramApi.service.ts
+class InstagramApiService {
+  async sendMessage(psid: string, message: string): Promise<InstagramResponse>
+  async refreshToken(accountId: string): Promise<void>
+  async validateToken(accountId: string): Promise<boolean>
+  async getAccountInfo(accountId: string): Promise<InstagramAccountInfo>
+}
+```
+
+### **Frontend Components to Create/Adapt**
+
+#### **1. Conversations Dashboard**
+```typescript
+// src/pages/conversations/ConversationsDashboard.tsx
+// Transform existing Dashboard.tsx
+interface ConversationsDashboard {
+  conversations: Conversation[];
+  stats: {
+    totalContacts: number;
+    activeConversations: number;
+    pendingResponses: number;
+    messagesToday: number;
+  };
+  filters: {
+    status: string;
+    dateRange: DateRange;
+    tags: string[];
+  };
+}
+```
+
+#### **2. Conversation Detail View**
+```typescript
+// src/pages/conversations/ConversationDetail.tsx
+// Transform existing AppointmentsPage.tsx
+interface ConversationDetail {
+  conversation: Conversation;
+  messages: Message[];
+  contact: Contact;
+  sendManualMessage: (content: string) => Promise<void>;
+  updateStatus: (status: string) => Promise<void>;
+}
+```
+
+#### **3. Settings Panel**
+```typescript
+// src/pages/settings/InstagramSettings.tsx
+// Transform existing billing interface
+interface InstagramSettings {
+  account: InstagramAccount;
+  rateLimits: RateLimitSettings;
+  aiSettings: AIConfiguration;
+  webhookSettings: WebhookConfiguration;
+}
+```
 
 ---
 
-## 🔄 **Próximos Pasos y Roadmap**
+## 🔒 **Security & Authentication**
 
-### **Prioridades Inmediatas (Semana 13-14)**
-1. **Testing & QA**
-   - Implementar suite de tests completa
-   - Testing de integración con APIs externas
-   - Performance testing y optimización
+### **Admin Authentication**
+- **Method**: Simple token-based auth (x-admin-token header)
+- **Implementation**: Reuse existing auth middleware
+- **Security**: Environment variable for admin token
+- **Rate Limiting**: Prevent brute force attacks
 
-2. **Production Deployment**
-   - Configuración de entorno de producción
-   - Monitoreo y logging en producción
-   - Backup y disaster recovery
+### **Webhook Security**
+- **Signature Validation**: Verify Meta webhook signatures
+- **IP Whitelisting**: Only accept from Meta IP ranges
+- **Token Validation**: Validate Instagram access tokens
 
-3. **Advanced Calendar Features**
-   - Gestión de horarios de trabajo
-   - Programación automática de citas
-   - Conflictos de horarios y validaciones
-
-### **Mediano Plazo (Mes 3-4)**
-1. **Advanced Features**
-   - Sistema de recordatorios automáticos
-   - Reportes y analytics
-   - Integración con sistemas de salud
-
-2. **Mobile Application**
-   - React Native app para doctores
-   - Notificaciones push
-   - Offline functionality
-
-3. **AI & Automation**
-   - Chatbot para pacientes
-   - Análisis de patrones de citas
-   - Recomendaciones automáticas
-
-### **Largo Plazo (Mes 5-6)**
-1. **Enterprise Features**
-   - Multi-tenant architecture
-   - Advanced reporting
-   - Integration APIs
-
-2. **Internationalization**
-   - Multi-language support
-   - Local compliance
-   - Regional payment methods
+### **Data Protection**
+- **Input Sanitization**: Clean all incoming messages
+- **SQL Injection Prevention**: Use Mongoose properly
+- **Rate Limiting**: Prevent abuse of all endpoints
 
 ---
 
-## 🎉 **Conclusión**
+## 📱 **Instagram API Integration**
 
-**Tiare** ha completado exitosamente las **Fases 1-7**, transformándose en una plataforma de gestión médica funcional y profesional. El sistema cuenta con:
+### **Webhook Configuration**
+```typescript
+// Webhook endpoint: /api/instagram/webhook
+// Meta verification: GET /api/instagram/webhook?hub.mode=subscribe&hub.challenge=...
+// Message reception: POST /api/instagram/webhook
+```
 
-- ✅ **Arquitectura sólida** y escalable
-- ✅ **Autenticación robusta** y segura
-- ✅ **UI/UX refinada** y minimalista
-- ✅ **Funcionalidades core** completamente implementadas
-- ✅ **Integración de base de datos** funcional
-- ✅ **Validación robusta** de formularios
-- ✅ **Navegación completa** entre todas las secciones
-- ✅ **Google Calendar integration** como fuente de verdad
-- ✅ **Soporte para agentes** y sistemas externos
-- ✅ **Logging mejorado** para debugging en producción
+### **Message Sending**
+```typescript
+// Instagram Graph API: /me/messages
+// Rate limits: 250 messages per user per day
+// Response time: 24-hour window for responses
+```
 
-**Estado General: 90% COMPLETADO** 🚀
+### **Error Handling**
+```typescript
+// 429: Rate limit exceeded → exponential backoff
+// 613: User limit exceeded → wait until next day
+// 100: Invalid parameter → log and skip
+// 190: Invalid token → refresh token
+```
 
-El proyecto está listo para producción y permite un desarrollo rápido de las funcionalidades restantes como facturación y notificaciones automáticas. 
+---
 
+## 🧪 **Testing Strategy**
 
-//To do
-Quitar todo lo de prueba, endpoints, mock data, etc.
-Mejorar logs en backend para que muestren las actividades que se estan haciendo
+### **Unit Tests**
+- **Services**: InstagramWebhook, DebounceWorker, SenderWorker
+- **Models**: Data validation and relationships
+- **Utilities**: Rate limiting, debouncing, cooldown logic
 
-Onboarding refinar:
-Quitar numero licencia
-Tipo de consulta, poder poner nombre
+### **Integration Tests**
+- **Webhook Flow**: End-to-end message processing
+- **API Integration**: Instagram Graph API calls
+- **Database Operations**: CRUD operations and relationships
 
-Check veificacion  app en google (Conectar google calendar)
+### **Performance Tests**
+- **Rate Limiting**: Verify pacing and cooldown
+- **Queue Processing**: Outbound message handling
+- **Database Performance**: Large conversation volumes
 
-Limpiar barra lateral, Dashboard, Citas, Pacientes. 
+### **Security Tests**
+- **Webhook Validation**: Signature verification
+- **Authentication**: Admin token validation
+- **Input Validation**: Message content sanitization
 
-Revisar manejo de numeros de telefono sin + ni espacios
+---
 
-Al crear paciente no deberia pedir numero de telefono del doctor en la UI
+## 🚀 **Deployment & DevOps**
 
-Revisar link a whatsapp, debe tener numero de Tiare
-https://wa.me/56996706983?text=Hola%20Alvaro%20Fidelizarte!%20%F0%9F%91%8B%20Soy%20el%20asistente%20virtual%20de%20Tiare.
-%20%C2%BFEn%20qu%C3%A9%20puedo%20ayudarte%20hoy%3F
+### **Environment Variables**
+```bash
+# Instagram Configuration
+INSTAGRAM_APP_ID=your_app_id
+INSTAGRAM_APP_SECRET=your_app_secret
+INSTAGRAM_VERIFY_TOKEN=your_webhook_verify_token
+INSTAGRAM_ACCESS_TOKEN=your_access_token
 
-Revisar gestion de horas.
+# Admin Authentication
+ADMIN_TOKEN=your_admin_token
+
+# Rate Limiting
+GLOBAL_RATE_LIMIT=3
+USER_COOLDOWN_SECONDS=3
+DEBOUNCE_WINDOW_MS=4000
+
+# AI Configuration
+OPENAI_API_KEY=your_openai_key
+AI_ENABLED=true
+```
+
+### **Monitoring & Logging**
+- **Webhook Logs**: All incoming messages and processing
+- **Queue Monitoring**: Outbound message status and retries
+- **Rate Limit Tracking**: API usage and limits
+- **Error Tracking**: Failed messages and retry attempts
+
+---
+
+## 📅 **Timeline & Milestones**
+
+### **Week 1-2: Backend Infrastructure** 🏗️
+- [ ] Adapt existing Tiare models for Instagram functionality
+- [ ] Create Instagram webhook endpoint
+- [ ] Implement basic message reception and storage
+- [ ] Set up Instagram API service
+
+### **Week 3-4: Core Logic Implementation** ⚙️
+- [ ] Implement debounce worker service
+- [ ] Implement sender worker service
+- [ ] Add rate limiting and cooldown logic
+- [ ] Integrate AI response generation
+
+### **Week 5-6: Frontend Development** 🎨
+- [ ] Transform existing Tiare UI for conversation management
+- [ ] Create conversations dashboard
+- [ ] Implement conversation detail view
+- [ ] Add settings and configuration panels
+
+### **Week 7: Testing & Deployment** 🧪
+- [ ] Comprehensive testing suite
+- [ ] Performance optimization
+- [ ] Security audit
+- [ ] Production deployment
+
+---
+
+## 🎯 **Success Criteria**
+
+### **Functional Requirements**
+- ✅ **Message Deduplication**: No duplicate responses to same `mid`
+- ✅ **Debounce Logic**: Multiple messages in <4s consolidated
+- ✅ **Cooldown System**: Prevents spam (2 messages in 5s → 1 response)
+- ✅ **Rate Limiting**: Respects Instagram API limits (<5 msgs/sec)
+- ✅ **Retry Logic**: Handles 429/613 errors with backoff
+- ✅ **Back Office**: List, view, manual send, configure
+
+### **Performance Requirements**
+- **Response Time**: Webhook response <100ms
+- **Processing**: Message processing <5s
+- **Queue**: Outbound queue processing <1s
+- **Database**: Query response <100ms
+
+### **Security Requirements**
+- **Webhook Validation**: 100% signature verification
+- **Authentication**: Secure admin access
+- **Input Sanitization**: All messages cleaned
+- **Rate Limiting**: Prevent abuse
+
+---
+
+## 🔄 **Migration Strategy**
+
+### **Preserve Existing Structure**
+- **Keep**: Express.js, TypeScript, MongoDB, authentication
+- **Adapt**: Models, services, routes for Instagram functionality
+- **Transform**: Frontend components for conversation management
+- **Maintain**: Code quality, testing, deployment patterns
+
+### **Gradual Transition**
+1. **Phase 1**: Add Instagram functionality alongside existing features
+2. **Phase 2**: Gradually replace healthcare features with DM management
+3. **Phase 3**: Remove unused healthcare code
+4. **Phase 4**: Optimize and polish Instagram DM system
+
+---
+
+## 💡 **Innovation Opportunities**
+
+### **AI Enhancement**
+- **Smart Routing**: Route conversations to human agents when needed
+- **Sentiment Analysis**: Detect user mood and adjust responses
+- **Intent Recognition**: Understand user goals and provide relevant info
+- **Multi-language Support**: Handle conversations in different languages
+
+### **Advanced Features**
+- **Automated Follow-ups**: Schedule reminder messages
+- **Lead Scoring**: Prioritize high-value conversations
+- **Integration APIs**: Connect with CRM and marketing tools
+- **Analytics Dashboard**: Conversation insights and metrics
+
+---
+
+**🎉 This plan transforms the existing Tiare healthcare system into a powerful Instagram DM management platform while preserving the solid architecture and development practices already established.**
