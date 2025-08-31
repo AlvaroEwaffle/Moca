@@ -83,7 +83,7 @@ export interface IContact extends Document {
 }
 
 const ContactSchema = new Schema<IContact>({
-  psid: { type: String, required: true, unique: true, index: true },
+  psid: { type: String, required: true, unique: true },
   name: { type: String, required: false },
   email: { type: String, required: false },
   phone: { type: String, required: false },
@@ -105,7 +105,6 @@ const ContactSchema = new Schema<IContact>({
 });
 
 // Indexes for performance
-ContactSchema.index({ psid: 1 });
 ContactSchema.index({ status: 1 });
 ContactSchema.index({ 'metadata.lastSeen': -1 });
 ContactSchema.index({ 'metadata.engagementScore': -1 });

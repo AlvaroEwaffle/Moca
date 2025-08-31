@@ -94,10 +94,10 @@ export interface IOutboundQueue extends Document {
 }
 
 const OutboundQueueSchema = new Schema<IOutboundQueue>({
-  messageId: { type: String, required: true, unique: true, index: true },
-  conversationId: { type: String, required: true, index: true },
-  contactId: { type: String, required: true, index: true },
-  accountId: { type: String, required: true, index: true },
+  messageId: { type: String, required: true, unique: true },
+  conversationId: { type: String, required: true },
+  contactId: { type: String, required: true },
+  accountId: { type: String, required: true },
   priority: { type: String, enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
   status: { type: String, enum: ['pending', 'processing', 'sent', 'failed', 'cancelled'], default: 'pending' },
   metadata: { type: QueueItemMetadataSchema, default: () => ({}) },
@@ -116,7 +116,6 @@ const OutboundQueueSchema = new Schema<IOutboundQueue>({
 });
 
 // Indexes for performance
-OutboundQueueSchema.index({ messageId: 1 });
 OutboundQueueSchema.index({ conversationId: 1 });
 OutboundQueueSchema.index({ contactId: 1 });
 OutboundQueueSchema.index({ accountId: 1 });

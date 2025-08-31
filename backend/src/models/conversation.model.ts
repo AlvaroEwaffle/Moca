@@ -98,8 +98,8 @@ export interface IConversation extends Document {
 }
 
 const ConversationSchema = new Schema<IConversation>({
-  contactId: { type: String, required: true, index: true },
-  accountId: { type: String, required: true, index: true },
+  contactId: { type: String, required: true },
+  accountId: { type: String, required: true },
   status: { type: String, enum: ['open', 'scheduled', 'closed', 'archived'], default: 'open' },
   timestamps: { type: ConversationTimestampsSchema, default: () => ({}) },
   context: { type: ConversationContextSchema, default: () => ({}) },

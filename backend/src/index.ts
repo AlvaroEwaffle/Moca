@@ -8,19 +8,15 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 
 // Import routes
-import doctorRoutes from './routes/doctor.routes';
-import patientRoutes from './routes/patient.routes';
-import searchRoutes from './routes/search.routes';
-import calendarRoutes from './routes/calendar.routes';
-import appointmentRoutes from './routes/appointment.routes';
 import instagramRoutes from './routes/instagram.routes';
 
 // Debug: Log environment variables
 console.log('🔧 [Environment Check] Loaded environment variables:', {
   MONGODB_URI: !!process.env.MONGODB_URI,
-  GOOGLE_CALENDAR_CLIENT_ID: !!process.env.GOOGLE_CALENDAR_CLIENT_ID,
-  GOOGLE_CALENDAR_CLIENT_SECRET: !!process.env.GOOGLE_CALENDAR_CLIENT_SECRET,
-  GOOGLE_CALENDAR_REDIRECT_URI: !!process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+  OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
+  INSTAGRAM_VERIFY_TOKEN: !!process.env.INSTAGRAM_VERIFY_TOKEN,
+  INSTAGRAM_APP_SECRET: !!process.env.INSTAGRAM_APP_SECRET,
+  INSTAGRAM_ACCESS_TOKEN: !!process.env.INSTAGRAM_ACCESS_TOKEN,
   NODE_ENV: process.env.NODE_ENV
 });
 
@@ -37,17 +33,12 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-          service: 'Moca Instagram DM Agent API',
+    service: 'Moca Instagram DM Agent API',
     version: '1.0.0'
   });
 });
 
 // API Routes
-app.use('/api/doctors', doctorRoutes);
-app.use('/api/patients', patientRoutes);
-app.use('/api/search', searchRoutes);
-app.use('/api/doctors/calendar', calendarRoutes);
-app.use('/api/appointments', appointmentRoutes);
 app.use('/api/instagram', instagramRoutes);
 
 // Error handling middleware
@@ -86,13 +77,7 @@ mongoose.connect(MONGODB_URI)
     app.listen(PORT, () => {
       console.log('📱 Moca Instagram DM Agent API running on port', PORT);
       console.log('📊 Health check: http://localhost:' + PORT + '/api/health');
-      console.log('👨‍⚕️ Doctor routes: http://localhost:' + PORT + '/api/doctors');
-      console.log('👶 Patient routes: http://localhost:' + PORT + '/api/patients');
-      console.log('🔍 Search routes: http://localhost:' + PORT + '/api/appointments');
-      console.log('📅 Calendar routes: http://localhost:' + PORT + '/api/doctors/calendar');
-      console.log('📅 Appointment routes: http://localhost:' + PORT + '/api/appointments');
       console.log('📱 Instagram routes: http://localhost:' + PORT + '/api/instagram');
-      console.log('📞 Doctor info endpoint: http://localhost:' + PORT + '/api/doctors/info/:id');
     });
   })
   .catch((error) => {

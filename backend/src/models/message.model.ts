@@ -102,10 +102,10 @@ export interface IMessage extends Document {
 }
 
 const MessageSchema = new Schema<IMessage>({
-  mid: { type: String, required: true, unique: true, index: true },
-  conversationId: { type: String, required: true, index: true },
-  contactId: { type: String, required: true, index: true },
-  accountId: { type: String, required: true, index: true },
+  mid: { type: String, required: true, unique: true },
+  conversationId: { type: String, required: true },
+  contactId: { type: String, required: true },
+  accountId: { type: String, required: true },
   role: { type: String, enum: ['user', 'assistant', 'system'], required: true },
   content: { type: MessageContentSchema, required: true },
   metadata: { type: MessageMetadataSchema, default: () => ({}) },
@@ -124,7 +124,6 @@ const MessageSchema = new Schema<IMessage>({
 });
 
 // Indexes for performance
-MessageSchema.index({ mid: 1 });
 MessageSchema.index({ conversationId: 1 });
 MessageSchema.index({ contactId: 1 });
 MessageSchema.index({ accountId: 1 });

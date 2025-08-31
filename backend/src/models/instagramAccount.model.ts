@@ -103,7 +103,6 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
 });
 
 // Indexes for performance
-InstagramAccountSchema.index({ accountId: 1 });
 InstagramAccountSchema.index({ accountName: 1 });
 InstagramAccountSchema.index({ isActive: 1 });
 InstagramAccountSchema.index({ 'metadata.lastSync': 1 });
