@@ -1,482 +1,313 @@
-# 🏥 Tiare - Healthcare Practice Management System
+# 🚀 **Moca - Instagram DM Agent**
 
-**Tiare** is a comprehensive healthcare practice management system designed for psychologists and psychiatrists. It provides a complete solution for patient management, appointment scheduling, billing, and professional practice administration with modern web technologies and external API integrations.
+[![GitHub](https://img.shields.io/badge/GitHub-Moca-blue?style=flat&logo=github)](https://github.com/AlvaroEwaffle/Moca)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green?style=flat&logo=node.js)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18+-blue?style=flat&logo=react)](https://reactjs.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-6+-green?style=flat&logo=mongodb)](https://www.mongodb.com/)
 
-## 🚀 Current Status
+**Moca** is an intelligent Instagram DM agent that handles lead communication automatically, preventing spam, consolidating messages, and providing a professional back office for team management. Built on a solid foundation with modern web technologies.
 
-**✅ PRODUCTION READY - Phase 6 COMPLETED**
+## 🎯 **What Moca Does**
 
-Tiare has successfully completed all planned development phases and is now a fully functional healthcare practice management system deployed on Railway.
+### **Smart Message Management**
+- 🤖 **AI-Powered Responses**: Generate contextual replies using OpenAI
+- ⚡ **Debounce Logic**: Consolidate multiple rapid messages into one
+- 🚫 **Anti-Spam Protection**: Cooldown system prevents bot spam
+- 📊 **Rate Limiting**: Respects Instagram API limits automatically
 
-## 🎯 Core Features
+### **Professional Back Office**
+- 👥 **Conversation Management**: View and manage all active conversations
+- 💬 **Manual Override**: Send manual messages when needed
+- ⚙️ **Configuration Panel**: Adjust settings, rate limits, and AI behavior
+- 📈 **Analytics Dashboard**: Monitor performance and engagement
 
-### ✅ **Fully Implemented & Working**
-- **🔐 Authentication System**: JWT + Refresh tokens with bcrypt (30-day duration)
-- **👨‍⚕️ Doctor Management**: Registration, login, profile management, and professional dashboard
-- **👶 Patient Management**: Create, search, associate with doctors, and comprehensive patient records
-- **📅 Appointment System**: Full appointment creation, management, and Google Calendar integration
-- **🔍 Search & Discovery**: Find doctors and patients by phone number (exact and partial matches)
-- **📱 WhatsApp Integration**: Automatic patient communication setup with personalized links
-- **🎨 Modern UI/UX**: Clean, minimalist interface built with React, TypeScript, and Tailwind CSS
-- **🗄️ Database**: MongoDB with Mongoose ODM for robust data persistence
-- **🔌 External APIs**: Google Calendar sync, WhatsApp integration, MercadoPago payment processing
+### **Instagram Integration**
+- 🔗 **Webhook Handling**: Secure Meta webhook integration
+- 📱 **Message Sending**: Instagram Graph API with error handling
+- 🔄 **Token Management**: Automatic token refresh and validation
+- 📋 **Queue Management**: Reliable outbound message processing
 
-### 🔄 **In Development & Testing**
-- **Advanced Calendar Features**: Working hours configuration, automatic scheduling
-- **Billing System**: Complete payment processing and invoice generation
-- **Notification System**: Automated reminders and patient communications
-- **Performance Optimization**: Caching and query optimization
-
-## 🏗️ Architecture
+## 🏗️ **Architecture**
 
 ### **Backend Stack**
 - **Runtime**: Node.js 18+ with TypeScript
 - **Framework**: Express.js with middleware architecture
 - **Database**: MongoDB with Mongoose ODM
-- **Authentication**: JWT tokens with refresh mechanism
-- **Development**: tsx for hot reloading and development
-- **External APIs**: Google Calendar, WhatsApp Cloud, MercadoPago
+- **Authentication**: JWT tokens with admin access
+- **External APIs**: Instagram Graph API, OpenAI GPT
 
 ### **Frontend Stack**
 - **Framework**: React 18 with TypeScript
 - **Build Tool**: Vite with SWC optimization
-- **Styling**: Tailwind CSS with custom design system
-- **UI Components**: shadcn/ui + Radix UI primitives
+- **Styling**: Tailwind CSS with shadcn/ui components
 - **State Management**: React Query + React Hook Form
 - **Routing**: React Router DOM with protected routes
-- **Validation**: Zod schemas for form validation
 
-## 📡 API Endpoints
+### **Core Services**
+- **Instagram Webhook Service**: Handle incoming messages
+- **Debounce Worker**: Consolidate and process messages
+- **Sender Worker**: Manage outbound queue and rate limits
+- **AI Service**: Generate intelligent responses
+- **Queue Management**: Handle retries and error recovery
 
-### **Health Check**
-```http
-GET /api/health
-```
-Returns system status and version information.
+## 🚀 **Quick Start**
 
-### **Authentication & User Management**
-
-#### **Doctor Registration & Login**
-```http
-POST /api/doctors/register
-POST /api/doctors/login
-```
-
-**Request Body:**
-```json
-{
-  "name": "Dr. Álvaro Villena",
-  "email": "alvaro@tiare.com",
-  "password": "password123",
-  "specialization": "Psicología Clínica",
-  "licenseNumber": "PSI-2024-001",
-  "phone": "+56920115198"
-}
-```
-
-**Response includes:** Doctor profile and JWT tokens (access + refresh)
-
-#### **Doctor Profile Management**
-```http
-GET /api/doctors/:id          # Protected - Full profile
-GET /api/doctors/info/:id     # Public - Basic info
-PUT /api/doctors/:id          # Protected - Update profile
-```
-
-### **Patient Management**
-
-#### **Create Patient**
-```http
-POST /api/patients/create
-```
-
-**Request Body:**
-```json
-{
-  "name": "Juan Pérez",
-  "email": "juan@example.com",
-  "phone": "+34612345678",
-  "notes": "Nuevo paciente",
-  "doctorPhone": "+56920115198"
-}
-```
-
-**Response includes:** Patient details and personalized WhatsApp link
-
-#### **List Patients**
-```http
-GET /api/patients
-```
-Protected endpoint returning all patients for the authenticated doctor.
-
-### **Appointment Management**
-
-#### **Create Appointment**
-```http
-POST /api/appointments
-```
-
-**Request Body:**
-```json
-{
-  "patientId": "9f0ba5ac-b1f9-4203-af0c-2563cb36b56f",
-  "dateTime": "2025-08-28T10:00:00.000Z",
-  "duration": 60,
-  "notes": "Primera consulta de evaluación",
-  "type": "remote"
-}
-```
-
-**Note:** The `doctorId` is automatically obtained from the patient's record.
-
-#### **List Appointments (Protected)**
-```http
-POST /api/appointments/list
-```
-Requires JWT authentication. Lists appointments with filters sent in request body. Returns only essential fields: `title`, `patientName`, `dateTime`, `duration`, `type`, `status`.
-
-**Headers:**
-```http
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "doctorId": "doctor_uuid",
-  "patientId": "patient_uuid", // optional
-  "status": "scheduled", // optional
-  "startDate": "2025-08-25T00:00:00.000Z", // optional
-  "endDate": "2025-08-31T23:59:59.999Z", // optional
-  "page": 1, // optional, default: 1
-  "limit": 20 // optional, default: 20
-}
-```
-
-**Note:** Either `doctorId` OR `patientId` must be provided. If `patientId` is used, `doctorId` is required.
-
-**Legacy Endpoint:** The old `GET /api/appointments` endpoint is still available for backward compatibility but is deprecated. Use `POST /api/appointments/list` for new implementations.
-
-**Data Source Priority:**
-1. **Google Calendar (Primary Source)**: Real-time appointment data from connected Google Calendar
-2. **Local Database (Fallback)**: If Google Calendar is unavailable, falls back to local database
-3. **Automatic Sync**: Local database is kept updated for offline access and backup
-
-**Enhanced Logging:**
-The endpoint now provides comprehensive logging for debugging:
-- **Route Level**: Query parameters received and validation
-- **Service Level**: Doctor lookup results, Google Calendar connection status
-- **Fallback Logic**: When and why fallback to local database occurs
-- **Error Details**: Specific reasons for failures (doctor not found, no OAuth, etc.)
-
-**Example Requests:**
-
-**Get all appointments for a doctor:**
-```bash
-curl -X POST "https://tiare-production.up.railway.app/api/appointments/list" \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "doctorId": "677b83ad-cc48-4327-ad6a-30f6e727b69"
-  }'
-```
-
-**Filter by status for a doctor:**
-```bash
-curl -X POST "https://tiare-production.up.railway.app/api/appointments/list" \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "doctorId": "677b83ad-cc48-4327-ad6a-30f6e727b69",
-    "status": "confirmed"
-  }'
-```
-
-**Filter by patient (requires both doctorId and patientId):**
-```bash
-curl -X POST "https://tiare-production.up.railway.app/api/appointments/list" \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "doctorId": "677b83ad-cc48-4327-ad6a-30f6e727b69",
-    "patientId": "9f0ba5ac-b1f9-4203-af0c-2563cb36b56f"
-  }'
-```
-
-**Filter by date range for a doctor:**
-```bash
-curl -X POST "https://tiare-production.up.railway.app/api/appointments/list" \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "doctorId": "677b83ad-cc48-4327-ad6a-30f6e727b69",
-    "startDate": "2025-08-25T00:00:00.000Z",
-    "endDate": "2025-08-31T23:59:59.999Z"
-  }'
-```
-
-**Use pagination for a doctor:**
-```bash
-curl -X POST "https://tiare-production.up.railway.app/api/appointments/list" \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "doctorId": "677b83ad-cc48-4327-ad6a-30f6e727b69",
-    "page": 1,
-    "limit": 10
-  }'
-```
-
-**Combine multiple filters for a doctor:**
-```bash
-curl -X POST "https://tiare-production.up.railway.app/api/appointments/list" \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "doctorId": "677b83ad-cc48-4327-ad6a-30f6e727b69",
-    "status": "scheduled",
-    "patientId": "9f0ba5ac-b1f9-4203-af0c-2563cb36b56f",
-    "page": 1,
-    "limit": 5
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "appointments": [
-      {
-        "title": "Consulta con Alvaro Fidelizarte",
-        "patientName": "Alvaro Fidelizarte",
-        "dateTime": "2025-08-28T10:00:00.000Z",
-        "duration": 60,
-        "type": "remote",
-        "status": "scheduled"
-      }
-    ],
-    "totalCount": 1,
-    "page": 1,
-    "totalPages": 1
-  }
-}
-```
-
-**Error Response (Missing Parameters):**
-```json
-{
-  "success": false,
-  "error": "Either doctorId or patientId must be provided"
-}
-```
-
-**Error Response (Invalid Patient Filter):**
-```json
-{
-  "success": false,
-  "error": "doctorId is required when filtering by patientId"
-}
-```
-
-**Error Response (Unauthorized):**
-```json
-{
-  "success": false,
-  "error": "User ID not found in token"
-}
-```
-
-**Error Response (Server Error):**
-```json
-{
-  "success": false,
-  "error": "Failed to fetch appointments"
-}
-```
-
-#### **Get Specific Appointment**
-```http
-GET /api/appointments/:id
-```
-Returns detailed appointment information including patient and doctor details.
-
-### **Search & Discovery**
-
-#### **Search by Phone Number**
-```http
-GET /api/search/phone/:phoneNumber          # Exact match
-GET /api/search/phone-partial/:partialPhone # Partial match
-```
-
-**Returns:** User information (doctor or patient) with type identification.
-
-### **Calendar Integration**
-
-#### **Google Calendar**
-```http
-GET /api/doctors/calendar/appointments      # Get synchronized appointments
-GET /api/doctors/calendar/auth              # Initiate OAuth flow
-```
-
-## 🧪 Testing & Development
-
-### **CURL Testing Suite**
-The project includes a comprehensive `CURL.sh` script for testing all API endpoints:
-
-```bash
-# Make the script executable
-chmod +x CURL.sh
-
-# Run all tests (requires valid JWT token)
-./CURL.sh
-```
-
-**Features:**
-- **Authentication Tests**: Doctor registration, login, and token validation
-- **Patient Management**: Create and search patients
-- **Appointment Management**: Create, list, and filter appointments
-- **Search Functionality**: Phone number search (exact and partial)
-- **Calendar Integration**: Google Calendar OAuth and sync
-- **Error Handling**: Invalid tokens, missing parameters, edge cases
-
-**Example Test Output:**
-```bash
-🔐 Testing Authentication...
-✅ Doctor registered successfully
-✅ Login successful
-📋 Testing Patient Management...
-✅ Patient created successfully
-🔍 Testing Search Functionality...
-✅ User found successfully
-```
-
-## 🚀 Getting Started
-
-### **Production Environment**
-- **URL:** https://tiare-production.up.railway.app
-- **Health Check:** https://tiare-production.up.railway.app/api/health
-- **Status:** ✅ **Production Ready & Fully Functional**
-
-### **Local Development Setup**
-
-#### **Prerequisites**
-- Node.js 18+ 
+### **Prerequisites**
+- Node.js 18+
 - MongoDB (local or Atlas)
-- npm or yarn
-- Google Calendar API credentials (for calendar features)
+- Instagram Business Account
+- OpenAI API Key
 
-#### **Backend Setup**
+### **Installation**
+
+1. **Clone the repository**
 ```bash
+git clone https://github.com/AlvaroEwaffle/Moca.git
+cd Moca
+```
+
+2. **Install dependencies**
+```bash
+# Backend
 cd backend
 npm install
-# Create .env file with required environment variables
-npm run dev  # Starts on http://localhost:3002
-```
 
-#### **Frontend Setup**
-```bash
-cd frontend
+# Frontend
+cd ../frontend
 npm install
-npm run dev  # Starts on http://localhost:8080
 ```
 
-#### **Environment Variables**
-```env
-# Server
+3. **Environment setup**
+```bash
+# Backend (.env)
+cd backend
+cp .env.example .env
+
+# Configure your environment variables
+INSTAGRAM_APP_ID=your_app_id
+INSTAGRAM_APP_SECRET=your_app_secret
+INSTAGRAM_ACCESS_TOKEN=your_access_token
+OPENAI_API_KEY=your_openai_key
+ADMIN_TOKEN=your_admin_token
+```
+
+4. **Start development servers**
+```bash
+# Backend (Port 3002)
+cd backend
+npm run dev
+
+# Frontend (Port 8080)
+cd ../frontend
+npm run dev
+```
+
+## 📱 **Instagram Setup**
+
+### **1. Create Instagram App**
+- Go to [Meta for Developers](https://developers.facebook.com/)
+- Create a new app with Instagram Basic Display
+- Add Instagram Graph API permissions
+
+### **2. Configure Webhook**
+- Set webhook URL: `https://yourdomain.com/api/instagram/webhook`
+- Verify token: Use your `INSTAGRAM_VERIFY_TOKEN`
+- Subscribe to `messages` and `messaging_postbacks` events
+
+### **3. Get Access Token**
+- Generate Instagram Graph API access token
+- Add to your environment variables
+- Token refreshes every 60 days
+
+## 🔧 **Configuration**
+
+### **Rate Limiting**
+```bash
+GLOBAL_RATE_LIMIT=3          # Messages per second globally
+USER_COOLDOWN_SECONDS=3      # Seconds between responses to same user
+DEBOUNCE_WINDOW_MS=4000      # Milliseconds to consolidate messages
+```
+
+### **AI Settings**
+```bash
+AI_ENABLED=true              # Enable AI-generated responses
+OPENAI_MODEL=gpt-4           # OpenAI model to use
+MAX_TOKENS=150               # Maximum response length
+```
+
+### **Webhook Security**
+```bash
+INSTAGRAM_VERIFY_TOKEN=your_webhook_verify_token
+WEBHOOK_SECRET=your_webhook_secret
+```
+
+## 📊 **API Endpoints**
+
+### **Instagram Webhook**
+```http
+POST /api/instagram/webhook
+```
+Handles incoming Instagram messages and webhook verification.
+
+### **Conversations**
+```http
+GET /api/conversations          # List all conversations
+GET /api/conversations/:id      # Get conversation details
+POST /api/conversations/:id/messages  # Send manual message
+```
+
+### **Contacts**
+```http
+GET /api/contacts               # List all contacts
+GET /api/contacts/:id           # Get contact details
+PUT /api/contacts/:id           # Update contact information
+```
+
+### **Settings**
+```http
+GET /api/settings               # Get current settings
+PUT /api/settings               # Update settings
+```
+
+## 🎨 **Back Office Features**
+
+### **Conversations Dashboard**
+- 📋 **Active Conversations**: View all open conversations
+- 🔍 **Search & Filter**: Find conversations by contact, status, or date
+- 📊 **Statistics**: Total contacts, active conversations, response rates
+
+### **Conversation Detail**
+- 💬 **Message Timeline**: Complete conversation history
+- ✏️ **Manual Response**: Send custom messages
+- 🏷️ **Status Management**: Open, schedule, or close conversations
+- 📝 **Notes & Tags**: Add context and categorization
+
+### **Configuration Panel**
+- ⚙️ **Instagram Settings**: API tokens and webhook configuration
+- 🤖 **AI Configuration**: OpenAI settings and response rules
+- 📏 **Rate Limits**: Adjust pacing and cooldown parameters
+- 🔒 **Security**: Admin token and access control
+
+## 🔄 **System Flow**
+
+### **1. Message Reception**
+```
+Instagram Webhook → Backend (200 OK) → Database Storage → Debounce Worker
+```
+
+### **2. Message Processing**
+```
+Debounce Timer → Message Consolidation → Cooldown Check → AI Decision → Queue
+```
+
+### **3. Response Sending**
+```
+Queue Check → Rate Limit Check → Instagram API → Status Update
+```
+
+### **4. Back Office**
+```
+Admin Login → Conversations List → Conversation Detail → Manual Message → Queue
+```
+
+## 🧪 **Testing**
+
+### **Run Tests**
+```bash
+# Backend tests
+cd backend
+npm test
+
+# Frontend tests
+cd ../frontend
+npm test
+
+# Integration tests
+npm run test:integration
+```
+
+### **Test Coverage**
+- **Unit Tests**: Services, models, utilities
+- **Integration Tests**: API endpoints, database operations
+- **E2E Tests**: Complete user workflows
+- **Performance Tests**: Rate limiting and queue processing
+
+## 🚀 **Deployment**
+
+### **Environment Variables**
+```bash
+# Production
+NODE_ENV=production
 PORT=3002
-NODE_ENV=development
+MONGODB_URI=mongodb+srv://...
 
-# Database
-MONGODB_URI=mongodb://localhost:27017/tiare
+# Instagram
+INSTAGRAM_APP_ID=your_app_id
+INSTAGRAM_APP_SECRET=your_app_secret
+INSTAGRAM_ACCESS_TOKEN=your_access_token
 
-# JWT
-JWT_SECRET=your-secret-key
-JWT_REFRESH_SECRET=your-refresh-secret
-JWT_EXPIRES_IN=1h
-JWT_REFRESH_EXPIRES_IN=7d
-
-# External APIs
-GOOGLE_CALENDAR_CLIENT_ID=your-client-id
-GOOGLE_CALENDAR_CLIENT_SECRET=your-client-secret
-GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:8080/calendar-auth-success
-WHATSAPP_ACCESS_TOKEN=your-whatsapp-token
-MERCADOPAGO_ACCESS_TOKEN=your-mercadopago-token
+# Security
+ADMIN_TOKEN=your_secure_admin_token
+JWT_SECRET=your_jwt_secret
 ```
 
-## 🔒 Security & Authentication
-
-- **JWT Authentication** with refresh tokens for protected endpoints
-- **Password hashing** with bcrypt and configurable salt rounds
-- **Input validation** and sanitization on all endpoints
-- **Error handling** without exposing sensitive information
-- **CORS configuration** for secure frontend integration
-
-### **Getting JWT Tokens for Protected Endpoints**
-
-1. **Register a doctor** (if not already registered):
+### **Deploy to Production**
 ```bash
-curl -X POST https://tiare-production.up.railway.app/api/doctors/register \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Dr. Álvaro Villena", "email": "alvaro@tiare.com", "password": "password123", "specialization": "Psicología Clínica", "licenseNumber": "PSI-2024-001", "phone": "+56920115198"}'
+# Build frontend
+cd frontend
+npm run build
+
+# Deploy backend
+cd ../backend
+npm run build
+npm start
 ```
 
-2. **Login to get tokens**:
-```bash
-curl -X POST https://tiare-production.up.railway.app/api/doctors/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "alvaro@tiare.com", "password": "password123"}'
-```
+## 📈 **Monitoring & Analytics**
 
-3. **Use the access token** in protected requests:
-```bash
-curl -X GET "https://tiare-production.up.railway.app/api/search/phone/+56920115198" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
-```
+### **Key Metrics**
+- **Response Time**: Average time to respond to messages
+- **Queue Performance**: Outbound message processing speed
+- **Error Rates**: Failed messages and retry success rates
+- **User Engagement**: Conversation duration and message frequency
 
-## 📊 API Status
+### **Logging**
+- **Webhook Logs**: All incoming message processing
+- **Queue Monitoring**: Outbound message status and retries
+- **Rate Limit Tracking**: API usage and limit management
+- **Error Tracking**: Detailed error logs with context
 
-| Endpoint | Status | Auth | Description |
-|----------|--------|------|-------------|
-| `GET /api/health` | ✅ Working | None | System health check |
-| `POST /api/doctors/register` | ✅ Working | None | Doctor registration |
-| `POST /api/doctors/login` | ✅ Working | None | Doctor authentication |
-| `GET /api/doctors/:id` | ✅ Working | Required | Full doctor profile |
-| `GET /api/doctors/info/:id` | ✅ Working | None | Public doctor info |
-| `PUT /api/doctors/:id` | ✅ Working | Required | Update doctor profile |
-| `POST /api/patients/create` | ✅ Working | None | Create new patient |
-| `GET /api/patients` | ✅ Working | Required | List patients |
-| `POST /api/appointments` | ✅ Working | Required | Create appointment |
-| `POST /api/appointments/list` | ✅ Working | Required | List appointments with filtering & pagination (essential fields only) |
-| `GET /api/appointments/:id` | ✅ Working | Required | Get specific appointment details |
-| `GET /api/search/phone/:phoneNumber` | ✅ Working | Required | Search by exact phone |
-| `GET /api/search/phone-partial/:partialPhone` | ✅ Working | Required | Search by partial phone |
-| `GET /api/doctors/calendar/appointments` | ✅ Working | Required | Calendar appointments |
-| `GET /api/doctors/calendar/auth` | ✅ Working | Required | Calendar OAuth |
-
-## 🚧 Roadmap
-
-### **Next Phase (Phase 7)**
-- **Complete Billing System**: Payment processing, invoicing, subscription management
-- **Advanced Notifications**: Automated reminders, patient communications
-- **Performance Optimization**: Caching, query optimization, monitoring
-- **Mobile Application**: React Native app for doctors and patients
-
-## 🤝 Contributing
+## 🤝 **Contributing**
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+### **Development Guidelines**
+- Follow TypeScript best practices
+- Write comprehensive tests
+- Update documentation for new features
+- Follow the existing code style
 
-This project is proprietary software developed for Tiare Healthcare Practice Management.
+## 📄 **License**
+
+This project is proprietary software developed for Moca Instagram DM Management.
+
+## 🆘 **Support**
+
+- **Documentation**: Check this README and the `plan.md` file
+- **Issues**: Report bugs and feature requests on GitHub
+- **Discussions**: Join the conversation in GitHub Discussions
+
+## 🎉 **Acknowledgments**
+
+Built on the solid foundation of the Tiare healthcare system, transformed into a powerful Instagram DM management platform.
 
 ---
 
-**Built with ❤️ for healthcare professionals**
+**Built with ❤️ for Instagram business automation**
 
-**Current Status: 85% COMPLETED - PRODUCTION READY** 🚀 
+**Status: 🚀 Ready for Development** 
