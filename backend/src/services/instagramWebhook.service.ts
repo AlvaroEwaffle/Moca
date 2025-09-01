@@ -13,7 +13,7 @@ interface MetaWebhookPayload {
   entry: Array<{
     id: string;
     time: number;
-    messaging: Array<{
+    messaging?: Array<{
       sender: { id: string };
       recipient: { id: string };
       timestamp: number;
@@ -45,6 +45,10 @@ interface MetaWebhookPayload {
       read?: {
         watermark: number;
       };
+    }>;
+    changes?: Array<{
+      field: string;
+      value: any;
     }>;
   }>;
 }
@@ -128,8 +132,19 @@ export class InstagramWebhookService {
       }
 
       for (const entry of payload.entry) {
-        for (const messaging of entry.messaging) {
-          await this.processMessaging(messaging);
+        // Handle different types of Instagram webhook events
+        if (entry.messaging) {
+          // Direct messages
+          for (const messaging of entry.messaging) {
+            await this.processMessaging(messaging);
+          }
+        } else if (entry.changes) {
+          // Comments and other changes
+          for (const change of entry.changes) {
+            await this.processChange(change);
+          }
+        } else {
+          console.log('⚠️ Unknown entry structure:', JSON.stringify(entry, null, 2));
         }
       }
 
@@ -137,6 +152,46 @@ export class InstagramWebhookService {
     } catch (error) {
       console.error('❌ Error processing webhook:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Process Instagram changes (comments, etc.)
+   */
+  private async processChange(change: any): Promise<void> {
+    try {
+      console.log(`📝 Processing Instagram change: ${change.field}`);
+
+      if (change.field === 'comments') {
+        await this.processComment(change.value);
+      } else {
+        console.log(`⚠️ Unhandled change field: ${change.field}`);
+      }
+    } catch (error) {
+      console.error('❌ Error processing change:', error);
+    }
+  }
+
+  /**
+   * Process Instagram comment
+   */
+  private async processComment(comment: any): Promise<void> {
+    try {
+      console.log(`💬 Processing comment from user: ${comment.from?.username || comment.from?.id}`);
+
+      // Create a message-like structure for comments
+      const messageData: InstagramMessage = {
+        mid: `comment_${comment.id}`,
+        psid: comment.from?.id || `comment_user_${comment.id}`,
+        text: comment.text,
+        timestamp: Date.now(),
+        type: 'message'
+      };
+
+      // Process the comment as a message
+      await this.processMessage(messageData);
+    } catch (error) {
+      console.error('❌ Error processing comment:', error);
     }
   }
 
