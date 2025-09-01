@@ -226,6 +226,10 @@ class DebounceWorkerService {
       const message = messageGroup[0];
       console.log(`📝 DebounceWorkerService: Processing message: ${message.id} for conversation: ${conversation.id}`);
       await this.processMessage(conversation, message);
+      
+      // Mark all messages in this group as processed
+      const messageIds = messageGroup.map(msg => msg.id);
+      await this.markMessagesAsProcessed(messageIds);
     }
   }
 
@@ -252,9 +256,6 @@ class DebounceWorkerService {
       } else {
         console.log(`⚠️ DebounceWorkerService: No response generated for message: ${message.id}`);
       }
-
-      // Mark message as processed
-      await Message.findByIdAndUpdate(message.id, { 'metadata.processed': true });
 
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error processing message ${message.id}:`, error);
