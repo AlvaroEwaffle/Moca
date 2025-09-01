@@ -293,7 +293,7 @@ class DebounceWorkerService {
    * Generate a response for a message
    */
   private async generateResponse(conversation: IConversation, message: IMessage): Promise<string | null> {
-    console.log(`🤖 DebounceWorkerService: Generating response for message: ${message.id}`);
+    console.log(`🤖 DebounceWorkerService: Generating mock response for message: ${message.id}`);
     
     try {
       // Check business hours
@@ -302,36 +302,14 @@ class DebounceWorkerService {
         return null;
       }
 
-      // Get conversation history for context
-      const history = await this.getConversationHistory(conversation.id);
-      console.log(`📚 DebounceWorkerService: Retrieved ${history.length} messages from conversation history`);
-
-      // Generate AI response
-      const response = await openaiService.generateInstagramResponse({
-        conversationHistory: history,
-        userIntent: 'general',
-        conversationTopic: conversation.context?.topic || 'general',
-        userSentiment: 'neutral',
-        businessContext: {
-          company: 'Moca',
-          sector: 'Digital Services',
-          services: ['web', 'marketing', 'consulting']
-        },
-        language: 'es'
-      });
-
-      if (response) {
-        console.log(`✅ DebounceWorkerService: AI response generated: "${response}"`);
-        return response;
-      } else {
-        console.log(`⚠️ DebounceWorkerService: No AI response generated, falling back to rule-based response`);
-        return this.generateFallbackResponse(message.content.text);
-      }
+      // Return mock response instead of calling AI
+      const mockResponse = "This would be an AI generated message";
+      console.log(`✅ DebounceWorkerService: Mock response generated: "${mockResponse}"`);
+      return mockResponse;
 
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error generating response for message ${message.id}:`, error);
-      console.log('🔄 DebounceWorkerService: Falling back to rule-based response');
-      return this.generateFallbackResponse(message.content.text);
+      return "This would be an AI generated message";
     }
   }
 
