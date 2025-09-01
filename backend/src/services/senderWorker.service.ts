@@ -66,11 +66,25 @@ class SenderWorkerService {
    */
   async process(): Promise<void> {
     try {
+      console.log(`🔍 SenderWorkerService: Looking for queue items ready to process...`);
+      
       // Get queue items ready to process
       const queueItems = await OutboundQueue.findReadyToProcess();
+      console.log(`📋 SenderWorkerService: Found ${queueItems.length} queue items ready to process`);
+      
+      if (queueItems.length > 0) {
+        console.log(`📋 SenderWorkerService: Queue items:`, queueItems.map(item => ({
+          id: item.id,
+          accountId: item.accountId,
+          contactId: item.contactId,
+          status: item.status,
+          attempts: item.metadata.attempts
+        })));
+      }
       
       let processedCount = 0;
       for (const queueItem of queueItems) {
+        console.log(`🔄 SenderWorkerService: Processing queue item: ${queueItem.id}`);
         const wasProcessed = await this.processQueueItem(queueItem);
         if (wasProcessed) processedCount++;
       }
@@ -100,12 +114,14 @@ class SenderWorkerService {
       }
 
       // Initialize Instagram service
+      console.log(`🔧 SenderWorkerService: Initializing Instagram service for account: ${queueItem.accountId}`);
       const initialized = await instagramService.initialize(queueItem.accountId);
       if (!initialized) {
         console.log(`❌ SenderWorkerService: Failed to initialize Instagram service for queue item ${queueItem.id}`);
         await this.handleError(queueItem, 'Instagram service initialization failed');
         return false;
       }
+      console.log(`✅ SenderWorkerService: Instagram service initialized successfully for account: ${queueItem.accountId}`);
 
       // Get contact information
       const contact = await this.getContact(queueItem.contactId);
@@ -118,6 +134,10 @@ class SenderWorkerService {
       // Send the message
       let response;
       try {
+        console.log(`📤 SenderWorkerService: Attempting to send message to PSID: ${contact.psid}`);
+        console.log(`📤 SenderWorkerService: Message content: "${queueItem.content.text}"`);
+        console.log(`📤 SenderWorkerService: Queue item ID: ${queueItem.id}`);
+        
         // For now, just send text messages
         response = await instagramService.sendTextMessage(contact.psid, queueItem.content.text);
 
@@ -136,6 +156,8 @@ class SenderWorkerService {
 
       } catch (error) {
         console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error);
+        console.error(`❌ SenderWorkerService: Error details:`, JSON.stringify(error, null, 2));
+        console.error(`❌ SenderWorkerService: Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
         await this.handleError(queueItem, error instanceof Error ? error.message : 'Unknown error');
         return false;
       }
