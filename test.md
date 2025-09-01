@@ -18,13 +18,15 @@ curl -X GET "https://moca-production.up.railway.app/api/health"
 # Local webhook verification
 curl -X GET "http://localhost:3002/api/instagram/webhook?hub.mode=subscribe&hub.verify_token=villena&hub.challenge=CHALLENGE_ACCEPTED"
 
+
+
 # Production webhook verification
-curl -X GET "https://moca-production.up.railway.app/api/instagram/webhook?hub.mode=subscribe&hub.verify_token=villena&hub.challenge=CHALLENGE_ACCEPTED"
+curl -X GET "https://moca-production.up.railway.app/api/instagram/webhook?hub.mode=subscribe&hub.verify_token=cataleya&hub.challenge=test_challenge_123"
 ```
 
 ### Webhook Message Reception (POST)
 ```bash
-# Local webhook message reception
+# Local webhook message reception (Direct Messages)
 curl -X POST "http://localhost:3002/api/instagram/webhook" \
   -H "Content-Type: application/json" \
   -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
@@ -45,7 +47,7 @@ curl -X POST "http://localhost:3002/api/instagram/webhook" \
     }]
   }'
 
-# Production webhook message reception
+# Production webhook message reception (Direct Messages)
 curl -X POST "https://moca-production.up.railway.app/api/instagram/webhook" \
   -H "Content-Type: application/json" \
   -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
@@ -61,6 +63,62 @@ curl -X POST "https://moca-production.up.railway.app/api/instagram/webhook" \
         "message": {
           "mid": "MESSAGE_ID",
           "text": "Hello, this is a test message!"
+        }
+      }]
+    }]
+  }'
+
+# Local webhook comment reception
+curl -X POST "http://localhost:3002/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
+  -d '{
+    "object": "instagram",
+    "entry": [{
+      "id": "123456789",
+      "time": 1234567890,
+      "changes": [{
+        "field": "comments",
+        "value": {
+          "from": {
+            "id": "232323232",
+            "username": "test_user"
+          },
+          "media": {
+            "id": "123123123",
+            "media_product_type": "FEED"
+          },
+          "id": "17865799348089039",
+          "parent_id": "1231231234",
+          "text": "This is a test comment!"
+        }
+      }]
+    }]
+  }'
+
+# Production webhook comment reception
+curl -X POST "https://moca-production.up.railway.app/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
+  -d '{
+    "object": "instagram",
+    "entry": [{
+      "id": "123456789",
+      "time": 1234567890,
+      "changes": [{
+        "field": "comments",
+        "value": {
+          "from": {
+            "id": "232323232",
+            "username": "test_user"
+          },
+          "media": {
+            "id": "123123123",
+            "media_product_type": "FEED"
+          },
+          "id": "17865799348089039",
+          "parent_id": "1231231234",
+          "text": "This is a test comment!"
         }
       }]
     }]
@@ -208,6 +266,36 @@ curl -X POST "http://localhost:3002/api/instagram/webhook" \
         "message": {
           "mid": "test_message_id",
           "text": "Hello! I need help with my website."
+        }
+      }]
+    }]
+  }'
+```
+
+### 3.5. **Simulate Incoming Comment**
+```bash
+# Simulate an incoming Instagram comment
+curl -X POST "http://localhost:3002/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "object": "instagram",
+    "entry": [{
+      "id": "123456789",
+      "time": 1234567890,
+      "changes": [{
+        "field": "comments",
+        "value": {
+          "from": {
+            "id": "232323232",
+            "username": "test_user"
+          },
+          "media": {
+            "id": "123123123",
+            "media_product_type": "FEED"
+          },
+          "id": "17865799348089039",
+          "parent_id": "1231231234",
+          "text": "This is a test comment!"
         }
       }]
     }]

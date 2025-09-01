@@ -46,6 +46,15 @@ interface MetaWebhookPayload {
         watermark: number;
       };
     }>;
+    messages?: Array<{
+      sender: { id: string };
+      recipient: { id: string };
+      timestamp: string;
+      message: {
+        mid: string;
+        text: string;
+      };
+    }>;
     changes?: Array<{
       field: string;
       value: any;
@@ -134,7 +143,7 @@ export class InstagramWebhookService {
       for (const entry of payload.entry) {
         // Handle different types of Instagram webhook events
         if (entry.messaging) {
-          // Direct messages
+          // Direct messages (legacy format)
           for (const messaging of entry.messaging) {
             await this.processMessaging(messaging);
           }
@@ -142,6 +151,11 @@ export class InstagramWebhookService {
           // Comments and other changes
           for (const change of entry.changes) {
             await this.processChange(change);
+          }
+        } else if (entry.messages) {
+          // Direct messages (new format)
+          for (const message of entry.messages) {
+            await this.processMessageEvent(message);
           }
         } else {
           console.log('⚠️ Unknown entry structure:', JSON.stringify(entry, null, 2));
@@ -192,6 +206,28 @@ export class InstagramWebhookService {
       await this.processMessage(messageData);
     } catch (error) {
       console.error('❌ Error processing comment:', error);
+    }
+  }
+
+  /**
+   * Process Instagram message event (new format)
+   */
+  private async processMessageEvent(messageEvent: any): Promise<void> {
+    try {
+      console.log(`📨 Processing message event from PSID: ${messageEvent.sender.id}`);
+
+      const messageData: InstagramMessage = {
+        mid: messageEvent.message.mid,
+        psid: messageEvent.sender.id,
+        text: messageEvent.message.text,
+        timestamp: parseInt(messageEvent.timestamp) * 1000, // Convert to milliseconds
+        type: 'message'
+      };
+
+      // Process the message
+      await this.processMessage(messageData);
+    } catch (error) {
+      console.error('❌ Error processing message event:', error);
     }
   }
 
