@@ -26,7 +26,7 @@ curl -X GET "https://moca-production.up.railway.app/api/instagram/webhook?hub.mo
 
 ### Webhook Message Reception (POST)
 ```bash
-# Local webhook message reception (Direct Messages)
+# Local webhook message reception (Direct Messages - Legacy Format)
 curl -X POST "http://localhost:3002/api/instagram/webhook" \
   -H "Content-Type: application/json" \
   -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
@@ -47,7 +47,28 @@ curl -X POST "http://localhost:3002/api/instagram/webhook" \
     }]
   }'
 
-# Production webhook message reception (Direct Messages)
+# Local webhook message reception (Direct Messages - New Format)
+curl -X POST "http://localhost:3002/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
+  -d '{
+    "object": "instagram",
+    "entry": [{
+      "id": "123456789",
+      "time": 1234567890,
+      "messages": [{
+        "sender": {"id": "USER_PSID"},
+        "recipient": {"id": "PAGE_ID"},
+        "timestamp": "1527459824",
+        "message": {
+          "mid": "MESSAGE_ID",
+          "text": "Hello, this is a test message!"
+        }
+      }]
+    }]
+  }'
+
+# Production webhook message reception (Direct Messages - Legacy Format)
 curl -X POST "https://moca-production.up.railway.app/api/instagram/webhook" \
   -H "Content-Type: application/json" \
   -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
@@ -60,6 +81,27 @@ curl -X POST "https://moca-production.up.railway.app/api/instagram/webhook" \
         "sender": {"id": "USER_PSID"},
         "recipient": {"id": "PAGE_ID"},
         "timestamp": 1234567890,
+        "message": {
+          "mid": "MESSAGE_ID",
+          "text": "Hello, this is a test message!"
+        }
+      }]
+    }]
+  }'
+
+# Production webhook message reception (Direct Messages - New Format)
+curl -X POST "https://moca-production.up.railway.app/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
+  -d '{
+    "object": "instagram",
+    "entry": [{
+      "id": "123456789",
+      "time": 1234567890,
+      "messages": [{
+        "sender": {"id": "USER_PSID"},
+        "recipient": {"id": "PAGE_ID"},
+        "timestamp": "1527459824",
         "message": {
           "mid": "MESSAGE_ID",
           "text": "Hello, this is a test message!"
