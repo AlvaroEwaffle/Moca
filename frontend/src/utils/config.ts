@@ -8,8 +8,8 @@ export const getBackendUrl = (): string => {
   const isProduction = window.location.hostname.includes('pages.dev') || 
                       window.location.hostname.includes('moca.pages.dev');
   
-  // Production backend URL - you'll need to set this to your actual backend URL
-  const productionBackendUrl = 'https://your-backend-domain.com';
+  // Production backend URL - Railway deployment
+  const productionBackendUrl = 'https://moca-production.up.railway.app';
   
   // Development backend URL
   const developmentBackendUrl = 'http://localhost:3002';
