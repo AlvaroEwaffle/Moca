@@ -454,9 +454,11 @@ router.post('/accounts', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error creating Instagram account:', error);
+    console.error('❌ Error details:', JSON.stringify(error, null, 2));
     res.status(500).json({
       success: false,
-      error: 'Failed to create Instagram account'
+      error: 'Failed to create Instagram account',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
