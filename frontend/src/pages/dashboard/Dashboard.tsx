@@ -3,63 +3,74 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Users, DollarSign, Clock, TrendingUp, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { MessageSquare, Users, Send, Clock, TrendingUp, AlertCircle, CheckCircle, XCircle, Activity } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { useToast } from "@/hooks/use-toast";
 
 interface DashboardStats {
-  totalPatients: number;
-  activePatients: number;
-  newPatientsThisMonth: number;
-  totalAppointments: number;
-  pendingAppointments: number;
-  completedAppointments: number;
-  totalBilling: number;
-  pendingBilling: number;
-  paidBilling: number;
+  totalConversations: number;
+  activeConversations: number;
+  newConversationsToday: number;
+  totalMessages: number;
+  messagesReceived: number;
+  messagesSent: number;
+  responseRate: number;
+  queueStatus: {
+    pending: number;
+    processing: number;
+    sent: number;
+    failed: number;
+  };
 }
 
-interface RecentAppointment {
+interface RecentConversation {
   id: string;
-  patientName: string;
-  dateTime: string;
-  type: string;
+  contactName: string;
+  lastMessage: string;
+  timestamp: string;
+  status: string;
+  unreadCount: number;
+}
+
+interface RecentMessage {
+  id: string;
+  conversationId: string;
+  contactName: string;
+  content: string;
+  timestamp: string;
+  role: 'user' | 'assistant';
   status: string;
 }
 
-interface RecentBilling {
+interface InstagramAccount {
   id: string;
-  patientName: string;
-  amount: number;
-  status: string;
-  dueDate: string;
-}
-
-interface DoctorInfo {
-  id: string;
-  name: string;
-  phone: string;
-  specialization: string;
-  licenseNumber: string;
+  accountId: string;
+  accountName: string;
+  isActive: boolean;
+  lastSync: string;
 }
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats>({
-    totalPatients: 0,
-    activePatients: 0,
-    newPatientsThisMonth: 0,
-    totalAppointments: 0,
-    pendingAppointments: 0,
-    completedAppointments: 0,
-    totalBilling: 0,
-    pendingBilling: 0,
-    paidBilling: 0
+    totalConversations: 0,
+    activeConversations: 0,
+    newConversationsToday: 0,
+    totalMessages: 0,
+    messagesReceived: 0,
+    messagesSent: 0,
+    responseRate: 0,
+    queueStatus: {
+      pending: 0,
+      processing: 0,
+      sent: 0,
+      failed: 0
+    }
   });
-  const [recentAppointments, setRecentAppointments] = useState<RecentAppointment[]>([]);
-  const [recentBilling, setRecentBilling] = useState<RecentBilling[]>([]);
-  const [doctorInfo, setDoctorInfo] = useState<DoctorInfo | null>(null);
+  const [recentConversations, setRecentConversations] = useState<RecentConversation[]>([]);
+  const [recentMessages, setRecentMessages] = useState<RecentMessage[]>([]);
+  const [instagramAccount, setInstagramAccount] = useState<InstagramAccount | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -69,69 +80,89 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL;
-      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      const accessToken = localStorage.getItem('accessToken');
       
       if (!backendUrl) {
         throw new Error('Missing backend URL configuration');
       }
 
-      // Fetch doctor info (public endpoint, no auth required)
+      // Fetch Instagram account info
       try {
-        const userId = userData.id || '6be302ce-9eb0-4f04-8490-4bb7a6b2063e'; // Fallback ID
-        const doctorResponse = await fetch(`${backendUrl}/api/doctors/info/${userId}`);
-        if (doctorResponse.ok) {
-          const doctorData = await doctorResponse.json();
-          setDoctorInfo(doctorData.doctor);
-        } else {
-          console.log('Doctor info not found, using fallback data');
-          setDoctorInfo({
-            id: userId,
-            name: "Dr. Usuario",
-            phone: "+56900000000",
-            specialization: "Especialidad",
-            licenseNumber: "LIC-000"
-          });
+        const accountsResponse = await fetch(`${backendUrl}/api/instagram/accounts`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        if (accountsResponse.ok) {
+          const accountsData = await accountsResponse.json();
+          if (accountsData.data.accounts.length > 0) {
+            const account = accountsData.data.accounts[0];
+            setInstagramAccount({
+              id: account.id,
+              accountId: account.accountId,
+              accountName: account.accountName,
+              isActive: account.isActive,
+              lastSync: account.metadata.lastSync
+            });
+          }
         }
       } catch (error) {
-        console.error('Error fetching doctor info:', error);
-        setDoctorInfo({
-          id: 'fallback',
-          name: "Dr. Usuario",
-          phone: "+56900000000",
-          specialization: "Especialidad",
-          licenseNumber: "LIC-000"
-        });
+        console.error('Error fetching Instagram account:', error);
       }
 
-      // TODO: Implement real API calls for stats, appointments, and billing
-      // For now, we'll show empty/placeholder data
-      setStats({
-        totalPatients: 0,
-        activePatients: 0,
-        newPatientsThisMonth: 0,
-        totalAppointments: 0,
-        pendingAppointments: 0,
-        completedAppointments: 0,
-        totalBilling: 0,
-        pendingBilling: 0,
-        paidBilling: 0
-      });
+      // Fetch queue status
+      try {
+        const queueResponse = await fetch(`${backendUrl}/api/instagram/queue/status`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        if (queueResponse.ok) {
+          const queueData = await queueResponse.json();
+          setStats(prev => ({
+            ...prev,
+            queueStatus: queueData.data
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching queue status:', error);
+      }
 
-      setRecentAppointments([]);
-      setRecentBilling([]);
+      // Fetch conversations
+      try {
+        const conversationsResponse = await fetch(`${backendUrl}/api/instagram/conversations`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        if (conversationsResponse.ok) {
+          const conversationsData = await conversationsResponse.json();
+          setRecentConversations(conversationsData.data.conversations.slice(0, 5));
+          
+          // Calculate stats from conversations
+          const totalConversations = conversationsData.data.conversations.length;
+          const activeConversations = conversationsData.data.conversations.filter((c: any) => c.status === 'open').length;
+          const newToday = conversationsData.data.conversations.filter((c: any) => {
+            const today = new Date().toDateString();
+            return new Date(c.timestamps.createdAt).toDateString() === today;
+          }).length;
+          
+          setStats(prev => ({
+            ...prev,
+            totalConversations,
+            activeConversations,
+            newConversationsToday: newToday
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching conversations:', error);
+      }
 
       setLoading(false);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CL', {
-      style: 'currency',
-      currency: 'CLP'
-    }).format(amount);
   };
 
   const formatDate = (dateString: string) => {
@@ -145,29 +176,29 @@ const Dashboard = () => {
     });
   };
 
-  const getStatusBadge = (status: string) => {
+  const getConversationStatusBadge = (status: string) => {
     switch (status) {
-      case 'confirmed':
-        return <Badge className="bg-green-100 text-green-800">Confirmada</Badge>;
-      case 'scheduled':
-        return <Badge className="bg-blue-100 text-blue-800">Programada</Badge>;
-      case 'completed':
-        return <Badge className="bg-gray-100 text-gray-800">Completada</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-red-100 text-red-800">Cancelada</Badge>;
+      case 'open':
+        return <Badge className="bg-green-100 text-green-800">Activa</Badge>;
+      case 'closed':
+        return <Badge className="bg-gray-100 text-gray-800">Cerrada</Badge>;
+      case 'archived':
+        return <Badge className="bg-blue-100 text-blue-800">Archivada</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const getBillingStatusBadge = (status: string) => {
+  const getMessageStatusBadge = (status: string) => {
     switch (status) {
-      case 'paid':
-        return <Badge className="bg-green-100 text-green-800">Pagado</Badge>;
+      case 'sent':
+        return <Badge className="bg-green-100 text-green-800">Enviado</Badge>;
       case 'pending':
         return <Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>;
-      case 'overdue':
-        return <Badge className="bg-red-100 text-red-800">Vencido</Badge>;
+      case 'failed':
+        return <Badge className="bg-red-100 text-red-800">Fallido</Badge>;
+      case 'received':
+        return <Badge className="bg-blue-100 text-blue-800">Recibido</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -176,7 +207,7 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-violet-600"></div>
       </div>
     );
   }
@@ -185,7 +216,7 @@ const Dashboard = () => {
     <>
       <Helmet>
         <title>Dashboard | Moca - Instagram DM Agent</title>
-        <meta name="description" content="Panel principal de gestión de tu práctica médica" />
+        <meta name="description" content="Panel principal de gestión de tu agente de Instagram" />
       </Helmet>
       
       <div className="min-h-screen bg-gray-50 p-6">
@@ -194,67 +225,69 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              {doctorInfo ? (
+              {instagramAccount ? (
                 <div className="space-y-1">
-                  <p className="text-gray-600">Bienvenido de vuelta, {doctorInfo.name}</p>
+                  <p className="text-gray-600">Bienvenido de vuelta a Moca</p>
                   <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <span>📱 {doctorInfo.phone}</span>
-                    <span>🏥 {doctorInfo.specialization}</span>
-                    <span>🆔 Lic. {doctorInfo.licenseNumber}</span>
+                    <span>📱 {instagramAccount.accountName}</span>
+                    <span>🆔 {instagramAccount.accountId}</span>
+                    <span className={`px-2 py-1 rounded-full text-xs ${instagramAccount.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {instagramAccount.isActive ? 'Activo' : 'Inactivo'}
+                    </span>
                   </div>
                 </div>
               ) : (
-                <p className="text-gray-600">Bienvenido de vuelta, Doctor</p>
+                <p className="text-gray-600">Bienvenido de vuelta a Moca</p>
               )}
             </div>
             <div className="flex space-x-3">
-              <Button variant="outline" onClick={() => navigate('/appointments')}>
-                <Calendar className="w-4 h-4 mr-2" />
-                Ver agenda
+              <Button variant="outline" onClick={() => navigate('/conversations')}>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Ver conversaciones
               </Button>
-              <Button onClick={() => navigate('/patients/create')}>
+              <Button onClick={() => navigate('/instagram/setup')}>
                 <Users className="w-4 h-4 mr-2" />
-                Nuevo paciente
+                Configurar Instagram
               </Button>
             </div>
           </div>
 
-          {/* Doctor Info Card */}
-          <Card className="border-blue-200 bg-blue-50">
+          {/* Instagram Account Info Card */}
+          <Card className="border-violet-200 bg-violet-50">
             <CardHeader>
-              <CardTitle className="text-blue-800 flex items-center">
-                👨‍⚕️ Información del Doctor
+              <CardTitle className="text-violet-800 flex items-center">
+                📱 Información de Instagram
               </CardTitle>
-              <CardDescription className="text-blue-600">
-                Tus datos profesionales y de contacto
+              <CardDescription className="text-violet-600">
+                Tu cuenta de Instagram conectada y estado del sistema
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {doctorInfo ? (
+              {instagramAccount ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-3 bg-white rounded-lg border border-blue-200">
-                      <div className="text-2xl font-bold text-blue-600">{doctorInfo.name}</div>
-                      <div className="text-sm text-blue-500">Nombre</div>
+                    <div className="text-center p-3 bg-white rounded-lg border border-violet-200">
+                      <div className="text-2xl font-bold text-violet-600">{instagramAccount.accountName}</div>
+                      <div className="text-sm text-violet-500">Cuenta de Instagram</div>
                     </div>
-                    <div className="text-center p-3 bg-white rounded-lg border border-blue-200">
-                      <div className="text-lg font-semibold text-blue-600">{doctorInfo.phone}</div>
-                      <div className="text-sm text-blue-500">Teléfono</div>
+                    <div className="text-center p-3 bg-white rounded-lg border border-violet-200">
+                      <div className="text-lg font-semibold text-violet-600">{instagramAccount.accountId}</div>
+                      <div className="text-sm text-violet-500">Account ID</div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="mt-2 text-blue-600 hover:text-blue-700"
+                        className="mt-2 text-violet-600 hover:text-violet-700"
                         onClick={async () => {
                           try {
-                            await navigator.clipboard.writeText(doctorInfo.phone);
+                            await navigator.clipboard.writeText(instagramAccount.accountId);
                             toast({
-                              title: "¡Teléfono copiado!",
-                              description: `${doctorInfo.phone} ha sido copiado al portapapeles`,
+                              title: "¡Account ID copiado!",
+                              description: `${instagramAccount.accountId} ha sido copiado al portapapeles`,
                             });
                           } catch (error) {
                             toast({
                               title: "Error al copiar",
-                              description: "No se pudo copiar el teléfono al portapapeles",
+                              description: "No se pudo copiar el Account ID al portapapeles",
                               variant: "destructive"
                             });
                           }
@@ -263,46 +296,39 @@ const Dashboard = () => {
                         📋 Copiar
                       </Button>
                     </div>
-                    <div className="text-center p-3 bg-white rounded-lg border border-blue-200">
-                      <div className="text-lg font-semibold text-blue-600">{doctorInfo.specialization}</div>
-                      <div className="text-sm text-blue-500">Especialización</div>
+                    <div className="text-center p-3 bg-white rounded-lg border border-violet-200">
+                      <div className="text-lg font-semibold text-violet-600">
+                        {formatDate(instagramAccount.lastSync)}
+                      </div>
+                      <div className="text-sm text-violet-500">Última sincronización</div>
                     </div>
                   </div>
                   <div className="mt-4 text-center space-y-3">
-                    <Badge variant="outline" className="text-blue-600 border-blue-300">
-                      🆔 Licencia: {doctorInfo.licenseNumber}
+                    <Badge variant="outline" className="text-violet-600 border-violet-300">
+                      {instagramAccount.isActive ? '✅ Activo' : '❌ Inactivo'}
                     </Badge>
                     <div>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                        onClick={async () => {
-                          const doctorInfoText = `👨‍⚕️ ${doctorInfo.name}\n📱 ${doctorInfo.phone}\n🏥 ${doctorInfo.specialization}\n🆔 Lic. ${doctorInfo.licenseNumber}`;
-                          try {
-                            await navigator.clipboard.writeText(doctorInfoText);
-                            toast({
-                              title: "¡Información copiada!",
-                              description: "Toda la información del doctor ha sido copiada al portapapeles",
-                            });
-                          } catch (error) {
-                            toast({
-                              title: "Error al copiar",
-                              description: "No se pudo copiar la información al portapapeles",
-                              variant: "destructive"
-                            });
-                          }
-                        }}
+                        className="text-violet-600 border-violet-300 hover:bg-violet-50"
+                        onClick={() => navigate('/instagram/accounts')}
                       >
-                        📋 Copiar Información Completa
+                        ⚙️ Configurar Cuenta
                       </Button>
                     </div>
                   </div>
                 </>
               ) : (
-                <div className="text-center py-8 text-blue-600">
-                  <p>No se pudo cargar la información del doctor</p>
-                  <p className="text-sm text-blue-500 mt-2">Verifica que el ID del doctor sea correcto</p>
+                <div className="text-center py-8 text-violet-600">
+                  <p>No hay cuenta de Instagram conectada</p>
+                  <p className="text-sm text-violet-500 mt-2">Configura tu cuenta de Instagram para comenzar</p>
+                  <Button 
+                    className="mt-4 bg-violet-600 hover:bg-violet-700"
+                    onClick={() => navigate('/instagram/setup')}
+                  >
+                    Conectar Instagram
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -312,56 +338,54 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Pacientes</CardTitle>
+                <CardTitle className="text-sm font-medium">Conversaciones</CardTitle>
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalConversations}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats.newConversationsToday > 0 ? `+${stats.newConversationsToday} hoy` : 'Sin nuevas conversaciones'}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Conversaciones Activas</CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.totalPatients}</div>
+                <div className="text-2xl font-bold">{stats.activeConversations}</div>
                 <p className="text-xs text-muted-foreground">
-                  {stats.newPatientsThisMonth > 0 ? `+${stats.newPatientsThisMonth} este mes` : 'Sin nuevos pacientes'}
+                  de {stats.totalConversations} total
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Citas Pendientes</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Cola de Mensajes</CardTitle>
+                <Send className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.pendingAppointments}</div>
+                <div className="text-2xl font-bold">{stats.queueStatus.pending}</div>
                 <p className="text-xs text-muted-foreground">
-                  de {stats.totalAppointments} total
+                  {stats.queueStatus.failed > 0 ? `${stats.queueStatus.failed} fallidos` : 'Todos enviados'}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Facturación Pendiente</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(stats.pendingBilling)}</div>
-                <p className="text-xs text-muted-foreground">
-                  de {formatCurrency(stats.totalBilling)} total
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Tasa de Completación</CardTitle>
+                <CardTitle className="text-sm font-medium">Tasa de Respuesta</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {stats.totalAppointments > 0 
-                    ? Math.round((stats.completedAppointments / stats.totalAppointments) * 100)
-                    : 0}%
+                  {stats.responseRate}%
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Citas completadas
+                  Mensajes respondidos
                 </p>
               </CardContent>
             </Card>
@@ -369,96 +393,126 @@ const Dashboard = () => {
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Recent Appointments */}
+            {/* Recent Conversations */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <Calendar className="w-5 h-5 mr-2" />
-                  Próximas Citas
+                  <MessageSquare className="w-5 h-5 mr-2" />
+                  Conversaciones Recientes
                 </CardTitle>
                 <CardDescription>
-                  Tus próximas consultas programadas
+                  Tus conversaciones de Instagram más recientes
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {recentAppointments.length > 0 ? (
+                {recentConversations.length > 0 ? (
                   <div className="space-y-4">
-                    {recentAppointments.map((appointment) => (
-                      <div key={appointment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    {recentConversations.map((conversation) => (
+                      <div key={conversation.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <Users className="w-5 h-5 text-blue-600" />
+                          <div className="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center">
+                            <Users className="w-5 h-5 text-violet-600" />
                           </div>
                           <div>
-                            <p className="font-medium text-sm">{appointment.patientName}</p>
-                            <p className="text-xs text-gray-500">{formatDate(appointment.dateTime)}</p>
-                            <p className="text-xs text-gray-500">{appointment.type}</p>
+                            <p className="font-medium text-sm">{conversation.contactName}</p>
+                            <p className="text-xs text-gray-500">{formatDate(conversation.timestamp)}</p>
+                            <p className="text-xs text-gray-500 truncate max-w-48">{conversation.lastMessage}</p>
                           </div>
                         </div>
-                        {getStatusBadge(appointment.status)}
+                        <div className="flex flex-col items-end space-y-1">
+                          {getConversationStatusBadge(conversation.status)}
+                          {conversation.unreadCount > 0 && (
+                            <Badge className="bg-red-100 text-red-800 text-xs">
+                              {conversation.unreadCount}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No hay citas programadas</p>
-                    <p className="text-sm">Las próximas citas aparecerán aquí</p>
+                    <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No hay conversaciones recientes</p>
+                    <p className="text-sm">Las conversaciones de Instagram aparecerán aquí</p>
                   </div>
                 )}
                 <Button 
                   variant="outline" 
                   className="w-full mt-4"
-                  onClick={() => navigate('/appointments')}
+                  onClick={() => navigate('/conversations')}
                 >
-                  Ver todas las citas
+                  Ver todas las conversaciones
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Recent Billing */}
+            {/* Queue Status */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <DollarSign className="w-5 h-5 mr-2" />
-                  Facturación Reciente
+                  <Activity className="w-5 h-5 mr-2" />
+                  Estado de la Cola
                 </CardTitle>
                 <CardDescription>
-                  Estado de tus facturas y pagos
+                  Estado de los mensajes en cola para envío
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {recentBilling.length > 0 ? (
-                  <div className="space-y-4">
-                    {recentBilling.map((billing) => (
-                      <div key={billing.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                            <DollarSign className="w-5 h-5 text-green-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">{billing.patientName}</p>
-                            <p className="text-xs text-gray-500">Vence: {billing.dueDate}</p>
-                            <p className="text-sm font-semibold">{formatCurrency(billing.amount)}</p>
-                          </div>
-                        </div>
-                        {getBillingStatusBadge(billing.status)}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-yellow-600" />
                       </div>
-                    ))}
+                      <div>
+                        <p className="font-medium text-sm">Pendientes</p>
+                        <p className="text-xs text-gray-500">Esperando envío</p>
+                      </div>
+                    </div>
+                    <Badge className="bg-yellow-100 text-yellow-800">
+                      {stats.queueStatus.pending}
+                    </Badge>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <DollarSign className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No hay facturas recientes</p>
-                    <p className="text-sm">Las facturas aparecerán aquí</p>
+                  
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Send className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Enviados</p>
+                        <p className="text-xs text-gray-500">Mensajes entregados</p>
+                      </div>
+                    </div>
+                    <Badge className="bg-green-100 text-green-800">
+                      {stats.queueStatus.sent}
+                    </Badge>
                   </div>
-                )}
+                  
+                  {stats.queueStatus.failed > 0 && (
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                          <XCircle className="w-5 h-5 text-red-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">Fallidos</p>
+                          <p className="text-xs text-gray-500">Requieren reintento</p>
+                        </div>
+                      </div>
+                      <Badge className="bg-red-100 text-red-800">
+                        {stats.queueStatus.failed}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
                 <Button 
                   variant="outline" 
                   className="w-full mt-4"
-                  onClick={() => navigate('/billing')}
+                  onClick={() => navigate('/system/queue')}
                 >
-                  Ver todas las facturas
+                  Ver detalles de la cola
                 </Button>
               </CardContent>
             </Card>
@@ -477,34 +531,34 @@ const Dashboard = () => {
                 <Button 
                   variant="outline" 
                   className="h-24 flex-col"
-                  onClick={() => navigate('/patients/create')}
+                  onClick={() => navigate('/conversations')}
+                >
+                  <MessageSquare className="w-6 h-6 mb-2" />
+                  <span className="text-sm">Ver Conversaciones</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex-col"
+                  onClick={() => navigate('/instagram/accounts')}
                 >
                   <Users className="w-6 h-6 mb-2" />
-                  <span className="text-sm">Nuevo Paciente</span>
+                  <span className="text-sm">Configurar Instagram</span>
                 </Button>
                 <Button 
                   variant="outline" 
                   className="h-24 flex-col"
-                  onClick={() => navigate('/appointments/create')}
+                  onClick={() => navigate('/system/queue')}
                 >
-                  <Calendar className="w-6 h-6 mb-2" />
-                  <span className="text-sm">Nueva Cita</span>
+                  <Activity className="w-6 h-6 mb-2" />
+                  <span className="text-sm">Estado de la Cola</span>
                 </Button>
                 <Button 
                   variant="outline" 
                   className="h-24 flex-col"
-                  onClick={() => navigate('/billing/create')}
-                >
-                  <DollarSign className="w-6 h-6 mb-2" />
-                  <span className="text-sm">Nueva Factura</span>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="h-24 flex-col"
-                  onClick={() => navigate('/appointments')}
+                  onClick={() => navigate('/system/logs')}
                 >
                   <Clock className="w-6 h-6 mb-2" />
-                  <span className="text-sm">Ver Agenda</span>
+                  <span className="text-sm">Ver Logs</span>
                 </Button>
               </div>
             </CardContent>
@@ -516,3 +570,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

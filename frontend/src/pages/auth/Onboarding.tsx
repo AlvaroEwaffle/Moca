@@ -4,19 +4,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, DollarSign, Settings, CheckCircle } from "lucide-react";
+import { Building2, Instagram, Bot, CheckCircle } from "lucide-react";
 import { Helmet } from "react-helmet";
 
-interface WorkingHours {
-  [key: string]: { start: string; end: string; available: boolean };
+interface BusinessInfo {
+  businessName: string;
+  businessType: string;
+  primaryLanguage: string;
 }
 
-interface ConsultationType {
-  type: 'presential' | 'remote' | 'home';
-  price: number;
-  duration: number;
+interface InstagramAccount {
+  accountId: string;
+  accountName: string;
+  accessToken: string;
+  isConnected: boolean;
+}
+
+interface AgentBehavior {
+  systemPrompt: string;
+  toneOfVoice: 'professional' | 'friendly' | 'casual';
+  keyInformation: string;
 }
 
 const Onboarding = () => {
@@ -24,75 +33,68 @@ const Onboarding = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    workingHours: {
-      monday: { start: '09:00', end: '17:00', available: true },
-      tuesday: { start: '09:00', end: '17:00', available: true },
-      wednesday: { start: '09:00', end: '17:00', available: true },
-      thursday: { start: '09:00', end: '17:00', available: true },
-      friday: { start: '09:00', end: '17:00', available: true },
-      saturday: { start: '09:00', end: '13:00', available: false },
-      sunday: { start: '09:00', end: '13:00', available: false }
-    } as WorkingHours,
-    consultationTypes: [
-      { type: 'presential' as const, price: 50000, duration: 60 },
-      { type: 'remote' as const, price: 40000, duration: 60 },
-      { type: 'home' as const, price: 80000, duration: 60 }
-    ] as ConsultationType[],
-    appointmentDuration: 60,
-    maxAppointmentsPerDay: 8,
-    billingCycle: 'daily' as 'daily' | 'weekly' | 'monthly',
-    automaticReminders: true,
-    reminder24hBefore: true,
-    reminder2hBefore: true,
-    reminderAfterAppointment: true,
-    paymentMethods: ['transfer', 'cash'],
-    defaultCurrency: 'CLP',
-    taxPercentage: 0
+    businessInfo: {
+      businessName: '',
+      businessType: '',
+      primaryLanguage: 'es'
+    } as BusinessInfo,
+    instagramAccount: {
+      accountId: '',
+      accountName: '',
+      accessToken: '',
+      isConnected: false
+    } as InstagramAccount,
+    agentBehavior: {
+      systemPrompt: 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.',
+      toneOfVoice: 'professional' as 'professional' | 'friendly' | 'casual',
+      keyInformation: ''
+    } as AgentBehavior
   });
 
-  const daysOfWeek = [
-    { key: 'monday', label: 'Lunes' },
-    { key: 'tuesday', label: 'Martes' },
-    { key: 'wednesday', label: 'Miércoles' },
-    { key: 'thursday', label: 'Jueves' },
-    { key: 'friday', label: 'Viernes' },
-    { key: 'saturday', label: 'Sábado' },
-    { key: 'sunday', label: 'Domingo' }
+  const businessTypes = [
+    { value: 'restaurant', label: 'Restaurante' },
+    { value: 'retail', label: 'Tienda/Retail' },
+    { value: 'service', label: 'Servicios' },
+    { value: 'beauty', label: 'Belleza/Salud' },
+    { value: 'fitness', label: 'Fitness/Deportes' },
+    { value: 'education', label: 'Educación' },
+    { value: 'technology', label: 'Tecnología' },
+    { value: 'other', label: 'Otro' }
   ];
 
-  const handleWorkingHoursChange = (day: string, field: string, value: string | boolean) => {
+  const languages = [
+    { value: 'es', label: 'Español' },
+    { value: 'en', label: 'English' },
+    { value: 'pt', label: 'Português' }
+  ];
+
+  const handleBusinessInfoChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
-      workingHours: {
-        ...prev.workingHours,
-        [day]: {
-          ...prev.workingHours[day],
-          [field]: value
-        }
+      businessInfo: {
+        ...prev.businessInfo,
+        [field]: value
       }
     }));
   };
 
-  const handleConsultationTypeChange = (index: number, field: string, value: string | number) => {
+  const handleInstagramAccountChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
-      consultationTypes: prev.consultationTypes.map((type, i) => 
-        i === index ? { ...type, [field]: value } : type
-      )
+      instagramAccount: {
+        ...prev.instagramAccount,
+        [field]: value
+      }
     }));
   };
 
-  const addConsultationType = () => {
+  const handleAgentBehaviorChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
-      consultationTypes: [...prev.consultationTypes, { type: 'presential', price: 50000, duration: 60 }]
-    }));
-  };
-
-  const removeConsultationType = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      consultationTypes: prev.consultationTypes.filter((_, i) => i !== index)
+      agentBehavior: {
+        ...prev.agentBehavior,
+        [field]: value
+      }
     }));
   };
 
@@ -105,46 +107,45 @@ const Onboarding = () => {
       const userData = JSON.parse(localStorage.getItem('userData') || '{}');
       const accessToken = localStorage.getItem('accessToken');
 
-      const response = await fetch(`${backendUrl}/api/doctors/${userData.id}`, {
-        method: 'PUT',
+      // Create Instagram account
+      const instagramResponse = await fetch(`${backendUrl}/api/instagram/accounts`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({
-          practiceSettings: {
-            workingHours: formData.workingHours,
-            consultationTypes: formData.consultationTypes,
-            appointmentDuration: formData.appointmentDuration,
-            maxAppointmentsPerDay: formData.maxAppointmentsPerDay
-          },
-          billingPreferences: {
-            billingCycle: formData.billingCycle,
-            automaticReminders: formData.automaticReminders,
-            reminder24hBefore: formData.reminder24hBefore,
-            reminder2hBefore: formData.reminder2hBefore,
-            reminderAfterAppointment: formData.reminderAfterAppointment,
-            paymentMethods: formData.paymentMethods,
-            defaultCurrency: formData.defaultCurrency,
-            taxPercentage: formData.taxPercentage
+          accountId: formData.instagramAccount.accountId,
+          accountName: formData.instagramAccount.accountName,
+          accessToken: formData.instagramAccount.accessToken,
+          settings: {
+            autoRespond: true,
+            aiEnabled: true,
+            systemPrompt: formData.agentBehavior.systemPrompt,
+            toneOfVoice: formData.agentBehavior.toneOfVoice,
+            keyInformation: formData.agentBehavior.keyInformation
           }
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update practice settings');
+      if (!instagramResponse.ok) {
+        throw new Error('Failed to create Instagram account');
       }
 
+      // Store business info in localStorage for later use
+      localStorage.setItem('businessInfo', JSON.stringify(formData.businessInfo));
+      localStorage.setItem('agentBehavior', JSON.stringify(formData.agentBehavior));
+
       // Redirect to dashboard
-              navigate('/app/dashboard');
+      navigate('/app/dashboard');
     } catch (error) {
-      console.error('Error updating practice settings:', error);
+      console.error('Error setting up Instagram account:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 4));
+  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 3));
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
 
   const renderStep = () => {
@@ -153,41 +154,59 @@ const Onboarding = () => {
         return (
           <div className="space-y-6">
             <div className="text-center">
-              <Calendar className="mx-auto h-12 w-12 text-blue-600 mb-4" />
-              <h3 className="text-lg font-semibold">Configura tus horarios de trabajo</h3>
-              <p className="text-gray-600">Define cuándo estás disponible para atender pacientes</p>
+              <Building2 className="mx-auto h-12 w-12 text-violet-600 mb-4" />
+              <h3 className="text-lg font-semibold">Información de tu negocio</h3>
+              <p className="text-gray-600">Cuéntanos sobre tu empresa para personalizar el agente</p>
             </div>
 
             <div className="space-y-4">
-              {daysOfWeek.map(({ key, label }) => (
-                <div key={key} className="flex items-center space-x-4 p-4 border rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      checked={formData.workingHours[key].available}
-                      onCheckedChange={(checked) => handleWorkingHoursChange(key, 'available', checked)}
-                    />
-                    <Label className="w-20 font-medium">{label}</Label>
-                  </div>
-                  
-                  {formData.workingHours[key].available && (
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        type="time"
-                        value={formData.workingHours[key].start}
-                        onChange={(e) => handleWorkingHoursChange(key, 'start', e.target.value)}
-                        className="w-32"
-                      />
-                      <span className="text-gray-500">a</span>
-                      <Input
-                        type="time"
-                        value={formData.workingHours[key].end}
-                        onChange={(e) => handleWorkingHoursChange(key, 'end', e.target.value)}
-                        className="w-32"
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
+              <div>
+                <Label htmlFor="businessName">Nombre del negocio</Label>
+                <Input
+                  id="businessName"
+                  value={formData.businessInfo.businessName}
+                  onChange={(e) => handleBusinessInfoChange('businessName', e.target.value)}
+                  placeholder="Ej: Mi Restaurante"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="businessType">Tipo de negocio</Label>
+                <Select
+                  value={formData.businessInfo.businessType}
+                  onValueChange={(value) => handleBusinessInfoChange('businessType', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona el tipo de negocio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {businessTypes.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="primaryLanguage">Idioma principal</Label>
+                <Select
+                  value={formData.businessInfo.primaryLanguage}
+                  onValueChange={(value) => handleBusinessInfoChange('primaryLanguage', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona el idioma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.value} value={lang.value}>
+                        {lang.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         );
@@ -196,77 +215,58 @@ const Onboarding = () => {
         return (
           <div className="space-y-6">
             <div className="text-center">
-              <DollarSign className="mx-auto h-12 w-12 text-green-600 mb-4" />
-              <h3 className="text-lg font-semibold">Tipos de consulta y precios</h3>
-              <p className="text-gray-600">Define los diferentes tipos de atención que ofreces</p>
+              <Instagram className="mx-auto h-12 w-12 text-pink-600 mb-4" />
+              <h3 className="text-lg font-semibold">Conecta tu cuenta de Instagram</h3>
+              <p className="text-gray-600">Conecta tu cuenta de Instagram Business para comenzar</p>
             </div>
 
             <div className="space-y-4">
-              {formData.consultationTypes.map((type, index) => (
-                <div key={index} className="p-4 border rounded-lg space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">Tipo de consulta {index + 1}</h4>
-                    {formData.consultationTypes.length > 1 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeConsultationType(index)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        Eliminar
-                      </Button>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label>Tipo</Label>
-                      <Select
-                        value={type.type}
-                        onValueChange={(value) => handleConsultationTypeChange(index, 'type', value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="presential">Presencial</SelectItem>
-                          <SelectItem value="remote">Remota</SelectItem>
-                          <SelectItem value="home">A domicilio</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label>Precio (CLP)</Label>
-                      <Input
-                        type="number"
-                        value={type.price}
-                        onChange={(e) => handleConsultationTypeChange(index, 'price', parseInt(e.target.value))}
-                        placeholder="50000"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label>Duración (minutos)</Label>
-                      <Input
-                        type="number"
-                        value={type.duration}
-                        onChange={(e) => handleConsultationTypeChange(index, 'duration', parseInt(e.target.value))}
-                        placeholder="60"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <div>
+                <Label htmlFor="accountName">Nombre de la cuenta de Instagram</Label>
+                <Input
+                  id="accountName"
+                  value={formData.instagramAccount.accountName}
+                  onChange={(e) => handleInstagramAccountChange('accountName', e.target.value)}
+                  placeholder="Ej: @mi_restaurante"
+                />
+              </div>
               
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addConsultationType}
-                className="w-full"
-              >
-                + Agregar tipo de consulta
-              </Button>
+              <div>
+                <Label htmlFor="accountId">Instagram Account ID</Label>
+                <Input
+                  id="accountId"
+                  value={formData.instagramAccount.accountId}
+                  onChange={(e) => handleInstagramAccountChange('accountId', e.target.value)}
+                  placeholder="Ej: 17841467023627361"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Puedes encontrar tu Account ID en Meta Developer Console
+                </p>
+              </div>
+              
+              <div>
+                <Label htmlFor="accessToken">Instagram Access Token</Label>
+                <Input
+                  id="accessToken"
+                  type="password"
+                  value={formData.instagramAccount.accessToken}
+                  onChange={(e) => handleInstagramAccountChange('accessToken', e.target.value)}
+                  placeholder="Tu Instagram User Access Token"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Genera un token en Meta Developer Console con permisos de Instagram
+                </p>
+              </div>
+              
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">¿Cómo obtener estos datos?</h4>
+                <ol className="text-sm text-blue-700 space-y-1">
+                  <li>1. Ve a <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="underline">Meta Developer Console</a></li>
+                  <li>2. Crea una app y agrega Instagram Basic Display</li>
+                  <li>3. Genera un Instagram User Access Token</li>
+                  <li>4. Copia el Account ID y Access Token aquí</li>
+                </ol>
+              </div>
             </div>
           </div>
         );
@@ -275,127 +275,62 @@ const Onboarding = () => {
         return (
           <div className="space-y-6">
             <div className="text-center">
-              <Settings className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-              <h3 className="text-lg font-semibold">Configuración de agenda</h3>
-              <p className="text-gray-600">Ajusta los parámetros de tu agenda</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <Label>Duración por defecto de citas (minutos)</Label>
-                  <Input
-                    type="number"
-                    value={formData.appointmentDuration}
-                    onChange={(e) => setFormData(prev => ({ ...prev, appointmentDuration: parseInt(e.target.value) }))}
-                    placeholder="60"
-                  />
-                </div>
-                
-                <div>
-                  <Label>Máximo de citas por día</Label>
-                  <Input
-                    type="number"
-                    value={formData.maxAppointmentsPerDay}
-                    onChange={(e) => setFormData(prev => ({ ...prev, maxAppointmentsPerDay: parseInt(e.target.value) }))}
-                    placeholder="8"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <Label>Ciclo de facturación</Label>
-                  <Select
-                    value={formData.billingCycle}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, billingCycle: value as any }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Diario</SelectItem>
-                      <SelectItem value="weekly">Semanal</SelectItem>
-                      <SelectItem value="monthly">Mensual</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label>Moneda por defecto</Label>
-                  <Select
-                    value={formData.defaultCurrency}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, defaultCurrency: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CLP">Peso Chileno (CLP)</SelectItem>
-                      <SelectItem value="USD">Dólar (USD)</SelectItem>
-                      <SelectItem value="EUR">Euro (EUR)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 4:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
-              <h3 className="text-lg font-semibold">Recordatorios y notificaciones</h3>
-              <p className="text-gray-600">Configura cómo quieres que se comunique con tus pacientes</p>
+              <Bot className="mx-auto h-12 w-12 text-purple-600 mb-4" />
+              <h3 className="text-lg font-semibold">Comportamiento del agente</h3>
+              <p className="text-gray-600">Configura cómo debe responder tu agente de Instagram</p>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <Label className="font-medium">Recordatorios automáticos</Label>
-                  <p className="text-sm text-gray-600">Enviar recordatorios de citas automáticamente</p>
-                </div>
-                <Switch
-                  checked={formData.automaticReminders}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, automaticReminders: checked }))}
+              <div>
+                <Label htmlFor="systemPrompt">Prompt del sistema</Label>
+                <Textarea
+                  id="systemPrompt"
+                  value={formData.agentBehavior.systemPrompt}
+                  onChange={(e) => handleAgentBehaviorChange('systemPrompt', e.target.value)}
+                  placeholder="Describe cómo debe comportarse tu agente..."
+                  rows={4}
                 />
+                <p className="text-sm text-gray-500 mt-1">
+                  Instrucciones específicas sobre cómo debe responder el agente
+                </p>
               </div>
-
-              {formData.automaticReminders && (
-                <div className="space-y-3 pl-4">
-                  <div className="flex items-center justify-between">
-                    <Label>24 horas antes de la cita</Label>
-                    <Switch
-                      checked={formData.reminder24hBefore}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, reminder24hBefore: checked }))}
-                    />
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <Label>2 horas antes de la cita</Label>
-                    <Switch
-                      checked={formData.reminder2hBefore}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, reminder2hBefore: checked }))}
-                    />
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <Label>Después de la consulta</Label>
-                    <Switch
-                      checked={formData.reminderAfterAppointment}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, reminderAfterAppointment: checked }))}
-                    />
-                  </div>
-                </div>
-              )}
+              
+              <div>
+                <Label htmlFor="toneOfVoice">Tono de voz</Label>
+                <Select
+                  value={formData.agentBehavior.toneOfVoice}
+                  onValueChange={(value) => handleAgentBehaviorChange('toneOfVoice', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona el tono" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="professional">Profesional</SelectItem>
+                    <SelectItem value="friendly">Amigable</SelectItem>
+                    <SelectItem value="casual">Casual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="keyInformation">Información clave a incluir</Label>
+                <Textarea
+                  id="keyInformation"
+                  value={formData.agentBehavior.keyInformation}
+                  onChange={(e) => handleAgentBehaviorChange('keyInformation', e.target.value)}
+                  placeholder="Información importante que el agente debe mencionar..."
+                  rows={3}
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Ej: horarios, precios, ubicación, servicios especiales
+                </p>
+              </div>
             </div>
 
             <div className="text-center p-6 bg-green-50 rounded-lg">
               <CheckCircle className="mx-auto h-8 w-8 text-green-600 mb-2" />
               <h4 className="font-medium text-green-800">¡Configuración completa!</h4>
-              <p className="text-sm text-green-600">Tu práctica está lista para recibir pacientes</p>
+              <p className="text-sm text-green-600">Tu agente de Instagram está listo para comenzar</p>
             </div>
           </div>
         );
@@ -408,31 +343,31 @@ const Onboarding = () => {
   return (
     <>
       <Helmet>
-        <title>Configuración inicial | Tiare - Gestión de Práctica Médica</title>
-        <meta name="description" content="Configura tu práctica médica en Tiare" />
+        <title>Configuración inicial | Moca - Instagram DM Agent</title>
+        <meta name="description" content="Configura tu agente de Instagram en Moca" />
       </Helmet>
       
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-violet-50 to-pink-100 p-4">
         <div className="max-w-4xl mx-auto">
           {/* Progress Bar */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Paso {currentStep} de 4</span>
-              <span className="text-sm text-gray-500">{Math.round((currentStep / 4) * 100)}%</span>
+              <span className="text-sm font-medium text-gray-700">Paso {currentStep} de 3</span>
+              <span className="text-sm text-gray-500">{Math.round((currentStep / 3) * 100)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(currentStep / 4) * 100}%` }}
+                className="bg-violet-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(currentStep / 3) * 100}%` }}
               ></div>
             </div>
           </div>
 
           <Card className="shadow-xl">
             <CardHeader>
-              <CardTitle className="text-center">Configuración de tu práctica</CardTitle>
+              <CardTitle className="text-center">Configuración de tu agente de Instagram</CardTitle>
               <CardDescription className="text-center">
-                Personaliza Tiare según tus necesidades
+                Personaliza Moca según las necesidades de tu negocio
               </CardDescription>
             </CardHeader>
             
@@ -449,7 +384,7 @@ const Onboarding = () => {
                   Anterior
                 </Button>
 
-                {currentStep < 4 ? (
+                {currentStep < 3 ? (
                   <Button onClick={nextStep}>
                     Siguiente
                   </Button>
@@ -457,12 +392,12 @@ const Onboarding = () => {
                   <Button 
                     onClick={handleSubmit}
                     disabled={loading}
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-violet-600 hover:bg-violet-700"
                   >
                     {loading ? (
                       <div className="flex items-center">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Guardando...
+                        Configurando...
                       </div>
                     ) : (
                       'Finalizar configuración'
