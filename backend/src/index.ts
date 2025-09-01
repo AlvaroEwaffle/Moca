@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 
 // Import routes
 import instagramRoutes from './routes/instagram.routes';
+import authRoutes from './routes/auth.routes';
 
 // Import services
 import debounceWorker from './services/debounceWorker.service';
@@ -61,6 +62,7 @@ app.get('/api/health', (req, res) => {
 // API Routes
 console.log('🔧 Setting up API routes...');
 app.use('/api/instagram', instagramRoutes);
+app.use('/api/auth', authRoutes);
 console.log('✅ API routes setup completed');
 
 // Error handling middleware

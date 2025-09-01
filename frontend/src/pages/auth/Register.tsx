@@ -14,15 +14,11 @@ const Register = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    password: "",
-    confirmPassword: "",
     businessName: "",
-    businessType: "",
     phone: "",
-    address: ""
+    password: ""
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,12 +28,6 @@ const Register = () => {
     setError(null);
 
     // Validation
-    if (formData.password !== formData.confirmPassword) {
-      setError("Las contraseñas no coinciden");
-      setLoading(false);
-      return;
-    }
-
     if (formData.password.length < 8) {
       setError("La contraseña debe tener al menos 8 caracteres");
       setLoading(false);
@@ -48,7 +38,7 @@ const Register = () => {
       const backendUrl = import.meta.env.VITE_BACKEND_URL;
       if (!backendUrl) throw new Error('Backend URL not configured');
 
-      const response = await fetch(`${backendUrl}/api/doctors/register`, {
+      const response = await fetch(`${backendUrl}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,9 +48,7 @@ const Register = () => {
           email: formData.email,
           password: formData.password,
           businessName: formData.businessName,
-          businessType: formData.businessType,
-          phone: formData.phone,
-          address: formData.address
+          phone: formData.phone
         }),
       });
 
@@ -73,7 +61,7 @@ const Register = () => {
       // Store tokens
       localStorage.setItem('accessToken', data.tokens.accessToken);
       localStorage.setItem('refreshToken', data.tokens.refreshToken);
-      localStorage.setItem('userData', JSON.stringify(data.doctor));
+      localStorage.setItem('userData', JSON.stringify(data.user));
 
       // Redirect to onboarding
       navigate('/onboarding');
@@ -121,10 +109,10 @@ const Register = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name" className="text-sm font-medium text-gray-700">
-                    Nombre completo *
+                    Name *
                   </Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -142,7 +130,7 @@ const Register = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                    Correo electrónico *
+                    Email *
                   </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -157,12 +145,10 @@ const Register = () => {
                     />
                   </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="businessName" className="text-sm font-medium text-gray-700">
-                    Nombre del negocio *
+                    Business Name *
                   </Label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -179,28 +165,8 @@ const Register = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="businessType" className="text-sm font-medium text-gray-700">
-                    Tipo de negocio *
-                  </Label>
-                  <div className="relative">
-                    <Instagram className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      id="businessType"
-                      type="text"
-                      placeholder="Restaurante, Retail, Servicios, etc."
-                      value={formData.businessType}
-                      onChange={(e) => handleInputChange('businessType', e.target.value)}
-                      className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
                   <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
-                    Teléfono *
+                    Phone Number *
                   </Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -217,27 +183,8 @@ const Register = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="address" className="text-sm font-medium text-gray-700">
-                    Dirección
-                  </Label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      id="address"
-                      type="text"
-                      placeholder="Av. Principal 123, Santiago"
-                      value={formData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
                   <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                    Contraseña *
+                    Password *
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -259,31 +206,6 @@ const Register = () => {
                     </button>
                   </div>
                   <p className="text-xs text-gray-500">Mínimo 8 caracteres</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
-                    Confirmar contraseña *
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      id="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={formData.confirmPassword}
-                      onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                      className="pl-10 pr-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
                 </div>
               </div>
 
