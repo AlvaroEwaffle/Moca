@@ -348,10 +348,10 @@ export class InstagramWebhookService {
       const contact = await this.upsertContact(messageData.psid, messageData);
 
       // Get or create conversation
-      const conversation = await this.getOrCreateConversation(contact.id, account.id);
+              const conversation = await this.getOrCreateConversation(contact.id, account.accountId);
 
       // Create message record
-      const message = await this.createMessage(messageData, conversation.id, contact.id, account.id);
+      const message = await this.createMessage(messageData, conversation.id, contact.id, account.accountId);
 
       // Update conversation metadata
       await this.updateConversationMetadata(conversation.id, messageData);
