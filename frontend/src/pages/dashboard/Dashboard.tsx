@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { BACKEND_URL } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +78,7 @@ const Dashboard = () => {
   const handleInstagramOAuthCallback = async (authCode: string) => {
     setLoading(true);
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       
       // Get stored business info and agent behavior from onboarding
       const businessInfo = JSON.parse(localStorage.getItem('businessInfo') || '{}');
@@ -153,7 +154,7 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const accessToken = localStorage.getItem('accessToken');
       
       if (!backendUrl) {

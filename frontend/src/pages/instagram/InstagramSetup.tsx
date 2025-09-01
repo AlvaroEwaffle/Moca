@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { BACKEND_URL } from "@/utils/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +39,7 @@ const InstagramSetup = () => {
 
   const fetchInstagramAccount = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const accessToken = localStorage.getItem('accessToken');
       
       if (!backendUrl) return;
@@ -76,7 +77,7 @@ const InstagramSetup = () => {
   const testConnection = async () => {
     setTesting(true);
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const accessToken = localStorage.getItem('accessToken');
       
       if (!backendUrl) return;
@@ -119,7 +120,7 @@ const InstagramSetup = () => {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const accessToken = localStorage.getItem('accessToken');
       
       if (!backendUrl) throw new Error('Backend URL not configured');

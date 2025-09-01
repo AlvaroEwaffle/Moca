@@ -19,7 +19,6 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  define: {
-    'import.meta.env.VITE_BACKEND_URL': JSON.stringify('http://localhost:3002'),
-  },
+  // Environment variables are handled by Vite automatically
+  // VITE_BACKEND_URL should be set in .env files or deployment environment
 }));
