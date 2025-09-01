@@ -102,6 +102,10 @@ export class InstagramWebhookService {
    * Handle webhook verification challenge
    */
   handleVerification(mode: string, token: string, challenge: string): string | null {
+    console.log('🔍 [Webhook Verification] Received:', { mode, token, challenge });
+    console.log('🔍 [Webhook Verification] Expected token:', this.verifyToken || 'NOT SET');
+    console.log('🔍 [Webhook Verification] Token match:', token === this.verifyToken);
+    
     if (mode === 'subscribe' && token === this.verifyToken) {
       console.log('✅ Webhook verified successfully');
       return challenge;

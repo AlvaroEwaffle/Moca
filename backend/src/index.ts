@@ -26,6 +26,14 @@ console.log('🔧 [Environment Check] Loaded environment variables:', {
   NODE_ENV: process.env.NODE_ENV
 });
 
+// Debug: Show actual verify token value (first few characters for security)
+if (process.env.INSTAGRAM_VERIFY_TOKEN) {
+  console.log('🔧 [Environment Check] INSTAGRAM_VERIFY_TOKEN:', 
+    process.env.INSTAGRAM_VERIFY_TOKEN.substring(0, 3) + '...');
+} else {
+  console.log('🔧 [Environment Check] INSTAGRAM_VERIFY_TOKEN: NOT SET');
+}
+
 const app = express();
 const PORT = process.env.PORT || 3002;
 

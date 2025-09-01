@@ -1,4 +1,316 @@
+# 🧪 **Moca Instagram DM Agent - Backend Testing Guide**
+
+## 🌐 **Health & Status Tests**
+
+### Health Check
+```bash
+# Local health check
+curl -X GET "http://localhost:3002/api/health"
+
+# Production health check
+curl -X GET "https://moca-production.up.railway.app/api/health"
+```
+
+## 📱 **Instagram Webhook Tests**
+
+### Webhook Verification (GET)
+```bash
+# Local webhook verification
+curl -X GET "http://localhost:3002/api/instagram/webhook?hub.mode=subscribe&hub.verify_token=villena&hub.challenge=CHALLENGE_ACCEPTED"
+
+# Production webhook verification
+curl -X GET "https://moca-production.up.railway.app/api/instagram/webhook?hub.mode=subscribe&hub.verify_token=villena&hub.challenge=CHALLENGE_ACCEPTED"
+```
+
+### Webhook Message Reception (POST)
+```bash
+# Local webhook message reception
+curl -X POST "http://localhost:3002/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
+  -d '{
+    "object": "instagram",
+    "entry": [{
+      "id": "123456789",
+      "time": 1234567890,
+      "messaging": [{
+        "sender": {"id": "USER_PSID"},
+        "recipient": {"id": "PAGE_ID"},
+        "timestamp": 1234567890,
+        "message": {
+          "mid": "MESSAGE_ID",
+          "text": "Hello, this is a test message!"
+        }
+      }]
+    }]
+  }'
+
+# Production webhook message reception
+curl -X POST "https://moca-production.up.railway.app/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: YOUR_SIGNATURE" \
+  -d '{
+    "object": "instagram",
+    "entry": [{
+      "id": "123456789",
+      "time": 1234567890,
+      "messaging": [{
+        "sender": {"id": "USER_PSID"},
+        "recipient": {"id": "PAGE_ID"},
+        "timestamp": 1234567890,
+        "message": {
+          "mid": "MESSAGE_ID",
+          "text": "Hello, this is a test message!"
+        }
+      }]
+    }]
+  }'
+```
+
+## 👥 **Contact Management Tests**
+
+### Get All Contacts
+```bash
+# Local - Get all contacts
+curl -X GET "http://localhost:3002/api/instagram/contacts"
+
+# Local - Get contacts with pagination
+curl -X GET "http://localhost:3002/api/instagram/contacts?page=1&limit=10"
+
+# Local - Search contacts
+curl -X GET "http://localhost:3002/api/instagram/contacts?search=john"
+
+# Production - Get all contacts
+curl -X GET "https://moca-production.up.railway.app/api/instagram/contacts"
+```
+
+### Get Specific Contact
+```bash
+# Local - Get contact by ID
+curl -X GET "http://localhost:3002/api/instagram/contacts/CONTACT_ID"
+
+# Production - Get contact by ID
+curl -X GET "https://moca-production.up.railway.app/api/instagram/contacts/CONTACT_ID"
+```
+
+## 💬 **Conversation Management Tests**
+
+### Get All Conversations
+```bash
+# Local - Get all conversations
+curl -X GET "http://localhost:3002/api/instagram/conversations"
+
+# Local - Get conversations with filters
+curl -X GET "http://localhost:3002/api/instagram/conversations?status=open&page=1&limit=10"
+
+# Production - Get all conversations
+curl -X GET "https://moca-production.up.railway.app/api/instagram/conversations"
+```
+
+### Get Specific Conversation with Messages
+```bash
+# Local - Get conversation with messages
+curl -X GET "http://localhost:3002/api/instagram/conversations/CONVERSATION_ID"
+
+# Production - Get conversation with messages
+curl -X GET "https://moca-production.up.railway.app/api/instagram/conversations/CONVERSATION_ID"
+```
+
+### Send Manual Message
+```bash
+# Local - Send manual message
+curl -X POST "http://localhost:3002/api/instagram/conversations/CONVERSATION_ID/messages" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "This is a manual test message from the API",
+    "type": "text"
+  }'
+
+# Production - Send manual message
+curl -X POST "https://moca-production.up.railway.app/api/instagram/conversations/CONVERSATION_ID/messages" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "This is a manual test message from the API",
+    "type": "text"
+  }'
+```
+
+## 📬 **Queue Management Tests**
+
+### Get Queue Status
+```bash
+# Local - Get queue statistics
+curl -X GET "http://localhost:3002/api/instagram/queue/status"
+
+# Production - Get queue statistics
+curl -X GET "https://moca-production.up.railway.app/api/instagram/queue/status"
+```
+
+### Retry Failed Messages
+```bash
+# Local - Retry failed messages
+curl -X POST "http://localhost:3002/api/instagram/queue/retry"
+
+# Production - Retry failed messages
+curl -X POST "https://moca-production.up.railway.app/api/instagram/queue/retry"
+```
+
+## 🔧 **API Connection Tests**
+
+### Test Instagram API Connection
+```bash
+# Local - Test Instagram API connection
+curl -X GET "http://localhost:3002/api/instagram/test-connection"
+
+# Production - Test Instagram API connection
+curl -X GET "https://moca-production.up.railway.app/api/instagram/test-connection"
+```
+
+## 📊 **System Monitoring Tests**
+
+### Get System Statistics
+```bash
+# Local - Get system stats
+curl -X GET "http://localhost:3002/api/instagram/stats"
+
+# Production - Get system stats
+curl -X GET "https://moca-production.up.railway.app/api/instagram/stats"
+```
+
+## 🧪 **Test Scenarios**
+
+### 1. **Basic Health Check**
+```bash
+# Test if the server is running
+curl -X GET "http://localhost:3002/api/health" | jq
+```
+
+### 2. **Webhook Verification Test**
+```bash
+# Test webhook verification (replace with your actual verify token)
+curl -X GET "http://localhost:3002/api/instagram/webhook?hub.mode=subscribe&hub.verify_token=test_token&hub.challenge=test_challenge"
+```
+
+### 3. **Simulate Incoming Message**
+```bash
+# Simulate an incoming Instagram message
+curl -X POST "http://localhost:3002/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "object": "instagram",
+    "entry": [{
+      "id": "123456789",
+      "time": 1234567890,
+      "messaging": [{
+        "sender": {"id": "test_user_psid"},
+        "recipient": {"id": "test_page_id"},
+        "timestamp": 1234567890,
+        "message": {
+          "mid": "test_message_id",
+          "text": "Hello! I need help with my website."
+        }
+      }]
+    }]
+  }'
+```
+
+### 4. **Check Message Processing**
+```bash
+# Check if messages were processed
+curl -X GET "http://localhost:3002/api/instagram/conversations" | jq
+```
+
+### 5. **Monitor Queue Status**
+```bash
+# Check queue status after message processing
+curl -X GET "http://localhost:3002/api/instagram/queue/status" | jq
+```
+
+## 🔍 **Debugging Commands**
+
+### Check Server Logs
+```bash
+# If running locally, check the console output for detailed logs
+# Look for logs starting with:
+# 🔧 InstagramApiService: 
+# 🔄 DebounceWorkerService: 
+# 📤 SenderWorkerService: 
+# 📥 Instagram webhook: 
+```
+
+### Test Database Connection
+```bash
+# The health endpoint will show if MongoDB is connected
+curl -X GET "http://localhost:3002/api/health" | jq '.database'
+```
+
+## 📝 **Environment Variables Required**
+
+Make sure these environment variables are set:
+```bash
+MONGODB_URI=mongodb://localhost:27017/moca
+OPENAI_API_KEY=your_openai_api_key
+INSTAGRAM_VERIFY_TOKEN=your_verify_token
+INSTAGRAM_APP_SECRET=your_app_secret
+INSTAGRAM_ACCESS_TOKEN=your_access_token
+```
+
+## 🚀 **Quick Test Sequence**
+
+```bash
+# 1. Health check
+curl -X GET "http://localhost:3002/api/health"
+
+# 2. Test webhook verification
+curl -X GET "http://localhost:3002/api/instagram/webhook?hub.mode=subscribe&hub.verify_token=test&hub.challenge=test"
+
+# 3. Send test message
+curl -X POST "http://localhost:3002/api/instagram/webhook" \
+  -H "Content-Type: application/json" \
+  -d '{"object":"instagram","entry":[{"id":"123","time":1234567890,"messaging":[{"sender":{"id":"test_user"},"recipient":{"id":"test_page"},"timestamp":1234567890,"message":{"mid":"test_msg","text":"Hello!"}}]}]}'
+
+# 4. Check conversations
+curl -X GET "http://localhost:3002/api/instagram/conversations"
+
+# 5. Check queue status
+curl -X GET "http://localhost:3002/api/instagram/queue/status"
+```
+
+## 📋 **Expected Responses**
+
+### Health Check Response
+```json
+{
+  "status": "OK",
+  "timestamp": "2025-08-31T23:53:06.025Z",
+  "service": "Moca Instagram DM Agent API",
+  "version": "1.0.0"
+}
+```
+
+### Webhook Verification Response
+```
+CHALLENGE_ACCEPTED
+```
+
+### Webhook Message Response
+```
+OK
+```
+
+### Conversations Response
+```json
+{
+  "success": true,
+  "data": {
+    "conversations": [...],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 0
+    }
+  }
+}
+```
 
 
-curl -X GET "http://localhost:3002/api/instagram/webhook"
-curl -X GET "https://moca-production.up.railway.app/api/instagram/webhook"
