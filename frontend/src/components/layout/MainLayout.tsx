@@ -31,7 +31,10 @@ import {
   Home,
   FileText,
   MessageSquare,
-  BarChart3
+  BarChart3,
+  Instagram,
+  Activity,
+  Send
 } from "lucide-react";
 
 const MainLayout = () => {
@@ -63,34 +66,28 @@ const MainLayout = () => {
       current: location.pathname === '/app/dashboard'
     },
     {
-      name: 'Citas',
-      href: '/app/appointments',
-      icon: Calendar,
-      current: location.pathname.startsWith('/app/appointments')
-    },
-    {
-      name: 'Pacientes',
-      href: '/app/patients',
-      icon: Users,
-      current: location.pathname.startsWith('/app/patients')
-    },
-    {
-      name: 'Facturación',
-      href: '/app/billing',
-      icon: DollarSign,
-      current: location.pathname.startsWith('/app/billing')
-    },
-    {
-      name: 'Reportes',
-      href: '/app/reportes',
-      icon: BarChart3,
-      current: location.pathname.startsWith('/app/reportes')
-    },
-    {
-      name: 'Mensajes',
-      href: '/app/mensajes',
+      name: 'Conversaciones',
+      href: '/conversations',
       icon: MessageSquare,
-      current: location.pathname.startsWith('/app/mensajes')
+      current: location.pathname.startsWith('/conversations')
+    },
+    {
+      name: 'Instagram',
+      href: '/instagram/setup',
+      icon: Instagram,
+      current: location.pathname.startsWith('/instagram')
+    },
+    {
+      name: 'Cola de Mensajes',
+      href: '/system/queue',
+      icon: Send,
+      current: location.pathname.startsWith('/system/queue')
+    },
+    {
+      name: 'Logs del Sistema',
+      href: '/system/logs',
+      icon: Activity,
+      current: location.pathname.startsWith('/system/logs')
     },
     {
       name: 'Configuración',
@@ -120,10 +117,10 @@ const MainLayout = () => {
         <SheetContent side="left" className="w-80">
           <SheetHeader>
             <SheetTitle className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">T</span>
+              <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">M</span>
               </div>
-                              <span className="text-xl font-bold">Moca</span>
+              <span className="text-xl font-bold">Moca</span>
             </SheetTitle>
           </SheetHeader>
           
@@ -135,7 +132,7 @@ const MainLayout = () => {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   item.current
-                    ? 'bg-blue-100 text-blue-700'
+                    ? 'bg-violet-100 text-violet-700'
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
@@ -152,10 +149,10 @@ const MainLayout = () => {
         <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-4 border-r border-gray-200">
           <div className="flex h-16 shrink-0 items-center">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">T</span>
+              <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">M</span>
               </div>
-                              <span className="text-xl font-bold text-gray-900">Moca</span>
+              <span className="text-xl font-bold text-gray-900">Moca</span>
             </div>
           </div>
           
@@ -169,8 +166,8 @@ const MainLayout = () => {
                         to={item.href}
                         className={`group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-medium transition-colors ${
                           item.current
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'text-gray-700 hover:text-blue-700 hover:bg-blue-50'
+                            ? 'bg-violet-50 text-violet-700'
+                            : 'text-gray-700 hover:text-violet-700 hover:bg-violet-50'
                         }`}
                       >
                         <item.icon className="h-6 w-6 shrink-0" />
@@ -185,7 +182,7 @@ const MainLayout = () => {
                 <div className="flex items-center space-x-3 p-3 rounded-lg bg-gray-50">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={userData.avatar} alt={userData.name} />
-                    <AvatarFallback className="bg-blue-100 text-blue-700 text-sm font-medium">
+                    <AvatarFallback className="bg-violet-100 text-violet-700 text-sm font-medium">
                       {getInitials(userData.name)}
                     </AvatarFallback>
                   </Avatar>

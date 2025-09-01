@@ -11,6 +11,7 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import Onboarding from "./pages/auth/Onboarding";
 import Dashboard from "./pages/dashboard/Dashboard";
+import InstagramSetup from "./pages/instagram/InstagramSetup";
 import BillingInterface from "./pages/billing/BillingInterface";
 import CreatePatient from "./pages/patients/CreatePatient";
 import AppointmentsPage from "./pages/appointments/AppointmentsPage";
@@ -117,6 +118,11 @@ function App() {
               <Route path="billing" element={<BillingPage />} />
               <Route path="billing/create" element={<CreateBillingPage />} />
               <Route path="facturacion" element={<BillingInterface />} />
+            </Route>
+
+            {/* Instagram routes */}
+            <Route path="/instagram" element={<MainLayout />}>
+              <Route path="setup" element={<InstagramSetup />} />
             </Route>
 
             {/* Google Calendar OAuth callback routes (public) */}
