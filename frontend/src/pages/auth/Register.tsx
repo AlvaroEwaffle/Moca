@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Eye, EyeOff, Lock, Mail, User, Phone, MapPin, GraduationCap, FileText } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, User, Phone, MapPin, Building2, Instagram } from "lucide-react";
 import { Helmet } from "react-helmet";
 
 const Register = () => {
@@ -16,8 +16,8 @@ const Register = () => {
     email: "",
     password: "",
     confirmPassword: "",
-    specialization: "",
-    licenseNumber: "",
+    businessName: "",
+    businessType: "",
     phone: "",
     address: ""
   });
@@ -57,8 +57,8 @@ const Register = () => {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          specialization: formData.specialization,
-          licenseNumber: formData.licenseNumber,
+          businessName: formData.businessName,
+          businessType: formData.businessType,
           phone: formData.phone,
           address: formData.address
         }),
@@ -95,21 +95,21 @@ const Register = () => {
   return (
     <>
       <Helmet>
-        <title>Registro | Tiare - Gestión de Práctica Médica</title>
-        <meta name="description" content="Regístrate en Tiare para gestionar tu práctica médica de manera eficiente" />
+        <title>Registro | Moca - Instagram DM Agent</title>
+        <meta name="description" content="Regístrate en Moca para automatizar tu Instagram y gestionar conversaciones de tu negocio" />
       </Helmet>
       
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-pink-100 p-4">
         <Card className="w-full max-w-2xl shadow-xl">
           <CardHeader className="text-center space-y-2">
-            <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-              <User className="w-8 h-8 text-white" />
+            <div className="mx-auto w-16 h-16 bg-violet-600 rounded-full flex items-center justify-center mb-4">
+              <Instagram className="w-8 h-8 text-white" />
             </div>
             <CardTitle className="text-2xl font-bold text-gray-900">
-              Únete a Tiare
+              Únete a Moca
             </CardTitle>
             <CardDescription className="text-gray-600">
-              Regístrate para gestionar tu práctica médica de manera eficiente
+              Regístrate para automatizar tu Instagram y gestionar conversaciones de tu negocio
             </CardDescription>
           </CardHeader>
           
@@ -131,10 +131,10 @@ const Register = () => {
                     <Input
                       id="name"
                       type="text"
-                      placeholder="Dr. Juan Pérez"
+                      placeholder="Juan Pérez"
                       value={formData.name}
                       onChange={(e) => handleInputChange('name', e.target.value)}
-                      className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                       required
                     />
                   </div>
@@ -149,10 +149,10 @@ const Register = () => {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="doctor@ejemplo.com"
+                      placeholder="empresa@ejemplo.com"
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
-                      className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                       required
                     />
                   </div>
@@ -161,36 +161,36 @@ const Register = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="specialization" className="text-sm font-medium text-gray-700">
-                    Especialidad *
+                  <Label htmlFor="businessName" className="text-sm font-medium text-gray-700">
+                    Nombre del negocio *
                   </Label>
                   <div className="relative">
-                    <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <Input
-                      id="specialization"
+                      id="businessName"
                       type="text"
-                      placeholder="Psicología, Psiquiatría, etc."
-                      value={formData.specialization}
-                      onChange={(e) => handleInputChange('specialization', e.target.value)}
-                      className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Mi Restaurante, Mi Tienda, etc."
+                      value={formData.businessName}
+                      onChange={(e) => handleInputChange('businessName', e.target.value)}
+                      className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="licenseNumber" className="text-sm font-medium text-gray-700">
-                    Número de licencia *
+                  <Label htmlFor="businessType" className="text-sm font-medium text-gray-700">
+                    Tipo de negocio *
                   </Label>
                   <div className="relative">
-                    <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Instagram className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <Input
-                      id="licenseNumber"
+                      id="businessType"
                       type="text"
-                      placeholder="12345"
-                      value={formData.licenseNumber}
-                      onChange={(e) => handleInputChange('licenseNumber', e.target.value)}
-                      className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Restaurante, Retail, Servicios, etc."
+                      value={formData.businessType}
+                      onChange={(e) => handleInputChange('businessType', e.target.value)}
+                      className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                       required
                     />
                   </div>
@@ -210,7 +210,7 @@ const Register = () => {
                       placeholder="+56 9 1234 5678"
                       value={formData.phone}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
-                      className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                       required
                     />
                   </div>
@@ -228,7 +228,7 @@ const Register = () => {
                       placeholder="Av. Principal 123, Santiago"
                       value={formData.address}
                       onChange={(e) => handleInputChange('address', e.target.value)}
-                      className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                     />
                   </div>
                 </div>
@@ -247,7 +247,7 @@ const Register = () => {
                       placeholder="••••••••"
                       value={formData.password}
                       onChange={(e) => handleInputChange('password', e.target.value)}
-                      className="pl-10 pr-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className="pl-10 pr-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                       required
                     />
                     <button
@@ -273,7 +273,7 @@ const Register = () => {
                       placeholder="••••••••"
                       value={formData.confirmPassword}
                       onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                      className="pl-10 pr-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className="pl-10 pr-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                       required
                     />
                     <button
@@ -289,7 +289,7 @@ const Register = () => {
 
               <Button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
                 disabled={loading}
               >
                 {loading ? (
@@ -308,7 +308,7 @@ const Register = () => {
                 ¿Ya tienes una cuenta?{" "}
                 <Link
                   to="/login"
-                  className="text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-violet-600 hover:text-violet-700 font-medium"
                 >
                   Inicia sesión aquí
                 </Link>
