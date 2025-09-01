@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Eye, EyeOff, Lock, Mail, User } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, Instagram } from "lucide-react";
 import { Helmet } from "react-helmet";
 
 const Login = () => {
@@ -27,7 +27,7 @@ const Login = () => {
       const backendUrl = import.meta.env.VITE_BACKEND_URL;
       if (!backendUrl) throw new Error('Backend URL not configured');
 
-      const response = await fetch(`${backendUrl}/api/doctors/login`, {
+      const response = await fetch(`${backendUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -42,9 +42,9 @@ const Login = () => {
       }
 
       // Store tokens
-      localStorage.setItem('accessToken', data.tokens.accessToken);
-      localStorage.setItem('refreshToken', data.tokens.refreshToken);
-      localStorage.setItem('userData', JSON.stringify(data.doctor));
+      localStorage.setItem('accessToken', data.data.tokens.accessToken);
+      localStorage.setItem('refreshToken', data.data.tokens.refreshToken);
+      localStorage.setItem('userData', JSON.stringify(data.data.user));
 
       // Redirect to dashboard
               navigate('/app/dashboard');
@@ -66,21 +66,21 @@ const Login = () => {
   return (
     <>
       <Helmet>
-        <title>Iniciar Sesión | Tiare - Gestión de Práctica Médica</title>
-        <meta name="description" content="Accede a tu panel de gestión de práctica médica con Tiare" />
+        <title>Iniciar Sesión | Moca - Instagram DM Agent</title>
+        <meta name="description" content="Accede a tu panel de automatización de Instagram con Moca" />
       </Helmet>
       
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-pink-100 p-4">
         <Card className="w-full max-w-md shadow-xl">
           <CardHeader className="text-center space-y-2">
-            <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-              <User className="w-8 h-8 text-white" />
+            <div className="mx-auto w-16 h-16 bg-violet-600 rounded-full flex items-center justify-center mb-4">
+              <Instagram className="w-8 h-8 text-white" />
             </div>
             <CardTitle className="text-2xl font-bold text-gray-900">
               Bienvenido de vuelta
             </CardTitle>
             <CardDescription className="text-gray-600">
-              Accede a tu panel de gestión médica
+              Accede a tu panel de automatización de Instagram
             </CardDescription>
           </CardHeader>
           
@@ -94,17 +94,17 @@ const Login = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                  Correo electrónico
+                  Email
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     id="email"
                     type="email"
-                    placeholder="doctor@ejemplo.com"
+                    placeholder="empresa@ejemplo.com"
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    className="pl-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                     required
                   />
                 </div>
@@ -112,7 +112,7 @@ const Login = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                  Contraseña
+                  Password
                 </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -122,7 +122,7 @@ const Login = () => {
                     placeholder="••••••••"
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
-                    className="pl-10 pr-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    className="pl-10 pr-10 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                     required
                   />
                   <button
@@ -137,7 +137,7 @@ const Login = () => {
 
               <Button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
                 disabled={loading}
               >
                 {loading ? (
@@ -156,7 +156,7 @@ const Login = () => {
                 ¿No tienes una cuenta?{" "}
                 <Link
                   to="/register"
-                  className="text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-violet-600 hover:text-violet-700 font-medium"
                 >
                   Regístrate aquí
                 </Link>

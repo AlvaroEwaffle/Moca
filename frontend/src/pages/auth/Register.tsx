@@ -59,9 +59,9 @@ const Register = () => {
       }
 
       // Store tokens
-      localStorage.setItem('accessToken', data.tokens.accessToken);
-      localStorage.setItem('refreshToken', data.tokens.refreshToken);
-      localStorage.setItem('userData', JSON.stringify(data.user));
+      localStorage.setItem('accessToken', data.data.tokens.accessToken);
+      localStorage.setItem('refreshToken', data.data.tokens.refreshToken);
+      localStorage.setItem('userData', JSON.stringify(data.data.user));
 
       // Redirect to onboarding
       navigate('/onboarding');
