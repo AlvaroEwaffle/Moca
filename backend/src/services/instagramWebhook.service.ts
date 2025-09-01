@@ -170,7 +170,7 @@ export class InstagramWebhookService {
   }
 
   /**
-   * Process Instagram changes (comments, etc.)
+   * Process Instagram changes (comments, messages, etc.)
    */
   private async processChange(change: any): Promise<void> {
     try {
@@ -178,11 +178,35 @@ export class InstagramWebhookService {
 
       if (change.field === 'comments') {
         await this.processComment(change.value);
+      } else if (change.field === 'messages') {
+        await this.processMessageChange(change.value);
       } else {
         console.log(`⚠️ Unhandled change field: ${change.field}`);
       }
     } catch (error) {
       console.error('❌ Error processing change:', error);
+    }
+  }
+
+  /**
+   * Process Instagram message change (from changes array)
+   */
+  private async processMessageChange(messageChange: any): Promise<void> {
+    try {
+      console.log(`📨 Processing message change from PSID: ${messageChange.sender?.id}`);
+
+      const messageData: InstagramMessage = {
+        mid: messageChange.message?.mid || `change_msg_${Date.now()}`,
+        psid: messageChange.sender?.id || `change_user_${Date.now()}`,
+        text: messageChange.message?.text || '',
+        timestamp: parseInt(messageChange.timestamp) * 1000 || Date.now(), // Convert to milliseconds
+        type: 'message'
+      };
+
+      // Process the message
+      await this.processMessage(messageData);
+    } catch (error) {
+      console.error('❌ Error processing message change:', error);
     }
   }
 
@@ -295,6 +319,21 @@ export class InstagramWebhookService {
       const existingMessage = await Message.findOne({ mid: messageData.mid });
       if (existingMessage) {
         console.log(`⚠️ Message ${messageData.mid} already exists, skipping`);
+        return;
+      }
+
+      // Check if we have a recent message with same text from same user (Meta duplicate webhook)
+      const recentDuplicate = await Message.findOne({
+        'content.text': messageData.text,
+        psid: messageData.psid,
+        role: 'user',
+        'metadata.timestamp': { 
+          $gte: new Date(Date.now() - 10000) // Within last 10 seconds
+        }
+      });
+
+      if (recentDuplicate) {
+        console.log(`⚠️ Duplicate message content from same user within 10s, skipping: "${messageData.text}"`);
         return;
       }
 

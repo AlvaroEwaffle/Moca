@@ -98,10 +98,28 @@ class DebounceWorkerService {
     console.log(`💬 DebounceWorkerService: Processing conversation: ${conversation.id}`);
     
     try {
+      // Check conversation state - don't respond if we're waiting for user
+      if (conversation.status === 'closed') {
+        console.log(`⏳ DebounceWorkerService: Conversation ${conversation.id} is closed, skipping`);
+        return;
+      }
+
       // Check if conversation is in cooldown
       if (conversation.timestamps.cooldownUntil && conversation.timestamps.cooldownUntil > new Date()) {
         const remainingSeconds = Math.ceil((conversation.timestamps.cooldownUntil.getTime() - Date.now()) / 1000);
         console.log(`⏰ DebounceWorkerService: Conversation ${conversation.id} is in cooldown, skipping (${remainingSeconds}s remaining)`);
+        return;
+      }
+
+      // Check if we already sent a response recently (within last 30 seconds)
+      const lastBotMessage = await Message.findOne({
+        conversationId: conversation.id,
+        role: 'assistant',
+        status: 'sent'
+      }).sort({ 'metadata.timestamp': -1 });
+
+      if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 30000) {
+        console.log(`⏰ DebounceWorkerService: Bot responded recently to conversation ${conversation.id}, skipping`);
         return;
       }
 
@@ -120,19 +138,16 @@ class DebounceWorkerService {
         return;
       }
 
-      // Check if we should consolidate messages
-      const debounceWindow = 4000; // 4 seconds
-      const now = Date.now();
-      const messagesInWindow = recentMessages.filter(msg => 
-        now - msg.metadata.timestamp.getTime() < debounceWindow
-      );
+      // Group messages by text content to handle Meta's duplicate webhooks
+      const uniqueMessages = this.groupMessagesByContent(recentMessages);
+      console.log(`📝 DebounceWorkerService: Grouped into ${uniqueMessages.length} unique message groups`);
 
-      if (messagesInWindow.length > 1) {
-        console.log(`🔗 DebounceWorkerService: Consolidating ${recentMessages.length} messages for conversation: ${conversation.id}`);
-        await this.consolidateMessages(conversation, recentMessages);
+      if (uniqueMessages.length > 1) {
+        console.log(`🔗 DebounceWorkerService: Consolidating ${uniqueMessages.length} unique message groups for conversation: ${conversation.id}`);
+        await this.consolidateMessages(conversation, uniqueMessages);
       } else {
-        console.log(`📝 DebounceWorkerService: Processing ${recentMessages.length} individual messages for conversation: ${conversation.id}`);
-        await this.processIndividualMessages(conversation, recentMessages);
+        console.log(`📝 DebounceWorkerService: Processing single message group for conversation: ${conversation.id}`);
+        await this.processIndividualMessages(conversation, uniqueMessages);
       }
 
     } catch (error) {
@@ -141,14 +156,15 @@ class DebounceWorkerService {
   }
 
   /**
-   * Consolidate multiple messages into one response
+   * Consolidate multiple message groups into one response
    */
-  private async consolidateMessages(conversation: IConversation, messages: IMessage[]): Promise<void> {
-    console.log(`🔗 DebounceWorkerService: Consolidating ${messages.length} messages for conversation: ${conversation.id}`);
+  private async consolidateMessages(conversation: IConversation, messageGroups: IMessage[][]): Promise<void> {
+    console.log(`🔗 DebounceWorkerService: Consolidating ${messageGroups.length} message groups for conversation: ${conversation.id}`);
     
     try {
-      // Combine all message texts
-      const combinedText = messages.map(msg => msg.content.text).join('\n\n');
+      // Combine all unique message texts (one from each group)
+      const uniqueTexts = messageGroups.map(group => group[0].content.text);
+      const combinedText = uniqueTexts.join('\n\n');
       console.log(`🔗 DebounceWorkerService: Combined text: "${combinedText}"`);
 
       // Create a consolidated message record
@@ -165,7 +181,7 @@ class DebounceWorkerService {
         metadata: {
           timestamp: new Date(),
           consolidated: true,
-          originalMessageIds: messages.map(msg => msg.id),
+          originalMessageIds: messageGroups.flat().map(msg => msg.id),
           processed: false
         }
       });
@@ -176,14 +192,14 @@ class DebounceWorkerService {
       // Process the consolidated message
       await this.processMessage(conversation, consolidatedMessage);
 
-      // Mark original messages as processed
-      const messageIds = messages.map(msg => msg.id);
+      // Mark all original messages as processed
+      const allMessageIds = messageGroups.flat().map(msg => msg.id);
       await Message.updateMany(
-        { _id: { $in: messageIds } },
+        { _id: { $in: allMessageIds } },
         { 'metadata.processed': true }
       );
 
-      console.log(`✅ DebounceWorkerService: Marked ${messageIds.length} original messages as processed`);
+      console.log(`✅ DebounceWorkerService: Marked ${allMessageIds.length} original messages as processed`);
 
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error consolidating messages for conversation ${conversation.id}:`, error);
@@ -191,12 +207,31 @@ class DebounceWorkerService {
   }
 
   /**
-   * Process individual messages
+   * Group messages by content to handle Meta's duplicate webhooks
    */
-  private async processIndividualMessages(conversation: IConversation, messages: IMessage[]): Promise<void> {
-    console.log(`📝 DebounceWorkerService: Processing ${messages.length} individual messages for conversation: ${conversation.id}`);
+  private groupMessagesByContent(messages: IMessage[]): IMessage[][] {
+    const groups: { [key: string]: IMessage[] } = {};
     
-    for (const message of messages) {
+    messages.forEach(message => {
+      const text = message.content?.text || '';
+      if (!groups[text]) {
+        groups[text] = [];
+      }
+      groups[text].push(message);
+    });
+    
+    return Object.values(groups);
+  }
+
+  /**
+   * Process individual message groups
+   */
+  private async processIndividualMessages(conversation: IConversation, messageGroups: IMessage[][]): Promise<void> {
+    console.log(`📝 DebounceWorkerService: Processing ${messageGroups.length} message groups for conversation: ${conversation.id}`);
+    
+    for (const messageGroup of messageGroups) {
+      // Process the first message in each group (they have same content)
+      const message = messageGroup[0];
       console.log(`📝 DebounceWorkerService: Processing message: ${message.id} for conversation: ${conversation.id}`);
       await this.processMessage(conversation, message);
     }
