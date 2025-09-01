@@ -81,7 +81,7 @@ class InstagramApiService {
       throw new Error('No access token available');
     }
 
-    const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${this.accessToken}`;
+    const url = `https://graph.instagram.com/v23.0/me/messages?access_token=${this.accessToken}`;
     
     const payload = {
       recipient: { id: psid },
@@ -95,6 +95,7 @@ class InstagramApiService {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload)
