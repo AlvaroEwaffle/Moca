@@ -390,7 +390,7 @@ router.post('/queue/retry', async (req, res) => {
 // Create Instagram account
 router.post('/accounts', async (req, res) => {
   try {
-    const { accountId, accessToken, refreshToken, rateLimits, settings } = req.body;
+    const { accountId, accountName, accessToken, refreshToken, rateLimits, settings } = req.body;
 
     // Validate required fields
     if (!accountId || !accessToken) {
@@ -412,6 +412,7 @@ router.post('/accounts', async (req, res) => {
     // Create new Instagram account
     const newAccount = new InstagramAccount({
       accountId,
+      accountName: accountName || `Account ${accountId}`,
       accessToken,
       refreshToken,
       tokenExpiry: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
