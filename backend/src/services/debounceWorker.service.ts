@@ -69,8 +69,6 @@ class DebounceWorkerService {
    * Main processing function
    */
   async process(): Promise<void> {
-    console.log('🔄 DebounceWorkerService: Starting debounce worker process');
-    
     try {
       // Get all active conversations
       const activeConversations = await Conversation.find({ 
@@ -78,14 +76,15 @@ class DebounceWorkerService {
         isActive: true 
       }).populate('contactId');
 
-      console.log(`📋 DebounceWorkerService: Found ${activeConversations.length} active conversations to process`);
-
+      let processedCount = 0;
       for (const conversation of activeConversations) {
-        console.log(`📋 DebounceWorkerService: Processing conversation: ${conversation.id}`);
-        await this.processConversation(conversation);
+        const wasProcessed = await this.processConversation(conversation);
+        if (wasProcessed) processedCount++;
       }
 
-      console.log('✅ DebounceWorkerService: Debounce worker process completed');
+      if (processedCount > 0) {
+        console.log(`✅ DebounceWorkerService: Processed ${processedCount} conversations`);
+      }
     } catch (error) {
       console.error('❌ DebounceWorkerService: Error in debounce worker process:', error);
     }
@@ -94,21 +93,16 @@ class DebounceWorkerService {
   /**
    * Process a single conversation
    */
-  private async processConversation(conversation: IConversation): Promise<void> {
-    console.log(`💬 DebounceWorkerService: Processing conversation: ${conversation.id}`);
-    
+  private async processConversation(conversation: IConversation): Promise<boolean> {
     try {
       // Check conversation state - don't respond if we're waiting for user
       if (conversation.status === 'closed') {
-        console.log(`⏳ DebounceWorkerService: Conversation ${conversation.id} is closed, skipping`);
-        return;
+        return false;
       }
 
       // Check if conversation is in cooldown
       if (conversation.timestamps.cooldownUntil && conversation.timestamps.cooldownUntil > new Date()) {
-        const remainingSeconds = Math.ceil((conversation.timestamps.cooldownUntil.getTime() - Date.now()) / 1000);
-        console.log(`⏰ DebounceWorkerService: Conversation ${conversation.id} is in cooldown, skipping (${remainingSeconds}s remaining)`);
-        return;
+        return false;
       }
 
       // Check if we already sent a response recently (within last 30 seconds)
@@ -119,8 +113,7 @@ class DebounceWorkerService {
       }).sort({ 'metadata.timestamp': -1 });
 
       if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 30000) {
-        console.log(`⏰ DebounceWorkerService: Bot responded recently to conversation ${conversation.id}, skipping`);
-        return;
+        return false;
       }
 
       // Get recent unprocessed messages
@@ -131,27 +124,26 @@ class DebounceWorkerService {
         'metadata.processed': { $ne: true }
       }).sort({ 'metadata.timestamp': 1 });
 
-      console.log(`📨 DebounceWorkerService: Found ${recentMessages.length} unprocessed messages for conversation: ${conversation.id}`);
-
       if (recentMessages.length === 0) {
-        console.log(`📭 DebounceWorkerService: No unprocessed messages for conversation: ${conversation.id}`);
-        return;
+        return false;
       }
 
       // Group messages by text content to handle Meta's duplicate webhooks
       const uniqueMessages = this.groupMessagesByContent(recentMessages);
-      console.log(`📝 DebounceWorkerService: Grouped into ${uniqueMessages.length} unique message groups`);
 
       if (uniqueMessages.length > 1) {
-        console.log(`🔗 DebounceWorkerService: Consolidating ${uniqueMessages.length} unique message groups for conversation: ${conversation.id}`);
+        console.log(`🔗 DebounceWorkerService: Consolidating ${uniqueMessages.length} message groups for conversation: ${conversation.id}`);
         await this.consolidateMessages(conversation, uniqueMessages);
       } else {
-        console.log(`📝 DebounceWorkerService: Processing single message group for conversation: ${conversation.id}`);
+        console.log(`📝 DebounceWorkerService: Processing message for conversation: ${conversation.id}`);
         await this.processIndividualMessages(conversation, uniqueMessages);
       }
 
+      return true; // Conversation was processed
+
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error processing conversation ${conversation.id}:`, error);
+      return false;
     }
   }
 

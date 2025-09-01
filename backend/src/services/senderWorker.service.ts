@@ -65,21 +65,23 @@ class SenderWorkerService {
    * Main processing function
    */
   async process(): Promise<void> {
-    console.log('📤 SenderWorkerService: Starting outbound queue processing');
-    
     try {
       // Get queue items ready to process
       const queueItems = await OutboundQueue.findReadyToProcess();
-      console.log(`📤 SenderWorkerService: Processing ${queueItems.length} outbound queue items`);
-
+      
+      let processedCount = 0;
       for (const queueItem of queueItems) {
-        console.log(`📤 SenderWorkerService: Processing queue item: ${queueItem.id}`);
-        await this.processQueueItem(queueItem);
+        const wasProcessed = await this.processQueueItem(queueItem);
+        if (wasProcessed) processedCount++;
       }
 
       // Handle retries and cleanup
-      await this.handleRetries();
-      await this.cleanupExpiredItems();
+      const retryCount = await this.handleRetries();
+      const cleanupCount = await this.cleanupExpiredItems();
+
+      if (processedCount > 0 || retryCount > 0 || cleanupCount > 0) {
+        console.log(`📤 SenderWorkerService: Processed ${processedCount} items, retried ${retryCount}, cleaned ${cleanupCount}`);
+      }
 
     } catch (error) {
       console.error('❌ SenderWorkerService: Error in outbound queue processing:', error);
@@ -89,15 +91,12 @@ class SenderWorkerService {
   /**
    * Process a single queue item
    */
-  private async processQueueItem(queueItem: IOutboundQueue): Promise<void> {
-    console.log(`📤 SenderWorkerService: Processing queue item: ${queueItem.id}`);
-    
+  private async processQueueItem(queueItem: IOutboundQueue): Promise<boolean> {
     try {
       // Check rate limits
       const canSend = await this.checkRateLimits(queueItem);
       if (!canSend.canSend) {
-        console.log(`⏰ SenderWorkerService: Rate limit hit for queue item ${queueItem.id}: ${canSend.reason}`);
-        return;
+        return false;
       }
 
       // Initialize Instagram service
@@ -105,7 +104,7 @@ class SenderWorkerService {
       if (!initialized) {
         console.log(`❌ SenderWorkerService: Failed to initialize Instagram service for queue item ${queueItem.id}`);
         await this.handleError(queueItem, 'Instagram service initialization failed');
-        return;
+        return false;
       }
 
       // Get contact information
@@ -113,10 +112,8 @@ class SenderWorkerService {
       if (!contact) {
         console.log(`❌ SenderWorkerService: Contact not found for queue item ${queueItem.id}`);
         await this.handleError(queueItem, 'Contact not found');
-        return;
+        return false;
       }
-
-      console.log(`📤 SenderWorkerService: Sending message to PSID: ${contact.psid}`);
 
       // Send the message
       let response;
@@ -135,14 +132,18 @@ class SenderWorkerService {
         // Update conversation metadata
         await this.updateConversationMetadata(queueItem.conversationId);
 
+        return true; // Successfully processed
+
       } catch (error) {
         console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error);
         await this.handleError(queueItem, error instanceof Error ? error.message : 'Unknown error');
+        return false;
       }
 
     } catch (error) {
       console.error(`❌ SenderWorkerService: Error processing queue item ${queueItem.id}:`, error);
       await this.handleError(queueItem, error instanceof Error ? error.message : 'Unknown error');
+      return false;
     }
   }
 
@@ -150,13 +151,10 @@ class SenderWorkerService {
    * Check rate limits before sending
    */
   private async checkRateLimits(queueItem: IOutboundQueue): Promise<{ canSend: boolean; reason?: string }> {
-    console.log(`⏰ SenderWorkerService: Checking rate limits for queue item: ${queueItem.id}`);
-    
     try {
       // Get account rate limits
       const account = await InstagramAccount.findOne({ accountId: queueItem.accountId });
       if (!account) {
-        console.log(`❌ SenderWorkerService: Account not found for rate limit check: ${queueItem.accountId}`);
         return { canSend: false, reason: 'Account not found' };
       }
 
@@ -353,12 +351,9 @@ class SenderWorkerService {
   /**
    * Handle retries of failed messages
    */
-  private async handleRetries(): Promise<void> {
-    console.log('🔄 SenderWorkerService: Starting retry of failed messages');
-    
+  private async handleRetries(): Promise<number> {
     try {
       const failedItems = await OutboundQueue.findNeedingRetry();
-      console.log(`📋 SenderWorkerService: Found ${failedItems.length} failed items to retry`);
 
       let retryCount = 0;
       for (const item of failedItems) {
@@ -375,24 +370,20 @@ class SenderWorkerService {
         }
       }
 
-      if (retryCount > 0) {
-        console.log(`✅ SenderWorkerService: Reset ${retryCount} failed items for retry`);
-      }
+      return retryCount;
 
     } catch (error) {
       console.error('❌ SenderWorkerService: Error handling retries:', error);
+      return 0;
     }
   }
 
   /**
    * Clean up expired queue items
    */
-  private async cleanupExpiredItems(): Promise<void> {
-    console.log('🧹 SenderWorkerService: Starting cleanup of expired queue items');
-    
+  private async cleanupExpiredItems(): Promise<number> {
     try {
       const expiredItems = await OutboundQueue.findExpired();
-      console.log(`📋 SenderWorkerService: Found ${expiredItems.length} expired items to clean up`);
 
       let cleanupCount = 0;
       for (const item of expiredItems) {
@@ -408,12 +399,11 @@ class SenderWorkerService {
         cleanupCount++;
       }
 
-      if (cleanupCount > 0) {
-        console.log(`✅ SenderWorkerService: Cleaned up ${cleanupCount} expired items`);
-      }
+      return cleanupCount;
 
     } catch (error) {
       console.error('❌ SenderWorkerService: Error cleaning up expired items:', error);
+      return 0;
     }
   }
 }
