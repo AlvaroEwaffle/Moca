@@ -277,6 +277,91 @@ curl -X GET "http://localhost:3002/api/instagram/stats"
 curl -X GET "https://moca-production.up.railway.app/api/instagram/stats"
 ```
 
+## 📱 **Instagram Account Management**
+
+### Create Instagram Account
+```bash
+# Local - Create Instagram account
+curl -X POST "http://localhost:3002/api/instagram/accounts" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accountId": "your_instagram_account_id",
+    "accessToken": "your_instagram_access_token",
+    "refreshToken": "your_refresh_token_optional",
+    "rateLimits": {
+      "messagesPerSecond": 3,
+      "userCooldown": 7,
+      "debounceWindow": 4000
+    },
+    "settings": {
+      "autoRespond": true,
+      "aiEnabled": true,
+      "fallbackRules": [
+        "Thank you for your message! We will get back to you soon.",
+        "Thanks for reaching out! Our team will respond shortly."
+      ]
+    }
+  }'
+
+# Production - Create Instagram account
+curl -X POST "https://moca-production.up.railway.app/api/instagram/accounts" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accountId": "your_instagram_account_id",
+    "accessToken": "your_instagram_access_token"
+  }'
+```
+
+### Get All Instagram Accounts
+```bash
+# Local - Get all accounts
+curl -X GET "http://localhost:3002/api/instagram/accounts"
+
+# Production - Get all accounts
+curl -X GET "https://moca-production.up.railway.app/api/instagram/accounts"
+```
+
+### Get Specific Instagram Account
+```bash
+# Local - Get specific account
+curl -X GET "http://localhost:3002/api/instagram/accounts/your_instagram_account_id"
+
+# Production - Get specific account
+curl -X GET "https://moca-production.up.railway.app/api/instagram/accounts/your_instagram_account_id"
+```
+
+### Update Instagram Account
+```bash
+# Local - Update account settings
+curl -X PUT "http://localhost:3002/api/instagram/accounts/your_instagram_account_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "settings": {
+      "autoRespond": false,
+      "aiEnabled": true
+    }
+  }'
+
+# Production - Update account settings
+curl -X PUT "https://moca-production.up.railway.app/api/instagram/accounts/your_instagram_account_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "settings": {
+      "autoRespond": false,
+      "aiEnabled": true
+    }
+  }'
+```
+
+### Delete Instagram Account
+```bash
+# Local - Delete account
+curl -X DELETE "http://localhost:3002/api/instagram/accounts/your_instagram_account_id"
+
+# Production - Delete account
+curl -X DELETE "https://moca-production.up.railway.app/api/instagram/accounts/your_instagram_account_id"
+```
+
 ## 🧪 **Test Scenarios**
 
 ### 1. **Basic Health Check**

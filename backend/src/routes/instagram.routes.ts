@@ -5,6 +5,7 @@ import Contact from '../models/contact.model';
 import Conversation from '../models/conversation.model';
 import Message from '../models/message.model';
 import OutboundQueue from '../models/outboundQueue.model';
+import InstagramAccount from '../models/instagramAccount.model';
 
 const router = express.Router();
 const webhookService = new InstagramWebhookService();
@@ -380,6 +381,213 @@ router.post('/queue/retry', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retry messages'
+    });
+  }
+});
+
+// ===== INSTAGRAM ACCOUNT MANAGEMENT =====
+
+// Create Instagram account
+router.post('/accounts', async (req, res) => {
+  try {
+    const { accountId, accessToken, refreshToken, rateLimits, settings } = req.body;
+
+    // Validate required fields
+    if (!accountId || !accessToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'accountId and accessToken are required'
+      });
+    }
+
+    // Check if account already exists
+    const existingAccount = await InstagramAccount.findOne({ accountId });
+    if (existingAccount) {
+      return res.status(409).json({
+        success: false,
+        error: 'Instagram account already exists'
+      });
+    }
+
+    // Create new Instagram account
+    const newAccount = new InstagramAccount({
+      accountId,
+      accessToken,
+      refreshToken,
+      tokenExpiry: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
+      rateLimits: {
+        messagesPerSecond: rateLimits?.messagesPerSecond || 3,
+        userCooldown: rateLimits?.userCooldown || 7,
+        debounceWindow: rateLimits?.debounceWindow || 4000
+      },
+      settings: {
+        autoRespond: settings?.autoRespond !== false, // Default to true
+        aiEnabled: settings?.aiEnabled !== false, // Default to true
+        fallbackRules: settings?.fallbackRules || [
+          'Thank you for your message! We\'ll get back to you soon.',
+          'Thanks for reaching out! Our team will respond shortly.'
+        ]
+      },
+      webhook: {
+        verifyToken: process.env.INSTAGRAM_VERIFY_TOKEN || 'default_token',
+        endpoint: `${req.protocol}://${req.get('host')}/api/instagram/webhook`
+      }
+    });
+
+    await newAccount.save();
+
+    console.log(`✅ Created Instagram account: ${accountId}`);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        message: 'Instagram account created successfully',
+        account: {
+          id: newAccount.id,
+          accountId: newAccount.accountId,
+          settings: newAccount.settings,
+          rateLimits: newAccount.rateLimits
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating Instagram account:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create Instagram account'
+    });
+  }
+});
+
+// Get all Instagram accounts
+router.get('/accounts', async (req, res) => {
+  try {
+    const accounts = await InstagramAccount.find()
+      .select('-accessToken -refreshToken -__v')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        accounts,
+        count: accounts.length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting Instagram accounts:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get Instagram accounts'
+    });
+  }
+});
+
+// Get specific Instagram account
+router.get('/accounts/:accountId', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    const account = await InstagramAccount.findOne({ accountId })
+      .select('-accessToken -refreshToken -__v');
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: account
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting Instagram account:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get Instagram account'
+    });
+  }
+});
+
+// Update Instagram account
+router.put('/accounts/:accountId', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { accessToken, refreshToken, rateLimits, settings } = req.body;
+
+    const account = await InstagramAccount.findOne({ accountId });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    // Update fields if provided
+    if (accessToken) account.accessToken = accessToken;
+    if (refreshToken) account.refreshToken = refreshToken;
+    if (rateLimits) account.rateLimits = { ...account.rateLimits, ...rateLimits };
+    if (settings) account.settings = { ...account.settings, ...settings };
+
+    await account.save();
+
+    console.log(`✅ Updated Instagram account: ${accountId}`);
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Instagram account updated successfully',
+        account: {
+          id: account.id,
+          accountId: account.accountId,
+          settings: account.settings,
+          rateLimits: account.rateLimits
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating Instagram account:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update Instagram account'
+    });
+  }
+});
+
+// Delete Instagram account
+router.delete('/accounts/:accountId', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    const account = await InstagramAccount.findOne({ accountId });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    await InstagramAccount.deleteOne({ accountId });
+
+    console.log(`✅ Deleted Instagram account: ${accountId}`);
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Instagram account deleted successfully'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting Instagram account:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete Instagram account'
     });
   }
 });
