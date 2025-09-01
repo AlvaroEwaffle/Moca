@@ -124,6 +124,23 @@ class DebounceWorkerService {
         'metadata.processed': { $ne: true }
       }).sort({ 'metadata.timestamp': 1 });
 
+      // Check if we already have a response (even if it failed to send)
+      const existingResponse = await Message.findOne({
+        conversationId: conversation.id,
+        role: 'assistant',
+        'metadata.timestamp': { 
+          $gte: new Date(Date.now() - 60000) // Within last minute
+        }
+      });
+
+      if (existingResponse) {
+        console.log(`⏭️ DebounceWorkerService: Response already exists for conversation ${conversation.id}, skipping`);
+        // Mark all unprocessed messages as processed since we already tried to respond
+        const messageIds = recentMessages.map(msg => msg.id);
+        await this.markMessagesAsProcessed(messageIds);
+        return false;
+      }
+
       if (recentMessages.length === 0) {
         return false;
       }
