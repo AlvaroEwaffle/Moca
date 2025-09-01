@@ -1,0 +1,171 @@
+import express from 'express';
+import InstagramAccount from '../models/instagramAccount.model';
+
+const router = express.Router();
+
+// Instagram OAuth callback
+router.post('/callback', async (req, res) => {
+  try {
+    const { code, redirectUri, businessInfo, agentBehavior } = req.body;
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Authorization code is required'
+      });
+    }
+
+    // Exchange code for access token using Instagram Business API
+    const tokenResponse = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: '2160534791106844', // Your Instagram Business Client ID
+        client_secret: process.env.INSTAGRAM_CLIENT_SECRET || '',
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+        code: code
+      })
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.json();
+      console.error('Instagram token exchange failed:', errorData);
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to exchange authorization code for access token'
+      });
+    }
+
+    const tokenData = await tokenResponse.json();
+    const { access_token, user_id } = tokenData;
+
+    // Get user profile information using Instagram Business API
+    const profileResponse = await fetch(`https://graph.instagram.com/${user_id}?fields=id,username,account_type,media_count,followers_count,follows_count&access_token=${access_token}`);
+    
+    if (!profileResponse.ok) {
+      console.error('Failed to fetch Instagram profile');
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to fetch Instagram profile'
+      });
+    }
+
+    const profileData = await profileResponse.json();
+
+    // Check if account already exists
+    const existingAccount = await InstagramAccount.findOne({ accountId: user_id });
+    if (existingAccount) {
+      // Update existing account
+      existingAccount.accessToken = access_token;
+      existingAccount.accountName = profileData.username;
+      existingAccount.tokenExpiry = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
+      existingAccount.isActive = true;
+      
+      // Update settings with onboarding data if provided
+      if (agentBehavior) {
+        existingAccount.settings.systemPrompt = agentBehavior.systemPrompt || existingAccount.settings.systemPrompt;
+        existingAccount.settings.toneOfVoice = agentBehavior.toneOfVoice || existingAccount.settings.toneOfVoice;
+        existingAccount.settings.keyInformation = agentBehavior.keyInformation || existingAccount.settings.keyInformation;
+      }
+      
+      await existingAccount.save();
+
+      console.log(`✅ Updated existing Instagram account: ${user_id}`);
+
+      return res.json({
+        success: true,
+        data: {
+          message: 'Instagram account updated successfully',
+          account: {
+            id: existingAccount.id,
+            accountId: existingAccount.accountId,
+            accountName: existingAccount.accountName,
+            isActive: existingAccount.isActive
+          }
+        }
+      });
+    }
+
+    // Create new Instagram account
+    const newAccount = new InstagramAccount({
+      accountId: user_id,
+      accountName: profileData.username,
+      accessToken: access_token,
+      tokenExpiry: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
+      isActive: true,
+      rateLimits: {
+        messagesPerSecond: 3,
+        userCooldown: 7,
+        debounceWindow: 4000
+      },
+      settings: {
+        autoRespond: true,
+        aiEnabled: true,
+        systemPrompt: agentBehavior?.systemPrompt || 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.',
+        toneOfVoice: agentBehavior?.toneOfVoice || 'professional',
+        keyInformation: agentBehavior?.keyInformation || '',
+        fallbackRules: [
+          'Thank you for your message! We\'ll get back to you soon.',
+          'Thanks for reaching out! Our team will respond shortly.'
+        ]
+      },
+      webhook: {
+        verifyToken: process.env.INSTAGRAM_VERIFY_TOKEN || 'default_token',
+        endpoint: `${req.protocol}://${req.get('host')}/api/instagram/webhook`
+      }
+    });
+
+    await newAccount.save();
+
+    console.log(`✅ Created new Instagram account: ${user_id}`);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        message: 'Instagram account connected successfully',
+        account: {
+          id: newAccount.id,
+          accountId: newAccount.accountId,
+          accountName: newAccount.accountName,
+          isActive: newAccount.isActive
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error in Instagram OAuth callback:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to connect Instagram account'
+    });
+  }
+});
+
+// Get Instagram OAuth URL
+router.get('/auth-url', (req, res) => {
+  try {
+    const clientId = '2160534791106844'; // Your Instagram Business Client ID
+    const redirectUri = 'https://moca.pages.dev/dashboard';
+    
+    const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights`;
+
+    res.json({
+      success: true,
+      data: {
+        authUrl,
+        redirectUri
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error generating Instagram auth URL:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate Instagram auth URL'
+    });
+  }
+});
+
+export default router;

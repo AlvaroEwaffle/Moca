@@ -34,7 +34,8 @@ import {
   BarChart3,
   Instagram,
   Activity,
-  Send
+  Send,
+  Clock
 } from "lucide-react";
 
 const MainLayout = () => {
@@ -67,33 +68,39 @@ const MainLayout = () => {
     },
     {
       name: 'Conversaciones',
-      href: '/conversations',
+      href: '/app/conversations',
       icon: MessageSquare,
-      current: location.pathname.startsWith('/conversations')
+      current: location.pathname.startsWith('/app/conversations')
+    },
+    {
+      name: 'Enviar Mensaje',
+      href: '/app/send-message',
+      icon: Send,
+      current: location.pathname.startsWith('/app/send-message')
     },
     {
       name: 'Instagram',
-      href: '/instagram/setup',
+      href: '/app/instagram',
       icon: Instagram,
-      current: location.pathname.startsWith('/instagram')
+      current: location.pathname.startsWith('/app/instagram')
     },
     {
       name: 'Cola de Mensajes',
-      href: '/system/queue',
-      icon: Send,
-      current: location.pathname.startsWith('/system/queue')
+      href: '/app/queue',
+      icon: Clock,
+      current: location.pathname.startsWith('/app/queue')
     },
     {
       name: 'Logs del Sistema',
-      href: '/system/logs',
+      href: '/app/logs',
       icon: Activity,
-      current: location.pathname.startsWith('/system/logs')
+      current: location.pathname.startsWith('/app/logs')
     },
     {
       name: 'Configuración',
-      href: '/app/configuracion',
+      href: '/app/accounts',
       icon: Settings,
-      current: location.pathname.startsWith('/app/configuracion')
+      current: location.pathname.startsWith('/app/accounts')
     }
   ];
 

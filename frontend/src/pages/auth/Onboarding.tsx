@@ -38,12 +38,6 @@ const Onboarding = () => {
       businessType: '',
       primaryLanguage: 'es'
     } as BusinessInfo,
-    instagramAccount: {
-      accountId: '',
-      accountName: '',
-      accessToken: '',
-      isConnected: false
-    } as InstagramAccount,
     agentBehavior: {
       systemPrompt: 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.',
       toneOfVoice: 'professional' as 'professional' | 'friendly' | 'casual',
@@ -78,15 +72,7 @@ const Onboarding = () => {
     }));
   };
 
-  const handleInstagramAccountChange = (field: string, value: string | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      instagramAccount: {
-        ...prev.instagramAccount,
-        [field]: value
-      }
-    }));
-  };
+
 
   const handleAgentBehaviorChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -101,51 +87,20 @@ const Onboarding = () => {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
-      if (!backendUrl) throw new Error('Backend URL not configured');
-
-      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-      const accessToken = localStorage.getItem('accessToken');
-
-      // Create Instagram account
-      const instagramResponse = await fetch(`${backendUrl}/api/instagram/accounts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({
-          accountId: formData.instagramAccount.accountId,
-          accountName: formData.instagramAccount.accountName,
-          accessToken: formData.instagramAccount.accessToken,
-          settings: {
-            autoRespond: true,
-            aiEnabled: true,
-            systemPrompt: formData.agentBehavior.systemPrompt,
-            toneOfVoice: formData.agentBehavior.toneOfVoice,
-            keyInformation: formData.agentBehavior.keyInformation
-          }
-        }),
-      });
-
-      if (!instagramResponse.ok) {
-        throw new Error('Failed to create Instagram account');
-      }
-
-      // Store business info in localStorage for later use
+      // Store business info and agent behavior in localStorage
       localStorage.setItem('businessInfo', JSON.stringify(formData.businessInfo));
       localStorage.setItem('agentBehavior', JSON.stringify(formData.agentBehavior));
 
-      // Redirect to dashboard
-      navigate('/app/dashboard');
+      // Redirect to Instagram OAuth flow
+      navigate('/instagram-auth');
     } catch (error) {
-      console.error('Error setting up Instagram account:', error);
+      console.error('Error saving configuration:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 3));
+  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 2));
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
 
   const renderStep = () => {
@@ -212,66 +167,6 @@ const Onboarding = () => {
         );
 
       case 2:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <Instagram className="mx-auto h-12 w-12 text-pink-600 mb-4" />
-              <h3 className="text-lg font-semibold">Conecta tu cuenta de Instagram</h3>
-              <p className="text-gray-600">Conecta tu cuenta de Instagram Business para comenzar</p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="accountName">Nombre de la cuenta de Instagram</Label>
-                <Input
-                  id="accountName"
-                  value={formData.instagramAccount.accountName}
-                  onChange={(e) => handleInstagramAccountChange('accountName', e.target.value)}
-                  placeholder="Ej: @mi_restaurante"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="accountId">Instagram Account ID</Label>
-                <Input
-                  id="accountId"
-                  value={formData.instagramAccount.accountId}
-                  onChange={(e) => handleInstagramAccountChange('accountId', e.target.value)}
-                  placeholder="Ej: 17841467023627361"
-                />
-                <p className="text-sm text-gray-500 mt-1">
-                  Puedes encontrar tu Account ID en Meta Developer Console
-                </p>
-              </div>
-              
-              <div>
-                <Label htmlFor="accessToken">Instagram Access Token</Label>
-                <Input
-                  id="accessToken"
-                  type="password"
-                  value={formData.instagramAccount.accessToken}
-                  onChange={(e) => handleInstagramAccountChange('accessToken', e.target.value)}
-                  placeholder="Tu Instagram User Access Token"
-                />
-                <p className="text-sm text-gray-500 mt-1">
-                  Genera un token en Meta Developer Console con permisos de Instagram
-                </p>
-              </div>
-              
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <h4 className="font-medium text-blue-800 mb-2">¿Cómo obtener estos datos?</h4>
-                <ol className="text-sm text-blue-700 space-y-1">
-                  <li>1. Ve a <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="underline">Meta Developer Console</a></li>
-                  <li>2. Crea una app y agrega Instagram Basic Display</li>
-                  <li>3. Genera un Instagram User Access Token</li>
-                  <li>4. Copia el Account ID y Access Token aquí</li>
-                </ol>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 3:
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -352,13 +247,13 @@ const Onboarding = () => {
           {/* Progress Bar */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Paso {currentStep} de 3</span>
-              <span className="text-sm text-gray-500">{Math.round((currentStep / 3) * 100)}%</span>
+              <span className="text-sm font-medium text-gray-700">Paso {currentStep} de 2</span>
+              <span className="text-sm text-gray-500">{Math.round((currentStep / 2) * 100)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-violet-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(currentStep / 3) * 100}%` }}
+                style={{ width: `${(currentStep / 2) * 100}%` }}
               ></div>
             </div>
           </div>
@@ -384,7 +279,7 @@ const Onboarding = () => {
                   Anterior
                 </Button>
 
-                {currentStep < 3 ? (
+                {currentStep < 2 ? (
                   <Button onClick={nextStep}>
                     Siguiente
                   </Button>
@@ -397,10 +292,10 @@ const Onboarding = () => {
                     {loading ? (
                       <div className="flex items-center">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Configurando...
+                        Conectando...
                       </div>
                     ) : (
-                      'Finalizar configuración'
+                      'Conectar Instagram'
                     )}
                   </Button>
                 )}

@@ -15,6 +15,9 @@ const InstagramSettingsSchema = new Schema({
   aiEnabled: { type: Boolean, default: true }, // Use AI for responses
   fallbackRules: [{ type: String }], // Simple response rules when AI unavailable
   defaultResponse: { type: String, default: "Thanks for your message! I'll get back to you soon." },
+  systemPrompt: { type: String, default: "You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully." },
+  toneOfVoice: { type: String, default: "professional", enum: ['professional', 'friendly', 'casual'] },
+  keyInformation: { type: String, default: "" },
   businessHours: {
     enabled: { type: Boolean, default: false },
     startTime: { type: String, default: "09:00" },
@@ -52,6 +55,9 @@ export interface IInstagramAccount extends Document {
     aiEnabled: boolean;
     fallbackRules: string[];
     defaultResponse: string;
+    systemPrompt: string;
+    toneOfVoice: 'professional' | 'friendly' | 'casual';
+    keyInformation: string;
     businessHours: {
       enabled: boolean;
       startTime: string;

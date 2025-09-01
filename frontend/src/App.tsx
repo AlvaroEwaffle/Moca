@@ -12,77 +12,22 @@ import Register from "./pages/auth/Register";
 import Onboarding from "./pages/auth/Onboarding";
 import Dashboard from "./pages/dashboard/Dashboard";
 import InstagramSetup from "./pages/instagram/InstagramSetup";
-import BillingInterface from "./pages/billing/BillingInterface";
-import CreatePatient from "./pages/patients/CreatePatient";
-import AppointmentsPage from "./pages/appointments/AppointmentsPage";
-import AppointmentsList from "./pages/appointments/AppointmentsList";
-import CreateAppointmentPage from "./pages/appointments/CreateAppointmentPage";
-import CalendarAuthSuccess from "./pages/appointments/CalendarAuthSuccess";
-import CalendarAuthError from "./pages/appointments/CalendarAuthError";
 import MainLayout from "./components/layout/MainLayout";
 
-// Placeholder components for other routes
-const BillingPage = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-gray-900 mb-4">💰 Gestión de Facturación</h1>
-      <p className="text-gray-600 mb-6">Esta funcionalidad estará disponible próximamente</p>
-      <button 
-        onClick={() => window.history.back()} 
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-      >
-        Volver
-      </button>
-    </div>
-  </div>
-);
+// Phase 2: Conversation Management
+import ConversationsList from "./pages/conversations/ConversationsList";
+import ConversationDetail from "./pages/conversations/ConversationDetail";
+import SendMessage from "./pages/conversations/SendMessage";
+
+// Phase 3: System Management
+import QueueStatus from "./pages/system/QueueStatus";
+import SystemLogs from "./pages/system/SystemLogs";
+import InstagramAccounts from "./pages/system/InstagramAccounts";
+
+// Instagram OAuth
+import InstagramAuth from "./pages/auth/InstagramAuth";
 
 
-
-const EditAppointmentPage = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-gray-900 mb-4">✏️ Editar Cita</h1>
-      <p className="text-gray-600 mb-6">Esta funcionalidad estará disponible próximamente</p>
-      <button 
-        onClick={() => window.history.back()} 
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-      >
-        Volver
-      </button>
-    </div>
-  </div>
-);
-
-const ViewAppointmentPage = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-gray-900 mb-4">👁️ Ver Cita</h1>
-      <p className="text-gray-600 mb-6">Esta funcionalidad estará disponible próximamente</p>
-      <button 
-        onClick={() => window.history.back()} 
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-      >
-        Volver
-      </button>
-    </div>
-  </div>
-);
-
-const CreateBillingPage = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-gray-900 mb-4">💰 Crear Nueva Factura</h1>
-      <p className="text-gray-600 mb-6">Esta funcionalidad estará disponible próximamente</p>
-      <button 
-        onClick={() => window.history.back()} 
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-      >
-        Volver
-      </button>
-    </div>
-  </div>
-);
 
 const queryClient = new QueryClient();
 
@@ -104,30 +49,26 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/instagram-auth" element={<InstagramAuth />} />
             
             {/* Protected routes */}
             <Route path="/app" element={<MainLayout />}>
               <Route index element={<Navigate to="/app/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
-              <Route path="patients/create" element={<CreatePatient />} />
-              <Route path="appointments" element={<AppointmentsPage />} />
-              <Route path="appointments/list" element={<AppointmentsList />} />
-              <Route path="appointments/create" element={<CreateAppointmentPage />} />
-              <Route path="appointments/edit/:id" element={<EditAppointmentPage />} />
-              <Route path="appointments/view/:id" element={<ViewAppointmentPage />} />
-              <Route path="billing" element={<BillingPage />} />
-              <Route path="billing/create" element={<CreateBillingPage />} />
-              <Route path="facturacion" element={<BillingInterface />} />
+              
+              {/* Phase 2: Conversation Management */}
+              <Route path="conversations" element={<ConversationsList />} />
+              <Route path="conversations/:id" element={<ConversationDetail />} />
+              <Route path="send-message" element={<SendMessage />} />
+              
+              {/* Phase 3: System Management */}
+              <Route path="queue" element={<QueueStatus />} />
+              <Route path="logs" element={<SystemLogs />} />
+              <Route path="accounts" element={<InstagramAccounts />} />
+              
+              {/* Instagram Setup */}
+              <Route path="instagram" element={<InstagramSetup />} />
             </Route>
-
-            {/* Instagram routes */}
-            <Route path="/instagram" element={<MainLayout />}>
-              <Route path="setup" element={<InstagramSetup />} />
-            </Route>
-
-            {/* Google Calendar OAuth callback routes (public) */}
-            <Route path="/calendar-auth-success" element={<CalendarAuthSuccess />} />
-            <Route path="/calendar-auth-error" element={<CalendarAuthError />} />
             
             {/* Catch all */}
             <Route path="*" element={<Navigate to="/" replace />} />

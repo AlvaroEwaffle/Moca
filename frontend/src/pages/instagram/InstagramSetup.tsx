@@ -108,6 +108,14 @@ const InstagramSetup = () => {
     }));
   };
 
+  const handleOAuthConnect = () => {
+    // Use the Instagram Business OAuth URL provided by Meta
+    const instagramAuthUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=2160534791106844&redirect_uri=https://moca.pages.dev/dashboard&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights`;
+    
+    // Redirect to Instagram Business OAuth
+    window.location.href = instagramAuthUrl;
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     try {
@@ -279,12 +287,49 @@ const InstagramSetup = () => {
             </CardContent>
           </Card>
 
+          {/* OAuth Connection */}
+          {!instagramAccount && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Conectar con Instagram</CardTitle>
+                <CardDescription>
+                  Conecta tu cuenta de Instagram de forma segura
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center space-y-4">
+                  <div className="bg-violet-50 p-6 rounded-lg">
+                    <Instagram className="w-12 h-12 text-violet-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      Conectar con OAuth (Recomendado)
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      Conecta tu cuenta de Instagram de forma segura usando el flujo oficial de OAuth. 
+                      No necesitas copiar tokens manualmente.
+                    </p>
+                    <Button 
+                      onClick={handleOAuthConnect}
+                      className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700"
+                    >
+                      <Instagram className="w-4 h-4 mr-2" />
+                      Conectar con Instagram
+                    </Button>
+                  </div>
+                  
+                  <div className="text-gray-500 text-sm">
+                    O continúa con la configuración manual
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Setup Form */}
           <Card>
             <CardHeader>
-              <CardTitle>Configurar Cuenta de Instagram</CardTitle>
+              <CardTitle>Configuración Manual</CardTitle>
               <CardDescription>
-                Ingresa los datos de tu cuenta de Instagram Business
+                Ingresa los datos de tu cuenta de Instagram Business manualmente
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">

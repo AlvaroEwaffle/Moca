@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,7 @@ interface InstagramAccount {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats>({
     totalConversations: 0,
@@ -73,9 +74,82 @@ const Dashboard = () => {
   const [instagramAccount, setInstagramAccount] = useState<InstagramAccount | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const handleInstagramOAuthCallback = async (authCode: string) => {
+    setLoading(true);
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      
+      // Get stored business info and agent behavior from onboarding
+      const businessInfo = JSON.parse(localStorage.getItem('businessInfo') || '{}');
+      const agentBehavior = JSON.parse(localStorage.getItem('agentBehavior') || '{}');
+
+      const response = await fetch(`${backendUrl}/api/instagram/oauth/callback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          code: authCode,
+          redirectUri: 'https://moca.pages.dev/dashboard',
+          businessInfo,
+          agentBehavior
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "¡Instagram conectado!",
+          description: "Tu cuenta de Instagram se ha conectado exitosamente",
+        });
+        
+        // Clear stored onboarding data
+        localStorage.removeItem('businessInfo');
+        localStorage.removeItem('agentBehavior');
+        
+        // Clear URL parameters
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Refresh dashboard data
+        await fetchDashboardData();
+      } else {
+        toast({
+          title: "Error al conectar",
+          description: data.error || "No se pudo conectar la cuenta de Instagram",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error handling Instagram callback:', error);
+      toast({
+        title: "Error al conectar",
+        description: "No se pudo conectar la cuenta de Instagram",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    // Check for Instagram OAuth callback
+    const code = searchParams.get('code');
+    const error = searchParams.get('error');
+    
+    if (code) {
+      handleInstagramOAuthCallback(code);
+    } else if (error) {
+      toast({
+        title: "Error de autorización",
+        description: `Instagram authorization failed: ${error}`,
+        variant: "destructive"
+      });
+    } else {
+      fetchDashboardData();
+    }
+  }, [searchParams]);
 
   const fetchDashboardData = async () => {
     try {
