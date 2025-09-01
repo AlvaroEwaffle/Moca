@@ -38,9 +38,9 @@ class DebounceWorkerService {
     this.intervalId = setInterval(async () => {
       console.log('⏰ DebounceWorkerService: Periodic processing triggered');
       await this.process();
-    }, 15000); // Process every 15 seconds
+    }, 5000); // Process every 5 seconds
 
-    console.log('⏰ DebounceWorkerService: Periodic processing scheduled every 15 seconds');
+    console.log('⏰ DebounceWorkerService: Periodic processing scheduled every 5 seconds');
   }
 
   /**
