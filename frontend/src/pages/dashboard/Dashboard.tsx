@@ -77,12 +77,18 @@ const Dashboard = () => {
 
   const handleInstagramOAuthCallback = async (authCode: string) => {
     setLoading(true);
+    console.log('🔧 [OAuth Callback] Processing Instagram OAuth callback with code:', authCode);
+    
     try {
       const backendUrl = BACKEND_URL;
+      console.log('🔧 [OAuth Callback] Using backend URL:', backendUrl);
       
       // Get stored business info and agent behavior from onboarding
       const businessInfo = JSON.parse(localStorage.getItem('businessInfo') || '{}');
       const agentBehavior = JSON.parse(localStorage.getItem('agentBehavior') || '{}');
+      
+      console.log('🔧 [OAuth Callback] Business info:', businessInfo);
+      console.log('🔧 [OAuth Callback] Agent behavior:', agentBehavior);
 
       const response = await fetch(`${backendUrl}/api/instagram/oauth/callback`, {
         method: 'POST',
@@ -99,8 +105,11 @@ const Dashboard = () => {
       });
 
       const data = await response.json();
+      console.log('🔧 [OAuth Callback] Response status:', response.status);
+      console.log('🔧 [OAuth Callback] Response data:', data);
 
       if (response.ok) {
+        console.log('✅ [OAuth Callback] Instagram account connected successfully');
         toast({
           title: "¡Instagram conectado!",
           description: "Tu cuenta de Instagram se ha conectado exitosamente",
@@ -116,6 +125,7 @@ const Dashboard = () => {
         // Refresh dashboard data
         await fetchDashboardData();
       } else {
+        console.error('❌ [OAuth Callback] Failed to connect Instagram account:', data);
         toast({
           title: "Error al conectar",
           description: data.error || "No se pudo conectar la cuenta de Instagram",
@@ -139,15 +149,20 @@ const Dashboard = () => {
     const code = searchParams.get('code');
     const error = searchParams.get('error');
     
+    console.log('🔧 [Dashboard] URL params:', { code, error, searchParams: searchParams.toString() });
+    
     if (code) {
+      console.log('🔧 [Dashboard] OAuth code detected, processing callback...');
       handleInstagramOAuthCallback(code);
     } else if (error) {
+      console.error('❌ [Dashboard] OAuth error detected:', error);
       toast({
         title: "Error de autorización",
         description: `Instagram authorization failed: ${error}`,
         variant: "destructive"
       });
     } else {
+      console.log('🔧 [Dashboard] No OAuth params, fetching dashboard data...');
       fetchDashboardData();
     }
   }, [searchParams]);

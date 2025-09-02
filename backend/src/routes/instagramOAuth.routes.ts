@@ -7,8 +7,16 @@ const router = express.Router();
 router.post('/callback', async (req, res) => {
   try {
     const { code, redirectUri, businessInfo, agentBehavior } = req.body;
+    
+    console.log('🔧 [OAuth Callback] Received callback request:', {
+      code: code ? `${code.substring(0, 10)}...` : 'none',
+      redirectUri,
+      businessInfo: businessInfo ? 'present' : 'missing',
+      agentBehavior: agentBehavior ? 'present' : 'missing'
+    });
 
     if (!code) {
+      console.error('❌ [OAuth Callback] No authorization code provided');
       return res.status(400).json({
         success: false,
         error: 'Authorization code is required'
@@ -32,7 +40,7 @@ router.post('/callback', async (req, res) => {
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json();
-      console.error('Instagram token exchange failed:', errorData);
+      console.error('❌ [OAuth Callback] Instagram token exchange failed:', errorData);
       return res.status(400).json({
         success: false,
         error: 'Failed to exchange authorization code for access token'
@@ -41,6 +49,11 @@ router.post('/callback', async (req, res) => {
 
     const tokenData = await tokenResponse.json();
     const { access_token, user_id } = tokenData;
+    
+    console.log('✅ [OAuth Callback] Token exchange successful:', {
+      user_id,
+      access_token: access_token ? `${access_token.substring(0, 10)}...` : 'none'
+    });
 
     // Get user profile information using Instagram Business API
     const profileResponse = await fetch(`https://graph.instagram.com/${user_id}?fields=id,username,account_type,media_count,followers_count,follows_count&access_token=${access_token}`);
