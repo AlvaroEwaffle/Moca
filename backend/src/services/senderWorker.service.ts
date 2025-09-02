@@ -325,7 +325,9 @@ class SenderWorkerService {
     try {
       const updateData: any = { status };
       if (externalId) {
-        updateData['metadata.externalId'] = externalId;
+        updateData['metadata.instagramResponse.messageId'] = externalId;
+        updateData['metadata.instagramResponse.status'] = 'sent';
+        updateData['metadata.instagramResponse.timestamp'] = new Date();
         updateData['metadata.deliveryConfirmed'] = true;
       }
 

@@ -322,6 +322,17 @@ export class InstagramWebhookService {
         return;
       }
 
+      // Check if this is a message we sent (bot message detection by message ID)
+      const sentMessage = await Message.findOne({ 
+        'metadata.instagramResponse.messageId': messageData.mid,
+        role: 'assistant'
+      });
+      
+      if (sentMessage) {
+        console.log(`🤖 Bot message detected by message ID, skipping processing to avoid loops: ${messageData.mid}`);
+        return;
+      }
+
       // Check if we have a recent message with same text from same user (Meta duplicate webhook)
       const recentDuplicate = await Message.findOne({
         'content.text': messageData.text,
