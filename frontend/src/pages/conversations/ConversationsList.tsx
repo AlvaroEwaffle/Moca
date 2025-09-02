@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { BACKEND_URL } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,7 @@ const ConversationsList = () => {
 
   const fetchConversations = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/conversations`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`

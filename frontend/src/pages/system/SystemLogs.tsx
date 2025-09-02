@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BACKEND_URL } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -72,7 +73,7 @@ const SystemLogs = () => {
 
   const fetchSystemData = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       
       // Fetch logs and system health in parallel
       const [logsResponse, healthResponse] = await Promise.all([

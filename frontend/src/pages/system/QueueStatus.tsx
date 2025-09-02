@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BACKEND_URL } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -84,7 +85,7 @@ const QueueStatus = () => {
 
   const fetchQueueStatus = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/queue/status`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`

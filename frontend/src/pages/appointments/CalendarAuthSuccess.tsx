@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BACKEND_URL } from "@/utils/config";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ const CalendarAuthSuccess = () => {
 
   const checkCalendarStatus = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const accessToken = localStorage.getItem('accessToken');
       
       if (!accessToken) {

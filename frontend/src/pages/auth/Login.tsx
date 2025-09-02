@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { BACKEND_URL } from "@/utils/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +25,7 @@ const Login = () => {
     setError(null);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       if (!backendUrl) throw new Error('Backend URL not configured');
 
       const response = await fetch(`${backendUrl}/api/auth/login`, {

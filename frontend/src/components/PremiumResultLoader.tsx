@@ -1,4 +1,5 @@
 import { useParams } from 'react-router-dom';
+import { BACKEND_URL } from "@/utils/config";
 import { useEffect, useState } from 'react';
 import PremiumResult from './PremiumResult';
 
@@ -157,7 +158,7 @@ const PremiumResultLoader = () => {
       setLoading(false);
       return;
     }
-    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    const backendUrl = BACKEND_URL;
     if (!backendUrl) throw new Error('VITE_BACKEND_URL is not set');
     fetch(`${backendUrl}/api/sessions/${sessionId}/premium`)
       .then(res => {

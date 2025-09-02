@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { BACKEND_URL } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +51,7 @@ const ConversationDetail = () => {
 
   const fetchConversation = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/conversations/${id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -73,7 +74,7 @@ const ConversationDetail = () => {
 
     setSending(true);
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/queue`, {
         method: 'POST',
         headers: {

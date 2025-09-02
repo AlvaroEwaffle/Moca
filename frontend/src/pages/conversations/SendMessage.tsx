@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BACKEND_URL } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +44,7 @@ const SendMessage = () => {
 
   const fetchData = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       
       // Fetch contacts and accounts in parallel
       const [contactsResponse, accountsResponse] = await Promise.all([
@@ -87,7 +88,7 @@ const SendMessage = () => {
     setSuccess(false);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/queue`, {
         method: 'POST',
         headers: {

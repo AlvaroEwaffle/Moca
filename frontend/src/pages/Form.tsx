@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, ArrowRight, Sparkles, Zap, Target } from "lucide-react";
+import { BACKEND_URL } from "@/utils/config";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
@@ -51,7 +52,7 @@ const Form = () => {
     localStorage.setItem('serviceFormData', JSON.stringify(formData));
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       if (!backendUrl) throw new Error('VITE_BACKEND_URL is not set');
       const response = await fetch(`${backendUrl}/api/sessions`, {
         method: 'POST',

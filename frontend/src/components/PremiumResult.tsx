@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BACKEND_URL } from "@/utils/config";
 import { Check, Target, Clock, BookOpen, Brain, Settings, Sparkles, ArrowLeft, ArrowRight, Crown, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -32,7 +33,7 @@ const PremiumResult: React.FC<Props> = ({ data }) => {
 
         setIsSubmitting(true);
         try {
-            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+            const backendUrl = BACKEND_URL;
             if (!backendUrl) throw new Error('VITE_BACKEND_URL is not set');
             
             const response = await fetch(`${backendUrl}/api/sessions/request-production`, {

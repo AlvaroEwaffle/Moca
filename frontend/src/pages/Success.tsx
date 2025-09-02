@@ -1,4 +1,5 @@
 import { CheckCircle, ArrowRight, Sparkles } from "lucide-react";
+import { BACKEND_URL } from "@/utils/config";
 import { Button } from "@/components/ui/button";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -12,7 +13,7 @@ const Success = () => {
   useEffect(() => {
     let interval: NodeJS.Timeout;
     let redirectTimeout: NodeJS.Timeout;
-    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    const backendUrl = BACKEND_URL;
     if (!backendUrl) throw new Error('VITE_BACKEND_URL is not set');
 
     const fetchStatus = () => {

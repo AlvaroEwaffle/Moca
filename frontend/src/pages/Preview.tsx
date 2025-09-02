@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BACKEND_URL } from "@/utils/config";
 import { ArrowLeft, Lock, Sparkles, Check, Target, Users, TrendingUp, XCircle, Crown, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -68,7 +69,7 @@ const Preview = () => {
     const fetchSessionData = async () => {
       let data;
       try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL;
+        const backendUrl = BACKEND_URL;
         if (!backendUrl) throw new Error('VITE_BACKEND_URL is not set');
         const response = await fetch(`${backendUrl}/api/sessions/${sessionId}`);
         if (!response.ok) {
@@ -108,7 +109,7 @@ const Preview = () => {
 
   const handlePayment = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       if (!backendUrl) throw new Error('VITE_BACKEND_URL is not set');
       
       const paymentData: any = { sessionId };
@@ -169,7 +170,7 @@ const Preview = () => {
 
     setIsValidatingPromoCode(true);
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       if (!backendUrl) throw new Error('VITE_BACKEND_URL is not set');
       
       const response = await fetch(`${backendUrl}/api/sessions/validate-promo`, {

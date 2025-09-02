@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BACKEND_URL } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -70,7 +71,7 @@ const InstagramAccounts = () => {
 
   const fetchAccounts = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/accounts`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -95,7 +96,7 @@ const InstagramAccounts = () => {
     setSuccess(null);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/test-connection/${accountId}`, {
         method: 'POST',
         headers: {
@@ -124,7 +125,7 @@ const InstagramAccounts = () => {
     }
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/accounts/${accountId}`, {
         method: 'DELETE',
         headers: {
@@ -152,7 +153,7 @@ const InstagramAccounts = () => {
     }
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/accounts`, {
         method: 'POST',
         headers: {
