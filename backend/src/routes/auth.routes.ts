@@ -1,12 +1,9 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
+import { User } from '../models';
 
 const router = express.Router();
-
-// Simple in-memory user storage (in production, use a proper database)
-const users: any[] = [];
 
 // Register endpoint
 router.post('/register', async (req, res) => {
@@ -22,7 +19,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if user already exists
-    const existingUser = users.find(user => user.email === email);
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -33,18 +30,16 @@ router.post('/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const newUser = {
-      id: uuidv4(),
+    // Create user in MongoDB
+    const newUser = new User({
       name,
       email,
       password: hashedPassword,
       businessName,
-      phone,
-      createdAt: new Date()
-    };
+      phone
+    });
 
-    users.push(newUser);
+    await newUser.save();
 
     // Generate tokens
     const accessToken = jwt.sign(
@@ -59,16 +54,17 @@ router.post('/register', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = newUser;
-
     console.log(`✅ User registered: ${email}`);
+
+    // Remove password from response
+    const userResponse = newUser.toObject();
+    delete (userResponse as any).password;
 
     res.status(201).json({
       success: true,
       data: {
         message: 'User registered successfully',
-        user: userWithoutPassword,
+        user: userResponse,
         tokens: {
           accessToken,
           refreshToken
@@ -98,8 +94,8 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Find user
-    const user = users.find(u => u.email === email);
+    // Find user in MongoDB
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -129,16 +125,22 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
+    // Update login tracking
+    user.metadata.loginCount += 1;
+    user.lastLogin = new Date();
+    await user.save();
 
     console.log(`✅ User logged in: ${email}`);
+
+    // Remove password from response
+    const userResponse = user.toObject();
+    delete (userResponse as any).password;
 
     res.json({
       success: true,
       data: {
         message: 'Login successful',
-        user: userWithoutPassword,
+        user: userResponse,
         tokens: {
           accessToken,
           refreshToken
