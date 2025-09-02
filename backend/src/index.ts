@@ -44,7 +44,22 @@ console.log(`🔧 Server will run on port: ${PORT}`);
 
 // Middleware
 console.log('🔧 Setting up middleware...');
-app.use(cors());
+
+// CORS configuration
+const corsOptions = {
+  origin: [
+    'http://localhost:8080', // Development frontend
+    'http://localhost:3000', // Alternative dev port
+    'https://moca.pages.dev', // Production frontend
+    'https://*.moca.pages.dev', // All Cloudflare Pages subdomains
+    'https://*.pages.dev' // All Cloudflare Pages (for dynamic URLs)
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 console.log('✅ Middleware setup completed');
