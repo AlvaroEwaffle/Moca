@@ -55,7 +55,7 @@ const InstagramAuth = () => {
         },
         body: JSON.stringify({
           code: authCode,
-          redirectUri: 'https://moca.pages.dev/app/dashboard/',
+          redirectUri: 'https://moca.pages.dev/instagram-callback',
           businessInfo,
           agentBehavior
         })
