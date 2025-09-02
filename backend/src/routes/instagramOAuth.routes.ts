@@ -66,10 +66,18 @@ router.post('/callback', async (req, res) => {
     });
 
     // Get user profile information using Instagram Business API
-    const profileResponse = await fetch(`https://graph.instagram.com/${user_id}?fields=id,username,account_type,media_count,followers_count,follows_count&access_token=${access_token}`);
+    const profileUrl = `https://graph.instagram.com/${user_id}?fields=id,username,account_type,media_count,followers_count,follows_count&access_token=${access_token}`;
+    console.log('🔧 [OAuth Callback] Fetching Instagram profile from:', profileUrl);
+    
+    const profileResponse = await fetch(profileUrl);
     
     if (!profileResponse.ok) {
-      console.error('Failed to fetch Instagram profile');
+      const errorData = await profileResponse.json().catch(() => ({}));
+      console.error('❌ [OAuth Callback] Failed to fetch Instagram profile:', {
+        status: profileResponse.status,
+        statusText: profileResponse.statusText,
+        error: errorData
+      });
       return res.status(400).json({
         success: false,
         error: 'Failed to fetch Instagram profile'
@@ -77,6 +85,7 @@ router.post('/callback', async (req, res) => {
     }
 
     const profileData = await profileResponse.json();
+    console.log('✅ [OAuth Callback] Instagram profile fetched successfully:', profileData);
 
     // Check if account already exists
     const existingAccount = await InstagramAccount.findOne({ accountId: user_id });
