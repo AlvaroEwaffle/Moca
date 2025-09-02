@@ -102,11 +102,16 @@ class DebounceWorkerService {
       'metadata.processed': { $ne: true } 
     });
     
-    return await Conversation.find({
+    console.log(`🔍 DebounceWorkerService: Found ${conversationIds.length} conversations with unprocessed user messages:`, conversationIds);
+    
+    const conversations = await Conversation.find({
       _id: { $in: conversationIds },
       status: 'open',
       isActive: true
     });
+    
+    console.log(`🔍 DebounceWorkerService: Returning ${conversations.length} active conversations`);
+    return conversations;
   }
 
   /**
@@ -161,11 +166,16 @@ class DebounceWorkerService {
    * Get unprocessed messages for a conversation
    */
   private async getUnprocessedMessages(conversationId: string): Promise<IMessage[]> {
-    return await Message.find({
+    const messages = await Message.find({
       conversationId,
       role: 'user',
       'metadata.processed': { $ne: true }
     }).sort({ 'metadata.timestamp': 1 });
+    
+    console.log(`🔍 DebounceWorkerService: Found ${messages.length} unprocessed user messages for conversation ${conversationId}:`, 
+      messages.map(m => ({ id: m.id, mid: m.mid, text: m.content.text, processed: (m.metadata as any).processed })));
+    
+    return messages;
   }
 
 

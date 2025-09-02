@@ -335,6 +335,7 @@ export class InstagramWebhookService {
 
       // CRITICAL FIX: Check if this is a bot message by comparing PSID with our account ID
       const instagramAccount = await this.getOrCreateInstagramAccount();
+      console.log(`🔍 PSID Check: messageData.psid=${messageData.psid}, account.accountId=${instagramAccount?.accountId}`);
       if (instagramAccount && messageData.psid === instagramAccount.accountId) {
         console.log(`🤖 Bot message detected by PSID match (${messageData.psid} === ${instagramAccount.accountId}), skipping processing to avoid loops`);
         return;
