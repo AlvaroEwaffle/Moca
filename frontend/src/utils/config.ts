@@ -23,8 +23,15 @@ export const getBackendUrl = (): string => {
     isProduction,
     envBackendUrl,
     productionBackendUrl,
-    developmentBackendUrl
+    developmentBackendUrl,
+    allEnvVars: import.meta.env
   });
+  
+  // Force production URL if we're in production, regardless of env var
+  if (isProduction) {
+    console.log('✅ [Backend URL] Production detected, using production URL:', productionBackendUrl);
+    return productionBackendUrl;
+  }
   
   if (envBackendUrl) {
     console.log('✅ [Backend URL] Using environment variable:', envBackendUrl);
