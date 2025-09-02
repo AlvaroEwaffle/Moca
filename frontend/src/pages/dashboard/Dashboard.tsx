@@ -98,7 +98,7 @@ const Dashboard = () => {
         },
         body: JSON.stringify({
           code: authCode,
-          redirectUri: 'https://moca.pages.dev/dashboard',
+          redirectUri: 'https://moca.pages.dev/app/dashboard',
           businessInfo,
           agentBehavior
         })
