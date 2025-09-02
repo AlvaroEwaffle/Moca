@@ -57,8 +57,7 @@ const UserSchema = new Schema<IUser>({
   toObject: { virtuals: true }
 });
 
-// Indexes for performance
-UserSchema.index({ email: 1 });
+// Indexes for performance (email already has unique index from schema definition)
 UserSchema.index({ isActive: 1 });
 UserSchema.index({ 'metadata.createdAt': 1 });
 
