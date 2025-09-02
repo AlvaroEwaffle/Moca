@@ -114,6 +114,17 @@ class DebounceWorkerService {
    */
   private async processConversationBatch(conversation: IConversation): Promise<boolean> {
     try {
+      // Check if there's already a pending response for this conversation
+      const existingQueueItem = await OutboundQueue.findOne({
+        conversationId: conversation.id,
+        status: { $in: ['pending', 'processing'] }
+      });
+
+      if (existingQueueItem) {
+        console.log(`⚠️ DebounceWorkerService: Response already pending for conversation ${conversation.id}, skipping`);
+        return false;
+      }
+
       // Get unprocessed messages for this conversation
       const unprocessedMessages = await this.getUnprocessedMessages(conversation.id);
       
@@ -123,6 +134,9 @@ class DebounceWorkerService {
 
       console.log(`📝 DebounceWorkerService: Processing ${unprocessedMessages.length} unprocessed messages for conversation ${conversation.id}`);
 
+      // Mark messages as processed FIRST to prevent race conditions
+      await this.markMessagesAsProcessed(unprocessedMessages.map(msg => msg.id));
+
       // Generate response with full conversation context
       const response = await this.generateResponse(conversation, unprocessedMessages);
       
@@ -130,9 +144,6 @@ class DebounceWorkerService {
         console.log(`⚠️ DebounceWorkerService: No response generated for conversation ${conversation.id}`);
         return false;
       }
-
-      // Mark messages as processed
-      await this.markMessagesAsProcessed(unprocessedMessages.map(msg => msg.id));
       
       // Queue response
       await this.queueResponse(conversation, response, unprocessedMessages.map(msg => msg.mid));
