@@ -425,8 +425,22 @@ class DebounceWorkerService {
 
       if (recentQueueItem) {
         console.log(`⚠️ DebounceWorkerService: Recent queue item with same content exists for contact ${conversation.contactId}, skipping`);
+        console.log(`🔍 Existing queue item details: ID=${recentQueueItem.id}, AccountId=${recentQueueItem.accountId}, Status=${recentQueueItem.status}`);
         return;
       }
+
+      // Log all existing queue items for this conversation for debugging
+      const allQueueItems = await OutboundQueue.find({
+        conversationId: conversation.id
+      }).sort({ createdAt: -1 });
+      
+      console.log(`🔍 All queue items for conversation ${conversation.id}:`, allQueueItems.map(item => ({
+        id: item.id,
+        accountId: item.accountId,
+        status: item.status,
+        createdAt: (item as any).createdAt,
+        content: item.content.text
+      })));
 
       // Create bot message record
       console.log(`🔍 Creating bot message for conversation ${conversation.id} with accountId: ${conversation.accountId}`);
