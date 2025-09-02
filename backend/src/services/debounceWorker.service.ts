@@ -105,14 +105,15 @@ class DebounceWorkerService {
         return false;
       }
 
-      // Check if we already sent a response recently (within last 30 seconds)
+      // Check if we already sent a response recently (within last 5 minutes)
       const lastBotMessage = await Message.findOne({
         conversationId: conversation.id,
         role: 'assistant',
         status: 'sent'
       }).sort({ 'metadata.timestamp': -1 });
 
-      if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 30000) {
+      if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 300000) { // 5 minutes
+        console.log(`⏭️ DebounceWorkerService: Recent bot response exists for conversation ${conversation.id}, skipping`);
         return false;
       }
 
@@ -124,17 +125,18 @@ class DebounceWorkerService {
         'metadata.processed': { $ne: true }
       }).sort({ 'metadata.timestamp': 1 });
 
-      // Check if we already have a response (even if it failed to send)
+      // Check if we already have a response (even if it failed to send) - more aggressive check
       const existingResponse = await Message.findOne({
         conversationId: conversation.id,
         role: 'assistant',
         'metadata.timestamp': { 
-          $gte: new Date(Date.now() - 60000) // Within last minute
+          $gte: new Date(Date.now() - 300000) // Within last 5 minutes
         }
       });
 
       if (existingResponse) {
         console.log(`⏭️ DebounceWorkerService: Response already exists for conversation ${conversation.id}, skipping`);
+        console.log(`🔍 Existing response details: ID=${existingResponse.id}, Status=${existingResponse.status}, AccountId=${existingResponse.accountId}`);
         // Mark all unprocessed messages as processed since we already tried to respond
         const messageIds = recentMessages.map(msg => msg.id);
         await this.markMessagesAsProcessed(messageIds);
@@ -257,6 +259,20 @@ class DebounceWorkerService {
     console.log(`📝 DebounceWorkerService: Processing message: ${message.id} for conversation: ${conversation.id}`);
     
     try {
+      // Check if we already have a response to this specific message
+      const existingResponseToMessage = await Message.findOne({
+        conversationId: conversation.id,
+        role: 'assistant',
+        'metadata.originalMids': message.mid
+      });
+
+      if (existingResponseToMessage) {
+        console.log(`⏭️ DebounceWorkerService: Response already exists for message ${message.mid}, skipping`);
+        console.log(`🔍 Existing response: ID=${existingResponseToMessage.id}, Status=${existingResponseToMessage.status}`);
+        await Message.findByIdAndUpdate(message.id, { 'metadata.processed': true });
+        return;
+      }
+
       // Check if we should respond to this message
       if (!this.shouldRespondToMessage(message)) {
         console.log(`⏭️ DebounceWorkerService: Skipping response for message: ${message.id}`);
@@ -269,7 +285,7 @@ class DebounceWorkerService {
       
       if (response) {
         console.log(`✅ DebounceWorkerService: Response generated and queued for message: ${message.id}`);
-        await this.queueResponse(conversation, response);
+        await this.queueResponse(conversation, response, message.mid);
       } else {
         console.log(`⚠️ DebounceWorkerService: No response generated for message: ${message.id}`);
       }
@@ -400,7 +416,7 @@ class DebounceWorkerService {
   /**
    * Queue a response for sending
    */
-  private async queueResponse(conversation: IConversation, responseText: string): Promise<void> {
+  private async queueResponse(conversation: IConversation, responseText: string, originalMid?: string): Promise<void> {
     console.log(`📬 DebounceWorkerService: Queuing response for conversation: ${conversation.id}`);
     
     try {
@@ -458,7 +474,8 @@ class DebounceWorkerService {
         metadata: {
           timestamp: new Date(),
           aiGenerated: true,
-          processed: false
+          processed: false,
+          originalMids: originalMid ? [originalMid] : []
         }
       });
 
