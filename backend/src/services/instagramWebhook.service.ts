@@ -333,6 +333,13 @@ export class InstagramWebhookService {
         return;
       }
 
+      // CRITICAL FIX: Check if this is a bot message by comparing PSID with our account ID
+      const instagramAccount = await this.getOrCreateInstagramAccount();
+      if (instagramAccount && messageData.psid === instagramAccount.accountId) {
+        console.log(`🤖 Bot message detected by PSID match (${messageData.psid} === ${instagramAccount.accountId}), skipping processing to avoid loops`);
+        return;
+      }
+
       // Check if we have a recent message with same text from same user (Meta duplicate webhook)
       const recentDuplicate = await Message.findOne({
         'content.text': messageData.text,
