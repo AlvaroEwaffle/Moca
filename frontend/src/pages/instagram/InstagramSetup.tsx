@@ -117,6 +117,52 @@ const InstagramSetup = () => {
     window.location.href = instagramAuthUrl;
   };
 
+  const handleRefreshToken = async () => {
+    if (!instagramAccount) return;
+    
+    setLoading(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const accessToken = localStorage.getItem('accessToken');
+      
+      if (!backendUrl) throw new Error('Backend URL not configured');
+
+      const response = await fetch(`${backendUrl}/api/instagram-oauth/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          accountId: instagramAccount.accountId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh token');
+      }
+
+      toast({
+        title: "¡Token actualizado!",
+        description: "El token de acceso se ha renovado exitosamente",
+      });
+
+      // Refresh account data and test connection
+      await fetchInstagramAccount();
+      await testConnection();
+
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      toast({
+        title: "Error al actualizar token",
+        description: "No se pudo renovar el token. Intenta reconectar con OAuth.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     try {
@@ -263,7 +309,7 @@ const InstagramSetup = () => {
                     </div>
                   </div>
                   
-                  <div className="flex justify-center space-x-4">
+                  <div className="flex justify-center space-x-4 flex-wrap gap-2">
                     <Button
                       variant="outline"
                       onClick={() => testConnection()}
@@ -273,9 +319,23 @@ const InstagramSetup = () => {
                     </Button>
                     <Button
                       variant="outline"
+                      onClick={handleRefreshToken}
+                      disabled={loading}
+                    >
+                      {loading ? 'Actualizando...' : 'Actualizar Token'}
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => navigate('/instagram/accounts')}
                     >
                       Gestionar Cuenta
+                    </Button>
+                    <Button
+                      onClick={handleOAuthConnect}
+                      className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700"
+                    >
+                      <Instagram className="w-4 h-4 mr-2" />
+                      Reconectar
                     </Button>
                   </div>
                 </div>
@@ -287,6 +347,39 @@ const InstagramSetup = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Reconnect Section - Show when account exists but connection has issues */}
+          {instagramAccount && connectionStatus === 'error' && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardHeader>
+                <CardTitle className="text-orange-800">⚠️ Problema de Conexión Detectado</CardTitle>
+                <CardDescription className="text-orange-700">
+                  Tu cuenta de Instagram está conectada pero hay un problema con el token de acceso. 
+                  Esto es común cuando la app no está completamente aprobada por Meta.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center space-y-4">
+                  <div className="bg-white p-6 rounded-lg border border-orange-200">
+                    <Instagram className="w-12 h-12 text-orange-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      Reconectar con Instagram
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      Haz clic en "Reconectar" para renovar tu token de acceso y restaurar la conexión.
+                    </p>
+                    <Button 
+                      onClick={handleOAuthConnect}
+                      className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
+                    >
+                      <Instagram className="w-4 h-4 mr-2" />
+                      Reconectar Ahora
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* OAuth Connection */}
           {!instagramAccount && (

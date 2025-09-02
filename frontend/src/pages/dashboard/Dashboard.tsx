@@ -331,11 +331,11 @@ const Dashboard = () => {
               )}
             </div>
             <div className="flex space-x-3">
-              <Button variant="outline" onClick={() => navigate('/conversations')}>
+              <Button variant="outline" onClick={() => navigate('/app/conversations')}>
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Ver conversaciones
               </Button>
-              <Button onClick={() => navigate('/instagram/setup')}>
+              <Button onClick={() => navigate('/app/instagram')}>
                 <Users className="w-4 h-4 mr-2" />
                 Configurar Instagram
               </Button>
@@ -402,7 +402,7 @@ const Dashboard = () => {
                         variant="outline"
                         size="sm"
                         className="text-violet-600 border-violet-300 hover:bg-violet-50"
-                        onClick={() => navigate('/instagram/accounts')}
+                        onClick={() => navigate('/app/accounts')}
                       >
                         ⚙️ Configurar Cuenta
                       </Button>
@@ -415,7 +415,7 @@ const Dashboard = () => {
                   <p className="text-sm text-violet-500 mt-2">Configura tu cuenta de Instagram para comenzar</p>
                   <Button 
                     className="mt-4 bg-violet-600 hover:bg-violet-700"
-                    onClick={() => navigate('/instagram/setup')}
+                    onClick={() => navigate('/app/instagram')}
                   >
                     Conectar Instagram
                   </Button>
@@ -530,7 +530,7 @@ const Dashboard = () => {
                 <Button 
                   variant="outline" 
                   className="w-full mt-4"
-                  onClick={() => navigate('/conversations')}
+                  onClick={() => navigate('/app/conversations')}
                 >
                   Ver todas las conversaciones
                 </Button>
@@ -600,7 +600,7 @@ const Dashboard = () => {
                 <Button 
                   variant="outline" 
                   className="w-full mt-4"
-                  onClick={() => navigate('/system/queue')}
+                  onClick={() => navigate('/app/queue')}
                 >
                   Ver detalles de la cola
                 </Button>
@@ -621,7 +621,7 @@ const Dashboard = () => {
                 <Button 
                   variant="outline" 
                   className="h-24 flex-col"
-                  onClick={() => navigate('/conversations')}
+                  onClick={() => navigate('/app/conversations')}
                 >
                   <MessageSquare className="w-6 h-6 mb-2" />
                   <span className="text-sm">Ver Conversaciones</span>
@@ -629,7 +629,7 @@ const Dashboard = () => {
                 <Button 
                   variant="outline" 
                   className="h-24 flex-col"
-                  onClick={() => navigate('/instagram/accounts')}
+                  onClick={() => navigate('/app/instagram')}
                 >
                   <Users className="w-6 h-6 mb-2" />
                   <span className="text-sm">Configurar Instagram</span>
@@ -637,7 +637,7 @@ const Dashboard = () => {
                 <Button 
                   variant="outline" 
                   className="h-24 flex-col"
-                  onClick={() => navigate('/system/queue')}
+                  onClick={() => navigate('/app/queue')}
                 >
                   <Activity className="w-6 h-6 mb-2" />
                   <span className="text-sm">Estado de la Cola</span>
@@ -645,7 +645,7 @@ const Dashboard = () => {
                 <Button 
                   variant="outline" 
                   className="h-24 flex-col"
-                  onClick={() => navigate('/system/logs')}
+                  onClick={() => navigate('/app/logs')}
                 >
                   <Clock className="w-6 h-6 mb-2" />
                   <span className="text-sm">Ver Logs</span>
