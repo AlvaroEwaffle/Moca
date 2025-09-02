@@ -6,6 +6,7 @@ import InstagramAccount from '../models/instagramAccount.model';
 import { IContact } from '../models/contact.model';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
+import debounceWorkerService from './debounceWorker.service';
 
 // Meta webhook payload interfaces
 interface MetaWebhookPayload {
@@ -400,6 +401,15 @@ export class InstagramWebhookService {
 
       // Update conversation metadata
       await this.updateConversationMetadata(conversation.id, messageData);
+
+      // Trigger message collection for batching (SAFE: preserves all bot detection logic)
+      try {
+        await debounceWorkerService.triggerMessageCollection(conversation.id, message);
+        console.log(`🎯 Webhook: Triggered message collection for batching: ${message.id}`);
+      } catch (error) {
+        console.error(`❌ Webhook: Error triggering message collection:`, error);
+        // Don't fail the webhook if batching fails - fallback to immediate processing
+      }
 
       console.log(`✅ User message processed successfully: ${message.id}`);
     } catch (error) {

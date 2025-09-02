@@ -12,6 +12,8 @@ import * as openaiService from './openai.service';
 class DebounceWorkerService {
   private isRunning: boolean = false;
   private intervalId: NodeJS.Timeout | null = null;
+  private messageCollectionWindow: number = 5000; // 5 seconds for message collection
+  private pendingMessages: Map<string, { messages: IMessage[], timer: NodeJS.Timeout }> = new Map();
 
   constructor() {
     console.log('🔧 DebounceWorkerService: Initializing service');
@@ -62,7 +64,30 @@ class DebounceWorkerService {
       console.log('⏰ DebounceWorkerService: Periodic processing stopped');
     }
 
+    // Clear all pending message collections
+    for (const [conversationId, collection] of this.pendingMessages) {
+      clearTimeout(collection.timer);
+      console.log(`🧹 DebounceWorkerService: Cleared pending collection for conversation ${conversationId}`);
+    }
+    this.pendingMessages.clear();
+
     console.log('✅ DebounceWorkerService: Service stopped successfully');
+  }
+
+  /**
+   * Trigger message collection for batching (called from webhook service)
+   */
+  async triggerMessageCollection(conversationId: string, message: IMessage): Promise<void> {
+    console.log(`🎯 DebounceWorkerService: Triggering message collection for conversation ${conversationId}`);
+    
+    try {
+      // Add message to collection window
+      this.addMessageToCollection(conversationId, message);
+      
+      console.log(`✅ DebounceWorkerService: Message collection triggered for conversation ${conversationId}`);
+    } catch (error) {
+      console.error(`❌ DebounceWorkerService: Error triggering message collection:`, error);
+    }
   }
 
   /**
@@ -117,7 +142,7 @@ class DebounceWorkerService {
   /**
    * Process a conversation batch with context-aware responses
    */
-  private async processConversationBatch(conversation: IConversation): Promise<boolean> {
+  private async processConversationBatch(conversation: IConversation, preCollectedMessages?: IMessage[]): Promise<boolean> {
     try {
       // Check if there's already a pending response for this conversation
       const existingQueueItem = await OutboundQueue.findOne({
@@ -131,13 +156,21 @@ class DebounceWorkerService {
       }
 
       // Get unprocessed messages for this conversation
-      const unprocessedMessages = await this.getUnprocessedMessages(conversation.id);
+      let unprocessedMessages: IMessage[];
+      
+      if (preCollectedMessages) {
+        // Use pre-collected messages (from batching)
+        unprocessedMessages = preCollectedMessages;
+        console.log(`📦 DebounceWorkerService: Using ${unprocessedMessages.length} pre-collected messages for conversation ${conversation.id}`);
+      } else {
+        // Get unprocessed messages from database (immediate processing)
+        unprocessedMessages = await this.getUnprocessedMessages(conversation.id);
+        console.log(`📝 DebounceWorkerService: Processing ${unprocessedMessages.length} unprocessed messages for conversation ${conversation.id}`);
+      }
       
       if (unprocessedMessages.length === 0) {
         return false;
       }
-
-      console.log(`📝 DebounceWorkerService: Processing ${unprocessedMessages.length} unprocessed messages for conversation ${conversation.id}`);
 
       // Mark messages as processed FIRST to prevent race conditions
       await this.markMessagesAsProcessed(unprocessedMessages.map(msg => msg.id));
@@ -176,6 +209,65 @@ class DebounceWorkerService {
       messages.map(m => ({ id: m.id, mid: m.mid, text: m.content.text, processed: (m.metadata as any).processed })));
     
     return messages;
+  }
+
+  /**
+   * Add message to collection window for batching
+   */
+  private addMessageToCollection(conversationId: string, message: IMessage): void {
+    console.log(`📥 DebounceWorkerService: Adding message to collection window for conversation ${conversationId}`);
+    
+    // Check if we already have a collection window for this conversation
+    const existing = this.pendingMessages.get(conversationId);
+    
+    if (existing) {
+      // Add message to existing collection
+      existing.messages.push(message);
+      console.log(`📥 DebounceWorkerService: Added message to existing collection. Total messages: ${existing.messages.length}`);
+    } else {
+      // Create new collection window
+      const messages = [message];
+      const timer = setTimeout(() => {
+        this.processCollectedMessages(conversationId);
+      }, this.messageCollectionWindow);
+      
+      this.pendingMessages.set(conversationId, { messages, timer });
+      console.log(`📥 DebounceWorkerService: Created new collection window for conversation ${conversationId}. Will process in ${this.messageCollectionWindow}ms`);
+    }
+  }
+
+  /**
+   * Process collected messages for a conversation
+   */
+  private async processCollectedMessages(conversationId: string): Promise<void> {
+    console.log(`⏰ DebounceWorkerService: Processing collected messages for conversation ${conversationId}`);
+    
+    const collection = this.pendingMessages.get(conversationId);
+    if (!collection) {
+      console.log(`⚠️ DebounceWorkerService: No collection found for conversation ${conversationId}`);
+      return;
+    }
+
+    // Remove from pending messages
+    this.pendingMessages.delete(conversationId);
+    
+    const messages = collection.messages;
+    console.log(`📦 DebounceWorkerService: Processing ${messages.length} collected messages for conversation ${conversationId}`);
+
+    if (messages.length === 0) {
+      console.log(`⚠️ DebounceWorkerService: No messages to process for conversation ${conversationId}`);
+      return;
+    }
+
+    // Get conversation details
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      console.error(`❌ DebounceWorkerService: Conversation not found: ${conversationId}`);
+      return;
+    }
+
+    // Process the batch
+    await this.processConversationBatch(conversation, messages);
   }
 
 
