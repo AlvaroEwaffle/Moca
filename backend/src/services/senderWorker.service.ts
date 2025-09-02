@@ -158,7 +158,17 @@ class SenderWorkerService {
         console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error);
         console.error(`❌ SenderWorkerService: Error details:`, JSON.stringify(error, null, 2));
         console.error(`❌ SenderWorkerService: Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
-        await this.handleError(queueItem, error instanceof Error ? error.message : 'Unknown error');
+        
+        // Check if this is a "user not found" error
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes('The requested user cannot be found')) {
+          console.log(`🚫 SenderWorkerService: User not found for PSID ${contact.psid}, marking as failed permanently`);
+          await this.updateQueueItemStatus(queueItem.id, 'failed');
+          await this.updateMessageStatus(queueItem.messageId, 'failed');
+          return false; // Don't retry for user not found errors
+        }
+        
+        await this.handleError(queueItem, errorMessage);
         return false;
       }
 

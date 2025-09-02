@@ -348,6 +348,19 @@ export class InstagramWebhookService {
         return;
       }
 
+      // Additional check: Look for any message with same MID in the last 30 seconds (extra safety)
+      const recentMessageByMid = await Message.findOne({
+        mid: messageData.mid,
+        'metadata.timestamp': { 
+          $gte: new Date(Date.now() - 30000) // Within last 30 seconds
+        }
+      });
+
+      if (recentMessageByMid) {
+        console.log(`⚠️ Message with same MID processed recently, skipping: ${messageData.mid}`);
+        return;
+      }
+
       // Get or create Instagram account
       const account = await this.getOrCreateInstagramAccount();
       if (!account) {

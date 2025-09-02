@@ -404,6 +404,17 @@ class DebounceWorkerService {
     console.log(`📬 DebounceWorkerService: Queuing response for conversation: ${conversation.id}`);
     
     try {
+      // Check if we already have a pending queue item for this conversation
+      const existingQueueItem = await OutboundQueue.findOne({
+        conversationId: conversation.id,
+        status: { $in: ['pending', 'processing'] }
+      });
+
+      if (existingQueueItem) {
+        console.log(`⚠️ DebounceWorkerService: Queue item already exists for conversation ${conversation.id}, skipping`);
+        return;
+      }
+
       // Create bot message record
       const botMessage = new Message({
         mid: `bot_${Date.now()}`,
