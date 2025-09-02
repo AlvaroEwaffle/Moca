@@ -25,7 +25,7 @@ router.post('/callback', async (req, res) => {
 
     // Exchange code for access token using Instagram Business API
     const tokenParams = {
-      client_id: process.env.INSTAGRAM_CLIENT_ID || '2160534791106844',
+      client_id: '2160534791106844', // Use the working client_id
       client_secret: process.env.INSTAGRAM_CLIENT_SECRET || '',
       grant_type: 'authorization_code',
       redirect_uri: redirectUri,
@@ -170,7 +170,7 @@ router.post('/callback', async (req, res) => {
 // Get Instagram OAuth URL
 router.get('/auth-url', (req, res) => {
   try {
-    const clientId = process.env.INSTAGRAM_CLIENT_ID || '2160534791106844';
+    const clientId = '2160534791106844'; // Use the working client_id
     const redirectUri = 'https://moca.pages.dev/instagram-callback';
     
     const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights`;
