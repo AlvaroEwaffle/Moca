@@ -176,6 +176,67 @@ router.post('/callback', async (req, res) => {
   }
 });
 
+// Refresh Instagram access token
+router.post('/refresh-token', async (req, res) => {
+  try {
+    const { accountId } = req.body;
+    
+    if (!accountId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Account ID is required'
+      });
+    }
+
+    console.log(`🔄 [Token Refresh] Refreshing token for account: ${accountId}`);
+
+    const account = await InstagramAccount.findOne({ accountId, isActive: true });
+    
+    if (!account) {
+      console.log(`❌ [Token Refresh] No active account found for ID: ${accountId}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Account not found'
+      });
+    }
+
+    // Import the Instagram API service
+    const instagramService = (await import('../services/instagramApi.service')).default;
+    
+    const refreshSuccess = await instagramService.refreshAccessToken(account);
+    
+    if (!refreshSuccess) {
+      console.log(`❌ [Token Refresh] Failed to refresh token for account: ${accountId}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to refresh access token'
+      });
+    }
+
+    console.log(`✅ [Token Refresh] Token refreshed successfully for account: ${accountId}`);
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Access token refreshed successfully',
+        account: {
+          id: account.id,
+          accountId: account.accountId,
+          accountName: account.accountName,
+          tokenExpiry: account.tokenExpiry
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error refreshing Instagram access token:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to refresh access token'
+    });
+  }
+});
+
 // Get Instagram OAuth URL
 router.get('/auth-url', (req, res) => {
   try {

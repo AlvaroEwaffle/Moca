@@ -55,16 +55,73 @@ class InstagramApiService {
 
       console.log(`✅ InstagramApiService: Found account: ${account.accountName}`);
 
+      // Check if token is expired and try to refresh it
       if (account.tokenExpiry <= new Date()) {
-        console.log(`⚠️ InstagramApiService: Token expired for account: ${account.accountName}`);
-        return false;
+        console.log(`⚠️ InstagramApiService: Token expired for account: ${account.accountName}, attempting refresh...`);
+        const refreshSuccess = await this.refreshAccessToken(account);
+        if (!refreshSuccess) {
+          console.log(`❌ InstagramApiService: Failed to refresh token for account: ${account.accountName}`);
+          return false;
+        }
+        // Re-fetch the account with updated token
+        const updatedAccount = await InstagramAccount.findOne({ accountId, isActive: true });
+        if (updatedAccount) {
+          this.accessToken = updatedAccount.accessToken;
+        }
+      } else {
+        this.accessToken = account.accessToken;
       }
 
-      this.accessToken = account.accessToken;
       console.log(`✅ InstagramApiService: Token valid for account: ${account.accountName}`);
       return true;
     } catch (error) {
       console.error(`❌ InstagramApiService: Error initializing account ${accountId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Refresh Instagram access token
+   */
+  async refreshAccessToken(account: IInstagramAccount): Promise<boolean> {
+    console.log(`🔄 InstagramApiService: Refreshing access token for account: ${account.accountName}`);
+    
+    try {
+      // Instagram Basic Display API token refresh
+      const refreshUrl = `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${account.accessToken}`;
+      
+      console.log(`🔄 InstagramApiService: Refresh URL: ${refreshUrl}`);
+      
+      const response = await fetch(refreshUrl, {
+        method: 'GET'
+      });
+
+      console.log(`🔄 InstagramApiService: Refresh response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`❌ InstagramApiService: Token refresh failed:`, errorData);
+        return false;
+      }
+
+      const refreshData = await response.json();
+      console.log(`✅ InstagramApiService: Token refresh successful:`, {
+        expires_in: refreshData.expires_in,
+        access_token: refreshData.access_token ? `${refreshData.access_token.substring(0, 10)}...` : 'none'
+      });
+
+      // Update the account with new token and expiry
+      const newExpiry = new Date(Date.now() + (refreshData.expires_in * 1000));
+      account.accessToken = refreshData.access_token;
+      account.tokenExpiry = newExpiry;
+      
+      await account.save();
+      
+      console.log(`✅ InstagramApiService: Account updated with new token, expires: ${newExpiry.toISOString()}`);
+      return true;
+      
+    } catch (error) {
+      console.error(`❌ InstagramApiService: Error refreshing access token:`, error);
       return false;
     }
   }
@@ -109,6 +166,22 @@ class InstagramApiService {
 
       if (!response.ok) {
         console.error(`❌ InstagramApiService: API error - Status: ${response.status}, Data:`, responseData);
+        
+        // If we get a 401 error, try to refresh the token
+        if (response.status === 401) {
+          console.log(`🔄 InstagramApiService: Received 401 error, attempting token refresh...`);
+          const account = await InstagramAccount.findOne({ accessToken: this.accessToken, isActive: true });
+          if (account) {
+            const refreshSuccess = await this.refreshAccessToken(account);
+            if (refreshSuccess) {
+              console.log(`🔄 InstagramApiService: Token refreshed, retrying message send...`);
+              // Update our access token and retry the request
+              this.accessToken = account.accessToken;
+              return this.sendMessage(psid, message);
+            }
+          }
+        }
+        
         throw new Error(`Instagram API error: ${response.status} - ${JSON.stringify(responseData)}`);
       }
 
