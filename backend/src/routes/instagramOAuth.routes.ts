@@ -24,18 +24,28 @@ router.post('/callback', async (req, res) => {
     }
 
     // Exchange code for access token using Instagram Business API
+    const tokenParams = {
+      client_id: '2160534791106844', // Your Instagram Business Client ID
+      client_secret: process.env.INSTAGRAM_CLIENT_SECRET || '',
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+      code: code
+    };
+    
+    console.log('🔧 [OAuth Callback] Token exchange params:', {
+      client_id: tokenParams.client_id,
+      client_secret: tokenParams.client_secret ? `${tokenParams.client_secret.substring(0, 10)}...` : 'missing',
+      grant_type: tokenParams.grant_type,
+      redirect_uri: tokenParams.redirect_uri,
+      code: tokenParams.code ? `${tokenParams.code.substring(0, 10)}...` : 'missing'
+    });
+    
     const tokenResponse = await fetch('https://api.instagram.com/oauth/access_token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        client_id: '2160534791106844', // Your Instagram Business Client ID
-        client_secret: process.env.INSTAGRAM_CLIENT_SECRET || '',
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
-        code: code
-      })
+      body: new URLSearchParams(tokenParams)
     });
 
     if (!tokenResponse.ok) {
