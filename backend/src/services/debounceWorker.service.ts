@@ -105,15 +105,15 @@ class DebounceWorkerService {
         return false;
       }
 
-      // Check if we already sent a response recently (within last 30 seconds)
+      // Check if we already sent a response recently (within last 10 seconds) - only for rapid duplicates
       const lastBotMessage = await Message.findOne({
         conversationId: conversation.id,
         role: 'assistant',
         status: 'sent'
       }).sort({ 'metadata.timestamp': -1 });
 
-      if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 30000) { // 30 seconds
-        console.log(`⏭️ DebounceWorkerService: Recent bot response exists for conversation ${conversation.id}, skipping`);
+      if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 10000) { // 10 seconds
+        console.log(`⏭️ DebounceWorkerService: Very recent bot response exists for conversation ${conversation.id}, skipping rapid duplicates`);
         return false;
       }
 
@@ -125,18 +125,17 @@ class DebounceWorkerService {
         'metadata.processed': { $ne: true }
       }).sort({ 'metadata.timestamp': 1 });
 
-      // Check if we already have a response (even if it failed to send) - more aggressive check
-      const existingResponse = await Message.findOne({
+      // Check if we already have a response to these specific messages
+      const messageMids = recentMessages.map(msg => msg.mid);
+      const existingResponseToMessages = await Message.findOne({
         conversationId: conversation.id,
         role: 'assistant',
-        'metadata.timestamp': { 
-          $gte: new Date(Date.now() - 60000) // Within last 1 minute
-        }
+        'metadata.originalMids': { $in: messageMids }
       });
 
-      if (existingResponse) {
-        console.log(`⏭️ DebounceWorkerService: Response already exists for conversation ${conversation.id}, skipping`);
-        console.log(`🔍 Existing response details: ID=${existingResponse.id}, Status=${existingResponse.status}, AccountId=${existingResponse.accountId}`);
+      if (existingResponseToMessages) {
+        console.log(`⏭️ DebounceWorkerService: Response already exists for these specific messages, skipping`);
+        console.log(`🔍 Existing response details: ID=${existingResponseToMessages.id}, Status=${existingResponseToMessages.status}, OriginalMIDs=${messageMids.join(',')}`);
         // Mark all unprocessed messages as processed since we already tried to respond
         const messageIds = recentMessages.map(msg => msg.id);
         await this.markMessagesAsProcessed(messageIds);
