@@ -444,12 +444,29 @@ class DebounceWorkerService {
     console.log(`✅ DebounceWorkerService: Marking ${messageIds.length} messages as processed`);
     
     try {
+      // First, let's check if the messages exist and their current structure
+      const existingMessages = await Message.find({ _id: { $in: messageIds } });
+      console.log(`🔍 DebounceWorkerService: Found ${existingMessages.length} existing messages out of ${messageIds.length} requested`);
+      
+      if (existingMessages.length > 0) {
+        console.log(`🔍 DebounceWorkerService: Sample message structure:`, {
+          id: existingMessages[0].id,
+          metadata: existingMessages[0].metadata,
+          hasProcessedField: 'processed' in existingMessages[0].metadata
+        });
+      }
+      
       const result = await Message.updateMany(
         { _id: { $in: messageIds } },
-        { 'metadata.processed': true }
+        { $set: { 'metadata.processed': true } }
       );
       
       console.log(`✅ DebounceWorkerService: Marked ${result.modifiedCount} messages as processed (requested: ${messageIds.length})`);
+      console.log(`🔍 DebounceWorkerService: Update result details:`, {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+        acknowledged: result.acknowledged
+      });
       
       if (result.modifiedCount !== messageIds.length) {
         console.error(`❌ DebounceWorkerService: Failed to mark all messages as processed. Expected: ${messageIds.length}, Actual: ${result.modifiedCount}`);
