@@ -26,6 +26,7 @@ import InstagramAccounts from "./pages/system/InstagramAccounts";
 
 // Instagram OAuth
 import InstagramAuth from "./pages/auth/InstagramAuth";
+import InstagramCallback from "./pages/auth/InstagramCallback";
 
 
 
@@ -50,6 +51,7 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/instagram-auth" element={<InstagramAuth />} />
+            <Route path="/instagram-callback" element={<InstagramCallback />} />
             
             {/* Protected routes */}
             <Route path="/app" element={<MainLayout />}>
