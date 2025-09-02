@@ -367,6 +367,8 @@ export class InstagramWebhookService {
         console.error('❌ No Instagram account found for webhook processing');
         return;
       }
+      
+      console.log(`🔍 Using Instagram account: ${account.accountId} (${account.accountName})`);
 
       // Get or create contact
       const contact = await this.upsertContact(messageData.psid, messageData);

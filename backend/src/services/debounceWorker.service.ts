@@ -415,7 +415,22 @@ class DebounceWorkerService {
         return;
       }
 
+      // Additional check: Look for recent queue items with same content and contact
+      const recentQueueItem = await OutboundQueue.findOne({
+        contactId: conversation.contactId,
+        'content.text': responseText,
+        status: { $in: ['pending', 'processing', 'sent'] },
+        createdAt: { $gte: new Date(Date.now() - 60000) } // Within last minute
+      });
+
+      if (recentQueueItem) {
+        console.log(`⚠️ DebounceWorkerService: Recent queue item with same content exists for contact ${conversation.contactId}, skipping`);
+        return;
+      }
+
       // Create bot message record
+      console.log(`🔍 Creating bot message for conversation ${conversation.id} with accountId: ${conversation.accountId}`);
+      
       const botMessage = new Message({
         mid: `bot_${Date.now()}`,
         conversationId: conversation.id,
