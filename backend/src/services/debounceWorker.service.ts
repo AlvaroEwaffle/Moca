@@ -105,14 +105,14 @@ class DebounceWorkerService {
         return false;
       }
 
-      // Check if we already sent a response recently (within last 5 minutes)
+      // Check if we already sent a response recently (within last 30 seconds)
       const lastBotMessage = await Message.findOne({
         conversationId: conversation.id,
         role: 'assistant',
         status: 'sent'
       }).sort({ 'metadata.timestamp': -1 });
 
-      if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 300000) { // 5 minutes
+      if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 30000) { // 30 seconds
         console.log(`⏭️ DebounceWorkerService: Recent bot response exists for conversation ${conversation.id}, skipping`);
         return false;
       }
@@ -130,7 +130,7 @@ class DebounceWorkerService {
         conversationId: conversation.id,
         role: 'assistant',
         'metadata.timestamp': { 
-          $gte: new Date(Date.now() - 300000) // Within last 5 minutes
+          $gte: new Date(Date.now() - 60000) // Within last 1 minute
         }
       });
 
