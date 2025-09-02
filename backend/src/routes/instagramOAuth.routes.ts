@@ -65,8 +65,8 @@ router.post('/callback', async (req, res) => {
       access_token: access_token ? `${access_token.substring(0, 10)}...` : 'none'
     });
 
-    // Get user profile information using Instagram Business API
-    const profileUrl = `https://graph.instagram.com/${user_id}?fields=id,username,account_type,media_count,followers_count,follows_count&access_token=${access_token}`;
+    // Get user profile information using Instagram Basic Display API
+    const profileUrl = `https://graph.instagram.com/me?fields=id,username&access_token=${access_token}`;
     console.log('🔧 [OAuth Callback] Fetching Instagram profile from:', profileUrl);
     
     const profileResponse = await fetch(profileUrl);
