@@ -350,13 +350,24 @@ export class InstagramWebhookService {
       // Get or create conversation
               const conversation = await this.getOrCreateConversation(contact.id, account.accountId);
 
-      // Create message record
+      // Check if this is a bot message (from our own Instagram account)
+      const isBotMessage = messageData.psid === account.accountId;
+      
+      if (isBotMessage) {
+        console.log(`🤖 Bot message detected, skipping processing to avoid loops: ${messageData.mid}`);
+        // Still create the message record for logging, but don't trigger responses
+        const message = await this.createMessage(messageData, conversation.id, contact.id, account.accountId);
+        console.log(`✅ Bot message logged: ${message.id}`);
+        return;
+      }
+
+      // Create message record for user messages
       const message = await this.createMessage(messageData, conversation.id, contact.id, account.accountId);
 
       // Update conversation metadata
       await this.updateConversationMetadata(conversation.id, messageData);
 
-      console.log(`✅ Message processed successfully: ${message.id}`);
+      console.log(`✅ User message processed successfully: ${message.id}`);
     } catch (error) {
       console.error('❌ Error processing message:', error);
       throw error;
@@ -518,12 +529,19 @@ export class InstagramWebhookService {
     accountId: string
   ): Promise<IMessage> {
     try {
+      // Determine if this message is from our bot or from a user
+      // If the sender ID matches our Instagram account ID, it's a bot message
+      const isBotMessage = messageData.psid === accountId;
+      const messageRole = isBotMessage ? 'assistant' : 'user';
+      
+      console.log(`🔍 Message role detection: PSID=${messageData.psid}, AccountID=${accountId}, Role=${messageRole}`);
+      
       const message = new Message({
         mid: messageData.mid,
         conversationId,
         contactId,
         accountId,
-        role: 'user',
+        role: messageRole,
         content: {
           text: messageData.text || messageData.type,
           attachments: messageData.attachments?.map(att => ({
