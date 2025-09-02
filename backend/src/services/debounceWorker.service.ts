@@ -444,13 +444,21 @@ class DebounceWorkerService {
     console.log(`✅ DebounceWorkerService: Marking ${messageIds.length} messages as processed`);
     
     try {
-      await Message.updateMany(
+      const result = await Message.updateMany(
         { _id: { $in: messageIds } },
         { 'metadata.processed': true }
       );
-      console.log(`✅ DebounceWorkerService: Marked ${messageIds.length} messages as processed`);
+      
+      console.log(`✅ DebounceWorkerService: Marked ${result.modifiedCount} messages as processed (requested: ${messageIds.length})`);
+      
+      if (result.modifiedCount !== messageIds.length) {
+        console.error(`❌ DebounceWorkerService: Failed to mark all messages as processed. Expected: ${messageIds.length}, Actual: ${result.modifiedCount}`);
+        console.error(`❌ DebounceWorkerService: Message IDs that failed to update:`, messageIds);
+        throw new Error(`Failed to mark all messages as processed. Expected: ${messageIds.length}, Actual: ${result.modifiedCount}`);
+      }
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error marking messages as processed:`, error);
+      throw error; // Re-throw to prevent further processing
     }
   }
 }
