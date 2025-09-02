@@ -38,9 +38,9 @@ class DebounceWorkerService {
     this.intervalId = setInterval(async () => {
       console.log('⏰ DebounceWorkerService: Periodic processing triggered');
       await this.process();
-    }, 5000); // Process every 5 seconds
+    }, 15000); // Process every 15 seconds
 
-    console.log('⏰ DebounceWorkerService: Periodic processing scheduled every 5 seconds');
+    console.log('⏰ DebounceWorkerService: Periodic processing scheduled every 15 seconds');
   }
 
   /**
@@ -70,16 +70,19 @@ class DebounceWorkerService {
    */
   async process(): Promise<void> {
     try {
-      // Get all active conversations
-      const activeConversations = await Conversation.find({ 
-        status: 'open',
-        isActive: true 
-      }).populate('contactId');
+      console.log('🔄 DebounceWorkerService: Starting context-aware batching processing');
+      
+      // Find all conversations with unprocessed messages
+      const conversations = await this.getConversationsWithUnprocessedMessages();
+      
+      console.log(`📊 DebounceWorkerService: Found ${conversations.length} conversations with unprocessed messages`);
 
       let processedCount = 0;
-      for (const conversation of activeConversations) {
-        const wasProcessed = await this.processConversation(conversation);
-        if (wasProcessed) processedCount++;
+      for (const conversation of conversations) {
+        const wasProcessed = await this.processConversationBatch(conversation);
+        if (wasProcessed) {
+          processedCount++;
+        }
       }
 
       if (processedCount > 0) {
@@ -91,242 +94,78 @@ class DebounceWorkerService {
   }
 
   /**
-   * Process a single conversation
+   * Get conversations with unprocessed messages
    */
-  private async processConversation(conversation: IConversation): Promise<boolean> {
-    try {
-      // Check conversation state - don't respond if we're waiting for user
-      if (conversation.status === 'closed') {
-        return false;
-      }
-
-      // Check if conversation is in cooldown
-      if (conversation.timestamps.cooldownUntil && conversation.timestamps.cooldownUntil > new Date()) {
-        return false;
-      }
-
-      // Check if we already sent a response recently (within last 10 seconds) - only for rapid duplicates
-      const lastBotMessage = await Message.findOne({
-        conversationId: conversation.id,
-        role: 'assistant',
-        status: 'sent'
-      }).sort({ 'metadata.timestamp': -1 });
-
-      if (lastBotMessage && (Date.now() - lastBotMessage.metadata.timestamp.getTime()) < 10000) { // 10 seconds
-        console.log(`⏭️ DebounceWorkerService: Very recent bot response exists for conversation ${conversation.id}, skipping rapid duplicates`);
-        return false;
-      }
-
-      // Get recent unprocessed messages
-      const recentMessages = await Message.find({
-        conversationId: conversation.id,
-        role: 'user',
-        status: 'received',
-        'metadata.processed': { $ne: true }
-      }).sort({ 'metadata.timestamp': 1 });
-
-      // Check if we already have a response to these specific messages
-      const messageMids = recentMessages.map(msg => msg.mid);
-      const existingResponseToMessages = await Message.findOne({
-        conversationId: conversation.id,
-        role: 'assistant',
-        'metadata.originalMids': { $in: messageMids }
-      });
-
-      if (existingResponseToMessages) {
-        console.log(`⏭️ DebounceWorkerService: Response already exists for these specific messages, skipping`);
-        console.log(`🔍 Existing response details: ID=${existingResponseToMessages.id}, Status=${existingResponseToMessages.status}, OriginalMIDs=${messageMids.join(',')}`);
-        // Mark all unprocessed messages as processed since we already tried to respond
-        const messageIds = recentMessages.map(msg => msg.id);
-        await this.markMessagesAsProcessed(messageIds);
-        return false;
-      }
-
-      if (recentMessages.length === 0) {
-        return false;
-      }
-
-      // Group messages by text content to handle Meta's duplicate webhooks
-      const uniqueMessages = this.groupMessagesByContent(recentMessages);
-
-      if (uniqueMessages.length > 1) {
-        console.log(`🔗 DebounceWorkerService: Consolidating ${uniqueMessages.length} message groups for conversation: ${conversation.id}`);
-        await this.consolidateMessages(conversation, uniqueMessages);
-      } else {
-        console.log(`📝 DebounceWorkerService: Processing message for conversation: ${conversation.id}`);
-        await this.processIndividualMessages(conversation, uniqueMessages);
-      }
-
-      return true; // Conversation was processed
-
-    } catch (error) {
-      console.error(`❌ DebounceWorkerService: Error processing conversation ${conversation.id}:`, error);
-      return false;
-    }
-  }
-
-  /**
-   * Consolidate multiple message groups into one response
-   */
-  private async consolidateMessages(conversation: IConversation, messageGroups: IMessage[][]): Promise<void> {
-    console.log(`🔗 DebounceWorkerService: Consolidating ${messageGroups.length} message groups for conversation: ${conversation.id}`);
-    
-    try {
-      // Combine all unique message texts (one from each group)
-      const uniqueTexts = messageGroups.map(group => group[0].content.text);
-      const combinedText = uniqueTexts.join('\n\n');
-      console.log(`🔗 DebounceWorkerService: Combined text: "${combinedText}"`);
-
-      // Create a consolidated message record
-      const consolidatedMessage = new Message({
-        mid: `consolidated_${Date.now()}`,
-        conversationId: conversation.id,
-        contactId: conversation.contactId,
-        accountId: conversation.accountId,
-        role: 'user',
-        content: {
-          text: combinedText,
-          type: 'text'
-        },
-        metadata: {
-          timestamp: new Date(),
-          consolidated: true,
-          originalMessageIds: messageGroups.flat().map(msg => msg.id),
-          processed: false
-        }
-      });
-
-      await consolidatedMessage.save();
-      console.log(`✅ DebounceWorkerService: Created consolidated message: ${consolidatedMessage.id}`);
-
-      // Process the consolidated message
-      await this.processMessage(conversation, consolidatedMessage);
-
-      // Mark all original messages as processed
-      const allMessageIds = messageGroups.flat().map(msg => msg.id);
-      await Message.updateMany(
-        { _id: { $in: allMessageIds } },
-        { 'metadata.processed': true }
-      );
-
-      console.log(`✅ DebounceWorkerService: Marked ${allMessageIds.length} original messages as processed`);
-
-    } catch (error) {
-      console.error(`❌ DebounceWorkerService: Error consolidating messages for conversation ${conversation.id}:`, error);
-    }
-  }
-
-  /**
-   * Group messages by content to handle Meta's duplicate webhooks
-   */
-  private groupMessagesByContent(messages: IMessage[]): IMessage[][] {
-    const groups: { [key: string]: IMessage[] } = {};
-    
-    messages.forEach(message => {
-      const text = message.content?.text || '';
-      if (!groups[text]) {
-        groups[text] = [];
-      }
-      groups[text].push(message);
+  private async getConversationsWithUnprocessedMessages(): Promise<IConversation[]> {
+    const conversationIds = await Message.distinct('conversationId', { 
+      role: 'user', 
+      'metadata.processed': { $ne: true } 
     });
     
-    return Object.values(groups);
+    return await Conversation.find({
+      _id: { $in: conversationIds },
+      status: 'open',
+      isActive: true
+    });
   }
 
   /**
-   * Process individual message groups
+   * Process a conversation batch with context-aware responses
    */
-  private async processIndividualMessages(conversation: IConversation, messageGroups: IMessage[][]): Promise<void> {
-    console.log(`📝 DebounceWorkerService: Processing ${messageGroups.length} message groups for conversation: ${conversation.id}`);
-    
-    for (const messageGroup of messageGroups) {
-      // Process the first message in each group (they have same content)
-      const message = messageGroup[0];
-      console.log(`📝 DebounceWorkerService: Processing message: ${message.id} for conversation: ${conversation.id}`);
-      await this.processMessage(conversation, message);
-      
-      // Mark all messages in this group as processed
-      const messageIds = messageGroup.map(msg => msg.id);
-      await this.markMessagesAsProcessed(messageIds);
-    }
-  }
-
-  /**
-   * Process a single message
-   */
-  private async processMessage(conversation: IConversation, message: IMessage): Promise<void> {
-    console.log(`📝 DebounceWorkerService: Processing message: ${message.id} for conversation: ${conversation.id}`);
-    
+  private async processConversationBatch(conversation: IConversation): Promise<boolean> {
     try {
-      // Check if we already have a response to this specific message
-      const existingResponseToMessage = await Message.findOne({
-        conversationId: conversation.id,
-        role: 'assistant',
-        'metadata.originalMids': message.mid
-      });
-
-      if (existingResponseToMessage) {
-        console.log(`⏭️ DebounceWorkerService: Response already exists for message ${message.mid}, skipping`);
-        console.log(`🔍 Existing response: ID=${existingResponseToMessage.id}, Status=${existingResponseToMessage.status}`);
-        await Message.findByIdAndUpdate(message.id, { 'metadata.processed': true });
-        return;
-      }
-
-      // Check if we should respond to this message
-      if (!this.shouldRespondToMessage(message)) {
-        console.log(`⏭️ DebounceWorkerService: Skipping response for message: ${message.id}`);
-        await Message.findByIdAndUpdate(message.id, { 'metadata.processed': true });
-        return;
-      }
-
-      // Generate response
-      const response = await this.generateResponse(conversation, message);
+      // Get unprocessed messages for this conversation
+      const unprocessedMessages = await this.getUnprocessedMessages(conversation.id);
       
-      if (response) {
-        console.log(`✅ DebounceWorkerService: Response generated and queued for message: ${message.id}`);
-        await this.queueResponse(conversation, response, message.mid);
-      } else {
-        console.log(`⚠️ DebounceWorkerService: No response generated for message: ${message.id}`);
+      if (unprocessedMessages.length === 0) {
+        return false;
       }
+
+      console.log(`📝 DebounceWorkerService: Processing ${unprocessedMessages.length} unprocessed messages for conversation ${conversation.id}`);
+
+      // Generate response with full conversation context
+      const response = await this.generateResponse(conversation, unprocessedMessages);
+      
+      if (!response) {
+        console.log(`⚠️ DebounceWorkerService: No response generated for conversation ${conversation.id}`);
+        return false;
+      }
+
+      // Mark messages as processed
+      await this.markMessagesAsProcessed(unprocessedMessages.map(msg => msg.id));
+      
+      // Queue response
+      await this.queueResponse(conversation, response, unprocessedMessages.map(msg => msg.mid));
+      
+      console.log(`✅ DebounceWorkerService: Successfully processed conversation ${conversation.id}`);
+      return true;
 
     } catch (error) {
-      console.error(`❌ DebounceWorkerService: Error processing message ${message.id}:`, error);
+      console.error(`❌ DebounceWorkerService: Error processing conversation batch ${conversation.id}:`, error);
+      return false;
     }
   }
 
   /**
-   * Check if we should respond to a message
+   * Get unprocessed messages for a conversation
    */
-  private shouldRespondToMessage(message: IMessage): boolean {
-    console.log(`🔍 DebounceWorkerService: Checking if should respond to message: ${message.id}`);
-    
-    // Don't respond to system messages
-    if (message.role === 'system') {
-      console.log(`⏭️ DebounceWorkerService: Skipping system message: ${message.id}`);
-      return false;
-    }
-
-    // Don't respond to bot messages
-    if (message.role === 'assistant') {
-      console.log(`⏭️ DebounceWorkerService: Skipping bot message: ${message.id}`);
-      return false;
-    }
-
-    // Check if message has content
-    if (!message.content?.text || message.content.text.trim() === '') {
-      console.log(`⏭️ DebounceWorkerService: Skipping empty message: ${message.id}`);
-      return false;
-    }
-
-    console.log(`✅ DebounceWorkerService: Should respond to message: ${message.id}`);
-    return true;
+  private async getUnprocessedMessages(conversationId: string): Promise<IMessage[]> {
+    return await Message.find({
+      conversationId,
+      role: 'user',
+      'metadata.processed': { $ne: true }
+    }).sort({ 'metadata.timestamp': 1 });
   }
+
+
+
+
 
   /**
    * Generate a response for a message
    */
-  private async generateResponse(conversation: IConversation, message: IMessage): Promise<string | null> {
-    console.log(`🤖 DebounceWorkerService: Generating mock response for message: ${message.id}`);
+  private async generateResponse(conversation: IConversation, newMessages: IMessage[]): Promise<string | null> {
+    console.log(`🤖 DebounceWorkerService: Generating context-aware response for ${newMessages.length} messages`);
     
     try {
       // Check business hours
@@ -335,14 +174,111 @@ class DebounceWorkerService {
         return null;
       }
 
-      // Return mock response instead of calling AI
-      const mockResponse = "This would be an AI generated message";
-      console.log(`✅ DebounceWorkerService: Mock response generated: "${mockResponse}"`);
-      return mockResponse;
+      // Get full conversation history for context
+      const conversationHistory = await this.getConversationHistory(conversation.id);
+      
+      // Get user context and business information
+      const userContext = await this.getUserContext(conversation.contactId);
+      
+      // Generate response with full context
+      const response = await this.generateContextualResponse(
+        conversationHistory, 
+        newMessages, 
+        userContext
+      );
+      
+      console.log(`✅ DebounceWorkerService: Context-aware response generated: "${response}"`);
+      return response;
 
     } catch (error) {
-      console.error(`❌ DebounceWorkerService: Error generating response for message ${message.id}:`, error);
-      return "This would be an AI generated message";
+      console.error(`❌ DebounceWorkerService: Error generating context-aware response:`, error);
+      return "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.";
+    }
+  }
+
+  /**
+   * Get full conversation history for context
+   */
+  private async getConversationHistory(conversationId: string): Promise<IMessage[]> {
+    return await Message.find({
+      conversationId,
+      role: { $in: ['user', 'assistant'] }
+    }).sort({ 'metadata.timestamp': 1 });
+  }
+
+  /**
+   * Get user context and business information
+   */
+  private async getUserContext(contactId: string): Promise<any> {
+    try {
+      const contact = await Contact.findById(contactId);
+      if (!contact) {
+        console.log(`⚠️ DebounceWorkerService: Contact not found for ID: ${contactId}`);
+        return {};
+      }
+
+      // For now, return basic contact info
+      // In the future, we can link to User model for business info
+      return {
+        contactName: contact.name,
+        contactEmail: contact.email,
+        businessName: contact.businessInfo?.company || 'Business',
+        specialization: contact.businessInfo?.sector || 'General',
+        preferences: contact.preferences || {},
+        agentBehavior: {}
+      };
+    } catch (error) {
+      console.error(`❌ DebounceWorkerService: Error getting user context:`, error);
+      return {};
+    }
+  }
+
+  /**
+   * Generate contextual response using AI service
+   */
+  private async generateContextualResponse(
+    conversationHistory: IMessage[], 
+    newMessages: IMessage[], 
+    userContext: any
+  ): Promise<string> {
+    try {
+      // Combine new messages into a single text
+      const newMessageText = newMessages.map(msg => msg.content.text).join('\n\n');
+      
+      // Create context for AI service
+      const context = {
+        conversationHistory: conversationHistory
+          .filter(msg => msg.role !== 'system')
+          .map(msg => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content.text,
+            timestamp: msg.metadata.timestamp
+          })),
+        newMessages: newMessageText,
+        userContext: userContext,
+        businessInfo: userContext.businessName,
+        agentBehavior: userContext.agentBehavior
+      };
+
+      // Call OpenAI service with full context
+      const response = await openaiService.generateInstagramResponse({
+        conversationHistory: context.conversationHistory,
+        userIntent: 'general_inquiry',
+        conversationTopic: 'general',
+        userSentiment: 'neutral',
+        businessContext: {
+          company: context.businessInfo,
+          sector: userContext.specialization,
+          services: ['desarrollo web', 'marketing digital', 'consultoría']
+        },
+        language: 'es'
+      });
+      
+      return response || "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.";
+      
+    } catch (error) {
+      console.error(`❌ DebounceWorkerService: Error generating contextual response:`, error);
+      return "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.";
     }
   }
 
@@ -357,65 +293,14 @@ class DebounceWorkerService {
     return true;
   }
 
-  /**
-   * Get conversation history for context
-   */
-  private async getConversationHistory(conversationId: string): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp: Date }>> {
-    console.log(`📚 DebounceWorkerService: Getting conversation history for: ${conversationId}`);
-    
-    try {
-      const messages = await Message.find({
-        conversationId,
-        role: { $in: ['user', 'assistant'] }
-      })
-      .sort({ 'metadata.timestamp': -1 })
-      .limit(10); // Last 10 messages for context
 
-      const history = messages.reverse().map(msg => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content.text,
-        timestamp: msg.metadata.timestamp
-      }));
 
-      console.log(`📚 DebounceWorkerService: Retrieved ${history.length} messages from history`);
-      return history;
-    } catch (error) {
-      console.error(`❌ DebounceWorkerService: Error getting conversation history:`, error);
-      return [];
-    }
-  }
 
-  /**
-   * Generate a fallback response when AI is not available
-   */
-  private generateFallbackResponse(userMessage: string): string {
-    console.log('🔄 DebounceWorkerService: Falling back to rule-based response');
-    
-    const message = userMessage.toLowerCase();
-    
-    if (message.includes('hola') || message.includes('hello')) {
-      console.log('🔄 DebounceWorkerService: Generated greeting response');
-      return '¡Hola! Gracias por contactarnos. ¿En qué puedo ayudarte hoy?';
-    }
-    
-    if (message.includes('precio') || message.includes('costo') || message.includes('price')) {
-      console.log('🔄 DebounceWorkerService: Generated pricing response');
-      return 'Te ayudo con información sobre nuestros precios. ¿Qué tipo de proyecto tienes en mente?';
-    }
-    
-    if (message.includes('servicio') || message.includes('service')) {
-      console.log('🔄 DebounceWorkerService: Generated service response');
-      return 'Ofrecemos servicios de desarrollo web, móvil y consultoría. ¿Qué te interesa más?';
-    }
-    
-    console.log('🔄 DebounceWorkerService: Generated default response');
-    return 'Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.';
-  }
 
   /**
    * Queue a response for sending
    */
-  private async queueResponse(conversation: IConversation, responseText: string, originalMid?: string): Promise<void> {
+  private async queueResponse(conversation: IConversation, responseText: string, originalMids?: string[]): Promise<void> {
     console.log(`📬 DebounceWorkerService: Queuing response for conversation: ${conversation.id}`);
     
     try {
@@ -474,7 +359,7 @@ class DebounceWorkerService {
           timestamp: new Date(),
           aiGenerated: true,
           processed: false,
-          originalMids: originalMid ? [originalMid] : []
+          originalMids: originalMids || []
         }
       });
 
@@ -535,6 +420,7 @@ class DebounceWorkerService {
 }
 
 export default new DebounceWorkerService();
+
 
 
 
