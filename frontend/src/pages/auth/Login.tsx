@@ -26,6 +26,7 @@ const Login = () => {
 
     try {
       const backendUrl = BACKEND_URL;
+      console.log('🔧 [Login] Using backend URL:', backendUrl);
       if (!backendUrl) throw new Error('Backend URL not configured');
 
       const response = await fetch(`${backendUrl}/api/auth/login`, {

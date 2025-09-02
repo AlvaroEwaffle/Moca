@@ -17,12 +17,24 @@ export const getBackendUrl = (): string => {
   // Use environment variable if set, otherwise use appropriate default
   const envBackendUrl = import.meta.env.VITE_BACKEND_URL;
   
+  // Debug logging
+  console.log('🔧 [Backend URL Debug]', {
+    hostname: window.location.hostname,
+    isProduction,
+    envBackendUrl,
+    productionBackendUrl,
+    developmentBackendUrl
+  });
+  
   if (envBackendUrl) {
+    console.log('✅ [Backend URL] Using environment variable:', envBackendUrl);
     return envBackendUrl;
   }
   
   // Fallback based on environment
-  return isProduction ? productionBackendUrl : developmentBackendUrl;
+  const finalUrl = isProduction ? productionBackendUrl : developmentBackendUrl;
+  console.log('✅ [Backend URL] Using fallback:', finalUrl);
+  return finalUrl;
 };
 
 // Export the backend URL

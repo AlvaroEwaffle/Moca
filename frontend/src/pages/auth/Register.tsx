@@ -37,6 +37,7 @@ const Register = () => {
 
     try {
       const backendUrl = BACKEND_URL;
+      console.log('🔧 [Register] Using backend URL:', backendUrl);
       if (!backendUrl) throw new Error('Backend URL not configured');
 
       const response = await fetch(`${backendUrl}/api/auth/register`, {
