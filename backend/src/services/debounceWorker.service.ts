@@ -178,7 +178,7 @@ class DebounceWorkerService {
       const conversationHistory = await this.getConversationHistory(conversation.id);
       
       // Get user context and business information
-      const userContext = await this.getUserContext(conversation.contactId);
+      const userContext = await this.getUserContext(conversation.contactId, conversation.accountId);
       
       // Generate response with full context
       const response = await this.generateContextualResponse(
@@ -209,7 +209,7 @@ class DebounceWorkerService {
   /**
    * Get user context and business information
    */
-  private async getUserContext(contactId: string): Promise<any> {
+  private async getUserContext(contactId: string, accountId: string): Promise<any> {
     try {
       const contact = await Contact.findById(contactId);
       if (!contact) {
@@ -217,15 +217,29 @@ class DebounceWorkerService {
         return {};
       }
 
-      // For now, return basic contact info
-      // In the future, we can link to User model for business info
+      // Get Instagram account settings for agent behavior
+      const instagramAccount = await InstagramAccount.findOne({ accountId, isActive: true });
+      let agentSettings = {};
+      
+      if (instagramAccount && instagramAccount.settings) {
+        agentSettings = {
+          systemPrompt: instagramAccount.settings.systemPrompt,
+          toneOfVoice: instagramAccount.settings.toneOfVoice,
+          keyInformation: instagramAccount.settings.keyInformation,
+          fallbackRules: instagramAccount.settings.fallbackRules
+        };
+        console.log(`✅ DebounceWorkerService: Found agent settings for account: ${instagramAccount.accountName}`);
+      } else {
+        console.log(`⚠️ DebounceWorkerService: No agent settings found for account: ${accountId}`);
+      }
+
       return {
         contactName: contact.name,
         contactEmail: contact.email,
         businessName: contact.businessInfo?.company || 'Business',
         specialization: contact.businessInfo?.sector || 'General',
         preferences: contact.preferences || {},
-        agentBehavior: {}
+        agentBehavior: agentSettings
       };
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error getting user context:`, error);
@@ -260,7 +274,7 @@ class DebounceWorkerService {
         agentBehavior: userContext.agentBehavior
       };
 
-      // Call OpenAI service with full context
+      // Call OpenAI service with full context including agent behavior
       const response = await openaiService.generateInstagramResponse({
         conversationHistory: context.conversationHistory,
         userIntent: 'general_inquiry',
@@ -271,7 +285,8 @@ class DebounceWorkerService {
           sector: userContext.specialization,
           services: ['desarrollo web', 'marketing digital', 'consultoría']
         },
-        language: 'es'
+        language: 'es',
+        agentBehavior: userContext.agentBehavior
       });
       
       return response || "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.";

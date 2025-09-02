@@ -33,11 +33,18 @@ export async function generateInstagramResponse(context: {
     services: string[];
   };
   language?: string;
+  agentBehavior?: {
+    systemPrompt?: string;
+    toneOfVoice?: string;
+    keyInformation?: string;
+    fallbackRules?: string[];
+  };
 }): Promise<string> {
   try {
     console.log('🤖 Generating Instagram DM response with AI');
 
-    const systemPrompt = `Eres un asistente virtual profesional y amigable para una empresa de servicios digitales. 
+    // Use custom system prompt if provided, otherwise use default
+    const systemPrompt = context.agentBehavior?.systemPrompt || `Eres un asistente virtual profesional y amigable para una empresa de servicios digitales. 
     
 Tu objetivo es:
 - Proporcionar respuestas útiles y profesionales
@@ -58,6 +65,18 @@ Instrucciones:
 - Mantén el tono profesional pero cercano
 - Usa emojis ocasionalmente para hacer la conversación más amigable`;
 
+    console.log(`🤖 Using ${context.agentBehavior?.systemPrompt ? 'custom' : 'default'} system prompt`);
+
+    // Build key information section
+    const keyInfoSection = context.agentBehavior?.keyInformation 
+      ? `\nInformación clave del negocio:\n${context.agentBehavior.keyInformation}\n`
+      : '';
+
+    // Build tone of voice instruction
+    const toneInstruction = context.agentBehavior?.toneOfVoice 
+      ? `\nTono de voz: ${context.agentBehavior.toneOfVoice}\n`
+      : '';
+
     const userPrompt = `Por favor, genera una respuesta natural para este mensaje del cliente:
 
 Contexto de la conversación:
@@ -71,7 +90,7 @@ Información adicional:
 - Sentimiento: ${context.userSentiment || 'neutral'}
 - Empresa del cliente: ${context.businessContext?.company || 'No especificada'}
 - Sector: ${context.businessContext?.sector || 'No especificado'}
-- Servicios de interés: ${context.businessContext?.services?.join(', ') || 'No especificados'}
+- Servicios de interés: ${context.businessContext?.services?.join(', ') || 'No especificados'}${keyInfoSection}${toneInstruction}
 
 Genera una respuesta natural, útil y profesional que:
 1. Responda directamente a la consulta del cliente
@@ -79,6 +98,7 @@ Genera una respuesta natural, útil y profesional que:
 3. Mantenga un tono profesional pero amigable
 4. No sea demasiado larga (máximo 2-3 frases)
 5. Use el idioma ${context.language || 'español'}
+6. Incluya información relevante del negocio cuando sea apropiado
 
 Respuesta:`;
 
