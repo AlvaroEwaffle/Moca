@@ -36,6 +36,8 @@ const WebhookConfigSchema = new Schema({
 
 export interface IInstagramAccount extends Document {
   id: string;
+  userId: string; // Moca user ID (links to User model)
+  userEmail: string; // User email for quick access
   accountId: string; // Instagram account ID
   accountName: string; // Instagram username
   accessToken: string; // Instagram Graph API token
@@ -83,6 +85,8 @@ export interface IInstagramAccount extends Document {
 }
 
 const InstagramAccountSchema = new Schema<IInstagramAccount>({
+  userId: { type: String, required: true },
+  userEmail: { type: String, required: true },
   accountId: { type: String, required: true, unique: true },
   accountName: { type: String, required: true },
   accessToken: { type: String, required: true },
@@ -109,6 +113,8 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
 });
 
 // Indexes for performance
+InstagramAccountSchema.index({ userId: 1 });
+InstagramAccountSchema.index({ userEmail: 1 });
 InstagramAccountSchema.index({ accountName: 1 });
 InstagramAccountSchema.index({ isActive: 1 });
 InstagramAccountSchema.index({ 'metadata.lastSync': 1 });

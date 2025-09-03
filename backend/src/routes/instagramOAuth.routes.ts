@@ -1,14 +1,17 @@
 import express from 'express';
 import InstagramAccount from '../models/instagramAccount.model';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
 // Instagram OAuth callback
-router.post('/callback', async (req, res) => {
+router.post('/callback', authenticateToken, async (req, res) => {
   try {
     const { code, redirectUri, businessInfo, agentBehavior } = req.body;
     
     console.log('🔧 [OAuth Callback] Received callback request:', {
+      userId: req.user?.userId,
+      userEmail: req.user?.email,
       code: code ? `${code.substring(0, 10)}...` : 'none',
       redirectUri,
       businessInfo: businessInfo ? 'present' : 'missing',
@@ -125,8 +128,11 @@ router.post('/callback', async (req, res) => {
     const profileData = await profileResponse.json();
     console.log('✅ [OAuth Callback] Instagram profile fetched successfully:', profileData);
 
-    // Check if account already exists
-    const existingAccount = await InstagramAccount.findOne({ accountId: user_id });
+    // Check if account already exists for this user
+    const existingAccount = await InstagramAccount.findOne({ 
+      accountId: user_id,
+      userId: req.user!.userId 
+    });
     if (existingAccount) {
       // Update existing account
       existingAccount.accessToken = finalAccessToken;
@@ -161,6 +167,8 @@ router.post('/callback', async (req, res) => {
 
     // Create new Instagram account
     const newAccount = new InstagramAccount({
+      userId: req.user!.userId,
+      userEmail: req.user!.email,
       accountId: user_id,
       accountName: profileData.username,
       accessToken: finalAccessToken,
@@ -190,7 +198,7 @@ router.post('/callback', async (req, res) => {
 
     await newAccount.save();
 
-    console.log(`✅ Created new Instagram account: ${user_id}`);
+    console.log(`✅ Created new Instagram account for user ${req.user!.email}: ${user_id}`);
 
     res.status(201).json({
       success: true,

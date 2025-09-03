@@ -6,6 +6,7 @@ import Conversation from '../models/conversation.model';
 import Message from '../models/message.model';
 import OutboundQueue from '../models/outboundQueue.model';
 import InstagramAccount from '../models/instagramAccount.model';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 const webhookService = new InstagramWebhookService();
@@ -388,7 +389,7 @@ router.post('/queue/retry', async (req, res) => {
 // ===== INSTAGRAM ACCOUNT MANAGEMENT =====
 
 // Create Instagram account
-router.post('/accounts', async (req, res) => {
+router.post('/accounts', authenticateToken, async (req, res) => {
   try {
     const { accountId, accountName, accessToken, refreshToken, rateLimits, settings } = req.body;
 
@@ -400,17 +401,22 @@ router.post('/accounts', async (req, res) => {
       });
     }
 
-    // Check if account already exists
-    const existingAccount = await InstagramAccount.findOne({ accountId });
+    // Check if account already exists for this user
+    const existingAccount = await InstagramAccount.findOne({ 
+      accountId,
+      userId: req.user!.userId 
+    });
     if (existingAccount) {
       return res.status(409).json({
         success: false,
-        error: 'Instagram account already exists'
+        error: 'Instagram account already exists for this user'
       });
     }
 
     // Create new Instagram account
     const newAccount = new InstagramAccount({
+      userId: req.user!.userId,
+      userEmail: req.user!.email,
       accountId,
       accountName: accountName || `Account ${accountId}`,
       accessToken,
@@ -464,9 +470,9 @@ router.post('/accounts', async (req, res) => {
 });
 
 // Get all Instagram accounts
-router.get('/accounts', async (req, res) => {
+router.get('/accounts', authenticateToken, async (req, res) => {
   try {
-    const accounts = await InstagramAccount.find()
+    const accounts = await InstagramAccount.find({ userId: req.user!.userId })
       .select('-accessToken -refreshToken -__v')
       .sort({ createdAt: -1 });
 
@@ -488,11 +494,14 @@ router.get('/accounts', async (req, res) => {
 });
 
 // Get specific Instagram account
-router.get('/accounts/:accountId', async (req, res) => {
+router.get('/accounts/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
 
-    const account = await InstagramAccount.findOne({ accountId })
+    const account = await InstagramAccount.findOne({ 
+      accountId,
+      userId: req.user!.userId 
+    })
       .select('-accessToken -refreshToken -__v');
 
     if (!account) {

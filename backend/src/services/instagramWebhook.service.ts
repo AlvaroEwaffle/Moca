@@ -66,6 +66,7 @@ interface MetaWebhookPayload {
 interface InstagramMessage {
   mid: string;
   psid: string;
+  recipient?: { id: string };
   text?: string;
   attachments?: Array<{
     type: string;
@@ -370,8 +371,8 @@ export class InstagramWebhookService {
         return;
       }
 
-      // Get or create Instagram account
-      const account = await this.getOrCreateInstagramAccount();
+          // Get or create Instagram account using recipient ID
+    const account = await this.getOrCreateInstagramAccount(messageData.recipient?.id);
       if (!account) {
         console.error('❌ No Instagram account found for webhook processing');
         return;
@@ -421,17 +422,33 @@ export class InstagramWebhookService {
   /**
    * Get or create Instagram account for webhook processing
    */
-  private async getOrCreateInstagramAccount(): Promise<any> {
+  private async getOrCreateInstagramAccount(recipientId?: string): Promise<any> {
     try {
-      // For now, we'll use the first active account
-      // In a multi-account setup, you'd determine which account based on recipient ID
-      let account = await InstagramAccount.findOne({ isActive: true });
+      // Find account by recipient ID (Instagram account ID)
+      // This ensures we get the correct user's account
+      let account = null;
+      
+      if (recipientId) {
+        account = await InstagramAccount.findOne({ 
+          accountId: recipientId,
+          isActive: true 
+        });
+        console.log(`🔧 [Webhook] Looking for account with recipientId: ${recipientId}`);
+      }
+      
+      // Fallback: use the first active account if no specific recipient
+      if (!account) {
+        account = await InstagramAccount.findOne({ isActive: true });
+        console.log('⚠️ [Webhook] No specific account found, using first active account');
+      }
 
       if (!account) {
         console.warn('⚠️ No active Instagram account found, creating default account');
         
         // Create a default account for development/testing
         account = new InstagramAccount({
+          userId: 'default_user',
+          userEmail: 'default@example.com',
           accountId: 'default',
           accountName: 'Default Account',
           accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || 'dummy_token',
@@ -446,6 +463,7 @@ export class InstagramWebhookService {
         console.log('✅ Created default Instagram account');
       }
 
+      console.log(`✅ [Webhook] Found account: ${account.accountName} (User: ${account.userEmail})`);
       return account;
     } catch (error) {
       console.error('❌ Error getting/creating Instagram account:', error);
