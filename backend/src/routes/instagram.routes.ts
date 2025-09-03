@@ -146,7 +146,7 @@ router.get('/contacts/:id', async (req, res) => {
 });
 
 // Get all conversations
-router.get('/conversations', async (req, res) => {
+router.get('/conversations', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 20, status, priority, assignedAgent } = req.query;
     
@@ -154,6 +154,11 @@ router.get('/conversations', async (req, res) => {
     if (status) query.status = status;
     if (priority) query['settings.priority'] = priority;
     if (assignedAgent) query['settings.assignedAgent'] = assignedAgent;
+
+    // Filter by user's Instagram accounts
+    const userAccounts = await InstagramAccount.find({ userId: req.user!.userId }).select('accountId');
+    const userAccountIds = userAccounts.map(acc => acc.accountId);
+    query.accountId = { $in: userAccountIds };
 
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
     
