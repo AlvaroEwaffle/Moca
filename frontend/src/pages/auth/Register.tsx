@@ -50,7 +50,12 @@ const Register = () => {
           email: formData.email,
           password: formData.password,
           businessName: formData.businessName,
-          phone: formData.phone
+          phone: formData.phone,
+          agentSettings: {
+            systemPrompt: 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.',
+            toneOfVoice: 'professional',
+            keyInformation: ''
+          }
         }),
       });
 

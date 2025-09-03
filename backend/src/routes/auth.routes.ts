@@ -2,13 +2,14 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
 // Register endpoint
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, businessName, phone } = req.body;
+    const { name, email, password, businessName, phone, agentSettings } = req.body;
 
     // Validate required fields
     if (!name || !email || !password || !businessName || !phone) {
@@ -36,7 +37,12 @@ router.post('/register', async (req, res) => {
       email,
       password: hashedPassword,
       businessName,
-      phone
+      phone,
+      agentSettings: {
+        systemPrompt: agentSettings?.systemPrompt || 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.',
+        toneOfVoice: agentSettings?.toneOfVoice || 'professional',
+        keyInformation: agentSettings?.keyInformation || ''
+      }
     });
 
     await newUser.save();
@@ -153,6 +159,55 @@ router.post('/login', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Login failed'
+    });
+  }
+});
+
+// Update user agent settings
+router.put('/update-agent-settings', authenticateToken, async (req, res) => {
+  try {
+    const { agentSettings } = req.body;
+    const userId = req.user!.userId;
+
+    if (!agentSettings) {
+      return res.status(400).json({
+        success: false,
+        error: 'Agent settings are required'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Update agent settings
+    user.agentSettings = {
+      systemPrompt: agentSettings.systemPrompt || user.agentSettings.systemPrompt,
+      toneOfVoice: agentSettings.toneOfVoice || user.agentSettings.toneOfVoice,
+      keyInformation: agentSettings.keyInformation || user.agentSettings.keyInformation
+    };
+
+    await user.save();
+
+    console.log(`✅ Updated agent settings for user: ${user.email}`);
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Agent settings updated successfully',
+        agentSettings: user.agentSettings
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating agent settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update agent settings'
     });
   }
 });

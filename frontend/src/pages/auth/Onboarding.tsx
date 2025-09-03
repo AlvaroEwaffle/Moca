@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { BACKEND_URL } from "@/utils/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,6 +91,25 @@ const Onboarding = () => {
       // Store business info and agent behavior in localStorage
       localStorage.setItem('businessInfo', JSON.stringify(formData.businessInfo));
       localStorage.setItem('agentBehavior', JSON.stringify(formData.agentBehavior));
+
+      // Update user's agent settings in backend
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/auth/update-agent-settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          agentSettings: formData.agentBehavior
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ Agent settings updated in user profile');
+      } else {
+        console.warn('⚠️ Failed to update agent settings in user profile');
+      }
 
       // Redirect to Instagram OAuth flow
       navigate('/instagram-auth');

@@ -1,5 +1,6 @@
 import express from 'express';
 import InstagramAccount from '../models/instagramAccount.model';
+import User from '../models/user.model';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
@@ -20,6 +21,10 @@ router.post('/callback', authenticateToken, async (req, res) => {
     
     console.log('🔧 [OAuth Callback] Detailed agentBehavior:', JSON.stringify(agentBehavior, null, 2));
     console.log('🔧 [OAuth Callback] Detailed businessInfo:', JSON.stringify(businessInfo, null, 2));
+    
+    // Get user's agent settings as fallback
+    const user = await User.findById(req.user!.userId);
+    console.log('🔧 [OAuth Callback] User agent settings:', JSON.stringify(user?.agentSettings, null, 2));
 
     if (!code) {
       console.error('❌ [OAuth Callback] No authorization code provided');
@@ -144,11 +149,11 @@ router.post('/callback', authenticateToken, async (req, res) => {
       existingAccount.isActive = true;
       
       // Update settings with onboarding data if provided
-      if (agentBehavior) {
+      if (agentBehavior || user?.agentSettings) {
         console.log(`🔧 [OAuth Callback] Updating existing account with agentBehavior:`, JSON.stringify(agentBehavior, null, 2));
-        existingAccount.settings.systemPrompt = agentBehavior.systemPrompt || existingAccount.settings.systemPrompt;
-        existingAccount.settings.toneOfVoice = agentBehavior.toneOfVoice || existingAccount.settings.toneOfVoice;
-        existingAccount.settings.keyInformation = agentBehavior.keyInformation || existingAccount.settings.keyInformation;
+        existingAccount.settings.systemPrompt = agentBehavior?.systemPrompt || user?.agentSettings?.systemPrompt || existingAccount.settings.systemPrompt;
+        existingAccount.settings.toneOfVoice = agentBehavior?.toneOfVoice || user?.agentSettings?.toneOfVoice || existingAccount.settings.toneOfVoice;
+        existingAccount.settings.keyInformation = agentBehavior?.keyInformation || user?.agentSettings?.keyInformation || existingAccount.settings.keyInformation;
         console.log(`🔧 [OAuth Callback] Updated settings:`, JSON.stringify(existingAccount.settings, null, 2));
       }
       
@@ -187,9 +192,9 @@ router.post('/callback', authenticateToken, async (req, res) => {
       settings: {
         autoRespond: true,
         aiEnabled: true,
-        systemPrompt: agentBehavior?.systemPrompt || 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.',
-        toneOfVoice: agentBehavior?.toneOfVoice || 'professional',
-        keyInformation: agentBehavior?.keyInformation || '',
+        systemPrompt: agentBehavior?.systemPrompt || user?.agentSettings?.systemPrompt || 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.',
+        toneOfVoice: agentBehavior?.toneOfVoice || user?.agentSettings?.toneOfVoice || 'professional',
+        keyInformation: agentBehavior?.keyInformation || user?.agentSettings?.keyInformation || '',
         fallbackRules: [
           'Thank you for your message! We\'ll get back to you soon.',
           'Thanks for reaching out! Our team will respond shortly.'

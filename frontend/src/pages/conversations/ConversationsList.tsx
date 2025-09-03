@@ -57,7 +57,32 @@ const ConversationsList = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setConversations(data.data?.conversations || []);
+        console.log('📥 Conversations data:', data);
+        
+        // Transform the data to match our interface
+        const transformedConversations = (data.data?.conversations || []).map((conv: any) => ({
+          id: conv._id || conv.id,
+          contactId: conv.contactId,
+          accountId: conv.accountId,
+          status: conv.status || 'open',
+          lastMessage: {
+            text: conv.lastMessage?.text || 'No messages yet',
+            timestamp: conv.lastMessage?.timestamp || conv.timestamps?.lastActivity || new Date(),
+            sender: conv.lastMessage?.sender || 'user'
+          },
+          contact: {
+            name: conv.contactId?.name || 'Unknown Contact',
+            username: conv.contactId?.psid || 'unknown',
+            profilePicture: conv.contactId?.profilePicture
+          },
+          messageCount: conv.messageCount || 0,
+          createdAt: conv.createdAt || new Date(),
+          updatedAt: conv.updatedAt || conv.timestamps?.lastActivity || new Date()
+        }));
+        
+        setConversations(transformedConversations);
+      } else {
+        console.error('❌ Failed to fetch conversations:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error fetching conversations:', error);
@@ -72,9 +97,9 @@ const ConversationsList = () => {
     // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(conv => 
-        conv.contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        conv.contact.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        conv.lastMessage.text.toLowerCase().includes(searchTerm.toLowerCase())
+        conv.contact?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        conv.contact?.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        conv.lastMessage?.text?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -93,7 +118,7 @@ const ConversationsList = () => {
         case "most_messages":
           return b.messageCount - a.messageCount;
         case "name":
-          return a.contact.name.localeCompare(b.contact.name);
+          return (a.contact?.name || '').localeCompare(b.contact?.name || '');
         default:
           return 0;
       }
@@ -233,16 +258,16 @@ const ConversationsList = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2 mb-1">
                           <h3 className="font-medium text-gray-900 truncate">
-                            {conversation.contact.name}
+                            {conversation.contact?.name || 'Unknown Contact'}
                           </h3>
                           <span className="text-gray-500 text-sm">
-                            @{conversation.contact.username}
+                            @{conversation.contact?.username || 'unknown'}
                           </span>
                           {getStatusBadge(conversation.status)}
                         </div>
                         
                         <p className="text-gray-600 text-sm mb-2">
-                          {truncateText(conversation.lastMessage.text)}
+                          {truncateText(conversation.lastMessage?.text || 'No message')}
                         </p>
                         
                         <div className="flex items-center space-x-4 text-xs text-gray-500">
@@ -252,7 +277,7 @@ const ConversationsList = () => {
                           </div>
                           <div className="flex items-center space-x-1">
                             <Clock className="w-3 h-3" />
-                            <span>{formatTimeAgo(conversation.lastMessage.timestamp)}</span>
+                            <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
                           </div>
                         </div>
                       </div>
@@ -260,7 +285,7 @@ const ConversationsList = () => {
                     
                     <div className="text-right">
                       <div className="text-xs text-gray-500 mb-1">
-                        {conversation.lastMessage.sender === 'bot' ? 'Bot' : 'User'}
+                        {conversation.lastMessage?.sender === 'bot' ? 'Bot' : 'User'}
                       </div>
                       <div className="text-xs text-gray-400">
                         {formatTimeAgo(conversation.updatedAt)}

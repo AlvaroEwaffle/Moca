@@ -20,6 +20,11 @@ export interface IUser extends Document {
       push: boolean;
     };
   };
+  agentSettings: {
+    systemPrompt: string;
+    toneOfVoice: 'professional' | 'friendly' | 'casual';
+    keyInformation: string;
+  };
   metadata: {
     createdAt: Date;
     updatedAt: Date;
@@ -45,6 +50,11 @@ const UserSchema = new Schema<IUser>({
       email: { type: Boolean, default: true },
       push: { type: Boolean, default: true }
     }
+  },
+  agentSettings: {
+    systemPrompt: { type: String, default: 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.' },
+    toneOfVoice: { type: String, enum: ['professional', 'friendly', 'casual'], default: 'professional' },
+    keyInformation: { type: String, default: '' }
   },
   metadata: {
     createdAt: { type: Date, default: Date.now },
