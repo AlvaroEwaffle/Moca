@@ -108,7 +108,7 @@ Respuesta:`;
     ];
 
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4',
+      model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
       messages,
       max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '150'),
       temperature: 0.7,
@@ -209,7 +209,7 @@ Responde con este formato JSON:
     ];
 
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4',
+      model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
       messages,
       max_tokens: 200,
       temperature: 0.3
@@ -342,7 +342,7 @@ export async function generateSession(input: any) {
     ]
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-3.5-turbo',
       messages,
     })
 
@@ -508,7 +508,7 @@ La estructura debe ser exactamente la siguiente (rellena todos los campos):
   ];
 
   const resp = await openai.chat.completions.create({
-    model: 'gpt-4',
+    model: 'gpt-3.5-turbo',
     messages
   });
 
