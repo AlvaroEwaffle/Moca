@@ -70,6 +70,11 @@ const Register = () => {
       localStorage.setItem('refreshToken', data.data.tokens.refreshToken);
       localStorage.setItem('userData', JSON.stringify(data.data.user));
 
+      // Clear any previous onboarding data
+      localStorage.removeItem('businessInfo');
+      localStorage.removeItem('agentBehavior');
+      console.log('🧹 Cleared previous onboarding data from localStorage');
+
       // Redirect to onboarding
       navigate('/onboarding');
     } catch (err) {

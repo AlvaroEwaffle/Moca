@@ -48,8 +48,13 @@ const Login = () => {
       localStorage.setItem('refreshToken', data.data.tokens.refreshToken);
       localStorage.setItem('userData', JSON.stringify(data.data.user));
 
+      // Clear any previous onboarding data (in case user was in middle of onboarding)
+      localStorage.removeItem('businessInfo');
+      localStorage.removeItem('agentBehavior');
+      console.log('🧹 Cleared previous onboarding data from localStorage');
+
       // Redirect to dashboard
-              navigate('/app/dashboard');
+      navigate('/app/dashboard');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed';
       setError(errorMessage);

@@ -88,9 +88,15 @@ const Onboarding = () => {
   const handleSubmit = async () => {
     setLoading(true);
     try {
+      // Clear any previous data first
+      localStorage.removeItem('businessInfo');
+      localStorage.removeItem('agentBehavior');
+      
       // Store business info and agent behavior in localStorage
       localStorage.setItem('businessInfo', JSON.stringify(formData.businessInfo));
       localStorage.setItem('agentBehavior', JSON.stringify(formData.agentBehavior));
+      
+      console.log('🔧 [Onboarding] Storing fresh agent behavior:', formData.agentBehavior);
 
       // Update user's agent settings in backend
       const backendUrl = BACKEND_URL;
