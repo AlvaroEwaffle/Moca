@@ -17,6 +17,9 @@ router.post('/callback', authenticateToken, async (req, res) => {
       businessInfo: businessInfo ? 'present' : 'missing',
       agentBehavior: agentBehavior ? 'present' : 'missing'
     });
+    
+    console.log('🔧 [OAuth Callback] Detailed agentBehavior:', JSON.stringify(agentBehavior, null, 2));
+    console.log('🔧 [OAuth Callback] Detailed businessInfo:', JSON.stringify(businessInfo, null, 2));
 
     if (!code) {
       console.error('❌ [OAuth Callback] No authorization code provided');
@@ -142,9 +145,11 @@ router.post('/callback', authenticateToken, async (req, res) => {
       
       // Update settings with onboarding data if provided
       if (agentBehavior) {
+        console.log(`🔧 [OAuth Callback] Updating existing account with agentBehavior:`, JSON.stringify(agentBehavior, null, 2));
         existingAccount.settings.systemPrompt = agentBehavior.systemPrompt || existingAccount.settings.systemPrompt;
         existingAccount.settings.toneOfVoice = agentBehavior.toneOfVoice || existingAccount.settings.toneOfVoice;
         existingAccount.settings.keyInformation = agentBehavior.keyInformation || existingAccount.settings.keyInformation;
+        console.log(`🔧 [OAuth Callback] Updated settings:`, JSON.stringify(existingAccount.settings, null, 2));
       }
       
       await existingAccount.save();
@@ -199,6 +204,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
     await newAccount.save();
 
     console.log(`✅ Created new Instagram account for user ${req.user!.email}: ${user_id}`);
+    console.log(`🔧 [OAuth Callback] Saved account settings:`, JSON.stringify(newAccount.settings, null, 2));
 
     res.status(201).json({
       success: true,
