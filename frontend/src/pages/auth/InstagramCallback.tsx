@@ -48,11 +48,28 @@ const InstagramCallback = () => {
       console.log('🔧 [Instagram Callback] Business info:', businessInfo);
       console.log('🔧 [Instagram Callback] Agent behavior:', agentBehavior);
 
+      // Check if access token exists and is valid
+      const accessToken = localStorage.getItem('accessToken');
+      console.log('🔧 [Instagram Callback] Access token exists:', !!accessToken);
+      console.log('🔧 [Instagram Callback] Access token preview:', accessToken ? `${accessToken.substring(0, 20)}...` : 'none');
+
+      if (!accessToken) {
+        throw new Error('No access token found. Please login again.');
+      }
+
+      // Check if token looks valid (JWT should have 3 parts)
+      const tokenParts = accessToken.split('.');
+      if (tokenParts.length !== 3) {
+        console.error('❌ [Instagram Callback] Invalid token format, clearing localStorage');
+        localStorage.clear();
+        throw new Error('Invalid token format. Please login again.');
+      }
+
       const response = await fetch(`${backendUrl}/api/instagram/oauth/callback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           code: authCode,

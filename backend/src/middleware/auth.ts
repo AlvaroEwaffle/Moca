@@ -17,6 +17,9 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
+  console.log('🔧 [Auth Middleware] Received auth header:', authHeader ? `${authHeader.substring(0, 20)}...` : 'none');
+  console.log('🔧 [Auth Middleware] Extracted token:', token ? `${token.substring(0, 20)}...` : 'none');
+
   if (!token) {
     console.log('❌ [Auth Middleware] No access token provided');
     return res.status(401).json({ 
@@ -25,9 +28,24 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     });
   }
 
+  // Check if token looks like a valid JWT (has 3 parts separated by dots)
+  const tokenParts = token.split('.');
+  if (tokenParts.length !== 3) {
+    console.log('❌ [Auth Middleware] Invalid token format - not a valid JWT');
+    return res.status(403).json({ 
+      success: false,
+      error: 'Invalid token format' 
+    });
+  }
+
   jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret', (err: any, user: any) => {
     if (err) {
       console.log('❌ [Auth Middleware] Invalid token:', err.message);
+      console.log('❌ [Auth Middleware] Token error details:', {
+        name: err.name,
+        message: err.message,
+        expiredAt: err.expiredAt
+      });
       return res.status(403).json({ 
         success: false,
         error: 'Invalid or expired token' 
