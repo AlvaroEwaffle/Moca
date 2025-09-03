@@ -28,6 +28,11 @@ import InstagramAccounts from "./pages/system/InstagramAccounts";
 import InstagramAuth from "./pages/auth/InstagramAuth";
 import InstagramCallback from "./pages/auth/InstagramCallback";
 
+// Legal Pages
+import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
+import TermsOfService from "./pages/legal/TermsOfService";
+import DataDeletion from "./pages/legal/DataDeletion";
+
 
 
 const queryClient = new QueryClient();
@@ -52,6 +57,11 @@ function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/instagram-auth" element={<InstagramAuth />} />
             <Route path="/instagram-callback" element={<InstagramCallback />} />
+            
+            {/* Legal pages */}
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route path="/data-deletion" element={<DataDeletion />} />
             
             {/* Protected routes */}
             <Route path="/app" element={<MainLayout />}>
