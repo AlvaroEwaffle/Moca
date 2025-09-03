@@ -60,13 +60,52 @@ router.post('/callback', async (req, res) => {
     const tokenData = await tokenResponse.json();
     const { access_token, user_id } = tokenData;
     
-    console.log('✅ [OAuth Callback] Token exchange successful:', {
+    console.log('✅ [OAuth Callback] Short-lived token exchange successful:', {
       user_id,
       access_token: access_token ? `${access_token.substring(0, 10)}...` : 'none'
     });
 
+    // Exchange short-lived token for long-lived token (60 days)
+    const longTokenParams = {
+      grant_type: 'ig_exchange_token',
+      client_secret: process.env.INSTAGRAM_CLIENT_SECRET || '',
+      access_token: access_token
+    };
+    
+    console.log('🔧 [OAuth Callback] Long-lived token exchange params:', {
+      grant_type: longTokenParams.grant_type,
+      client_secret: longTokenParams.client_secret ? `${longTokenParams.client_secret.substring(0, 10)}...` : 'missing',
+      access_token: longTokenParams.access_token ? `${longTokenParams.access_token.substring(0, 10)}...` : 'missing'
+    });
+    
+    const longTokenResponse = await fetch('https://graph.instagram.com/access_token', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(longTokenParams)
+    });
+
+    let finalAccessToken = access_token;
+    let tokenExpiry = new Date(Date.now() + 2 * 60 * 60 * 1000); // Default 2 hours
+
+    if (longTokenResponse.ok) {
+      const longTokenData = await longTokenResponse.json();
+      finalAccessToken = longTokenData.access_token;
+      tokenExpiry = new Date(Date.now() + (longTokenData.expires_in * 1000)); // Convert seconds to milliseconds
+      
+      console.log('✅ [OAuth Callback] Long-lived token exchange successful:', {
+        expires_in: longTokenData.expires_in,
+        expires_in_days: Math.round(longTokenData.expires_in / (24 * 60 * 60)),
+        token_expiry: tokenExpiry.toISOString()
+      });
+    } else {
+      const errorData = await longTokenResponse.json().catch(() => ({}));
+      console.warn('⚠️ [OAuth Callback] Long-lived token exchange failed, using short-lived token:', errorData);
+    }
+
     // Get user profile information using Instagram Basic Display API
-    const profileUrl = `https://graph.instagram.com/me?fields=id,username&access_token=${access_token}`;
+    const profileUrl = `https://graph.instagram.com/me?fields=id,username&access_token=${finalAccessToken}`;
     console.log('🔧 [OAuth Callback] Fetching Instagram profile from:', profileUrl);
     
     const profileResponse = await fetch(profileUrl);
@@ -91,9 +130,9 @@ router.post('/callback', async (req, res) => {
     const existingAccount = await InstagramAccount.findOne({ accountId: user_id });
     if (existingAccount) {
       // Update existing account
-      existingAccount.accessToken = access_token;
+      existingAccount.accessToken = finalAccessToken;
       existingAccount.accountName = profileData.username;
-      existingAccount.tokenExpiry = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
+      existingAccount.tokenExpiry = tokenExpiry;
       existingAccount.isActive = true;
       
       // Update settings with onboarding data if provided
@@ -125,8 +164,8 @@ router.post('/callback', async (req, res) => {
     const newAccount = new InstagramAccount({
       accountId: user_id,
       accountName: profileData.username,
-      accessToken: access_token,
-      tokenExpiry: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
+      accessToken: finalAccessToken,
+      tokenExpiry: tokenExpiry,
       isActive: true,
       rateLimits: {
         messagesPerSecond: 3,
