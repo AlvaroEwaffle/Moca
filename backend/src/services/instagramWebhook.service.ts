@@ -751,15 +751,15 @@ export class InstagramWebhookService {
    */
   private async identifyAccountByPSID(psid: string, recipientId?: string, isBotMessage?: boolean): Promise<any> {
     try {
-      console.log(`🔍 [PSID Matching] Looking for account with PSID: ${psid}, recipientId: ${recipientId}`);
+      console.log(`🔍 [Account Identification] Starting account lookup - Sender PSID: ${psid}, Recipient ID: ${recipientId}`);
       
       // Get all active Instagram accounts
       const allAccounts = await InstagramAccount.find({ isActive: true });
-      console.log(`🔍 [PSID Matching] Found ${allAccounts.length} active accounts`);
-      console.log(`🔍 [PSID Matching] Account details:`, allAccounts.map(acc => ({ 
+      console.log(`🔍 [Account Identification] Found ${allAccounts.length} active accounts in database`);
+      console.log(`🔍 [Account Identification] Account details:`, allAccounts.map(acc => ({ 
         accountName: acc.accountName, 
         accountId: acc.accountId, 
-        pageScopedId: acc.pageScopedId,
+        pageScopedId: acc.pageScopedId, 
         userEmail: acc.userEmail 
       })));
       
@@ -780,7 +780,7 @@ export class InstagramWebhookService {
       } else {
         // User message - first try to match by stored pageScopedId, then fetch if needed
         if (recipientId) {
-          console.log(`🔍 [PSID Matching] User message - looking for recipient account: ${recipientId}`);
+          console.log(`🔍 [Account Identification] User message - looking for which account received this message: ${recipientId}`);
           
           // First, try to match against stored pageScopedId
           for (const account of allAccounts) {
@@ -791,7 +791,7 @@ export class InstagramWebhookService {
           }
           
           // If not found in cache, fetch Business Account ID from Instagram API
-          console.log(`🔍 [PSID Matching] Page-Scoped ID not in cache, fetching Business Account ID for: ${recipientId}`);
+          console.log(`🔍 [Account Identification] Page-Scoped ID not in cache, fetching Business Account ID for: ${recipientId}`);
           
           try {
             const businessAccountId = await this.fetchBusinessAccountIdFromPageScopedId(recipientId);
