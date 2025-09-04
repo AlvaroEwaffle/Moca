@@ -138,7 +138,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
 
     // Check if account already exists for this user
     const existingAccount = await InstagramAccount.findOne({ 
-      accountId: user_id,
+      accountId: profileData.id, // Use the Instagram Business Account ID from profile
       userId: req.user!.userId 
     });
     if (existingAccount) {
@@ -159,7 +159,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       
       await existingAccount.save();
 
-      console.log(`✅ Updated existing Instagram account: ${user_id}`);
+      console.log(`✅ Updated existing Instagram account: ${profileData.id}`);
 
       return res.json({
         success: true,
@@ -179,7 +179,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
     const newAccount = new InstagramAccount({
       userId: req.user!.userId,
       userEmail: req.user!.email,
-      accountId: user_id,
+      accountId: profileData.id, // Use the Instagram Business Account ID from profile
       accountName: profileData.username,
       accessToken: finalAccessToken,
       tokenExpiry: tokenExpiry,
@@ -208,7 +208,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
 
     await newAccount.save();
 
-    console.log(`✅ Created new Instagram account for user ${req.user!.email}: ${user_id}`);
+    console.log(`✅ Created new Instagram account for user ${req.user!.email}: ${profileData.id}`);
     console.log(`🔧 [OAuth Callback] Saved account settings:`, JSON.stringify(newAccount.settings, null, 2));
 
     res.status(201).json({
