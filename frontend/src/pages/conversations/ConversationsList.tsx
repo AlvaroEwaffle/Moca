@@ -272,61 +272,40 @@ const ConversationsList = () => {
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h3 className="font-medium text-gray-900 truncate">
-                            {conversation.contact?.name || 'Unknown Contact'}
-                          </h3>
+                        <div className="flex items-center space-x-2 mb-2">
                           <span className="text-gray-500 text-sm">
                             @{conversation.contact?.username || 'unknown'}
                           </span>
                           {getStatusBadge(conversation.status)}
                         </div>
                         
-                        <p className="text-gray-600 text-sm mb-2">
-                          {truncateText(conversation.lastMessage?.text || 'No message')}
-                        </p>
-                        
-                        <div className="flex items-center space-x-4 text-xs text-gray-500">
-                          <div className="flex items-center space-x-1">
-                            <MessageCircle className="w-3 h-3" />
-                            <span>{conversation.messageCount} messages</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <Clock className="w-3 h-3" />
-                            <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
-                          </div>
+                        <div className="flex items-center space-x-1 text-xs text-gray-500">
+                          <MessageCircle className="w-3 h-3" />
+                          <span>{conversation.messageCount} messages</span>
+                          <span className="mx-1">•</span>
+                          <Clock className="w-3 h-3" />
+                          <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex flex-col items-end space-y-3">
-                      <div className="text-right">
-                        <div className="text-xs text-gray-500 mb-1">
-                          {conversation.lastMessage?.sender === 'bot' ? 'Bot' : 'User'}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {formatTimeAgo(conversation.updatedAt)}
-                        </div>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/app/conversations/${conversation.id}`)}
+                        className="flex items-center space-x-1"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>Details</span>
+                      </Button>
                       
-                      <div className="flex items-center space-x-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigate(`/app/conversations/${conversation.id}`)}
-                          className="flex items-center space-x-1"
-                        >
-                          <Eye className="w-4 h-4" />
-                          <span>Details</span>
-                        </Button>
-                        
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm text-gray-600">Agent</span>
-                          <Switch
-                            checked={conversation.agentEnabled}
-                            onCheckedChange={(checked) => handleAgentToggle(conversation.id, checked)}
-                          />
-                        </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-600">Agent</span>
+                        <Switch
+                          checked={conversation.agentEnabled}
+                          onCheckedChange={(checked) => handleAgentToggle(conversation.id, checked)}
+                        />
                       </div>
                     </div>
                   </div>
