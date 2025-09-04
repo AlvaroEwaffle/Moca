@@ -319,6 +319,7 @@ export class InstagramWebhookService {
     try {
       console.log(`📨 Processing message from PSID: ${messageData.psid}, MID: ${messageData.mid}`);
       console.log(`🔧 [Webhook] Message recipient ID: ${messageData.recipient?.id || 'NOT PROVIDED'}`);
+      console.log(`🔧 [Webhook] Full messageData:`, JSON.stringify(messageData, null, 2));
 
       // Check if message already exists (deduplication)
       const existingMessage = await Message.findOne({ mid: messageData.mid });
@@ -601,6 +602,8 @@ export class InstagramWebhookService {
       
       console.log(`🔍 Message role detection: PSID=${messageData.psid}, AccountID=${accountId}, Role=${messageRole}`);
       
+      console.log(`💾 [Message Creation] Storing recipientId: ${messageData.recipient?.id}`);
+      
       const message = new Message({
         mid: messageData.mid,
         conversationId,
@@ -631,6 +634,7 @@ export class InstagramWebhookService {
 
       await message.save();
       console.log(`✅ Created message record: ${message.id}`);
+      console.log(`✅ [Message Saved] recipientId stored: ${message.recipientId}`);
 
       return message;
     } catch (error) {
@@ -742,11 +746,16 @@ export class InstagramWebhookService {
    */
   private async identifyAccountByPSID(psid: string, recipientId?: string): Promise<any> {
     try {
-      console.log(`🔍 [PSID Matching] Looking for account with PSID: ${psid}`);
+      console.log(`🔍 [PSID Matching] Looking for account with PSID: ${psid}, recipientId: ${recipientId}`);
       
       // Get all active Instagram accounts
       const allAccounts = await InstagramAccount.find({ isActive: true });
       console.log(`🔍 [PSID Matching] Found ${allAccounts.length} active accounts`);
+      console.log(`🔍 [PSID Matching] Account details:`, allAccounts.map(acc => ({ 
+        accountName: acc.accountName, 
+        accountId: acc.accountId, 
+        userEmail: acc.userEmail 
+      })));
       
       // Check if PSID matches any account ID (this would be a bot message)
       for (const account of allAccounts) {
