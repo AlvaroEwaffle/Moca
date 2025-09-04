@@ -169,6 +169,19 @@ router.get('/conversations', authenticateToken, async (req, res) => {
       .populate('contactId', 'name psid email metadata')
       .select('-__v');
 
+    console.log(`🔍 [API] Found ${conversations.length} conversations`);
+    console.log(`🔍 [API] First conversation contactId:`, conversations[0]?.contactId);
+    console.log(`🔍 [API] ContactId type:`, typeof conversations[0]?.contactId);
+
+    // Check if contacts exist
+    if (conversations.length > 0) {
+      const contactIds = conversations.map(conv => conv.contactId).filter(Boolean);
+      console.log(`🔍 [API] Checking if contacts exist:`, contactIds);
+      
+      const existingContacts = await Contact.find({ _id: { $in: contactIds } }).select('_id psid metadata');
+      console.log(`🔍 [API] Found ${existingContacts.length} existing contacts:`, existingContacts.map(c => ({ id: c._id, psid: c.psid, hasMetadata: !!c.metadata })));
+    }
+
     const total = await Conversation.countDocuments(query);
 
     res.json({
