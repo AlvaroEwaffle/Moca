@@ -68,6 +68,7 @@ interface InstagramMessage {
   psid: string;
   recipient?: { id: string };
   text?: string;
+  is_echo?: boolean; // Indicates if message was sent by your business account
   attachments?: Array<{
     type: string;
     url?: string;
@@ -319,6 +320,7 @@ export class InstagramWebhookService {
     try {
       console.log(`📨 Processing message from PSID: ${messageData.psid}, MID: ${messageData.mid}`);
       console.log(`🔧 [Webhook] Message recipient ID: ${messageData.recipient?.id || 'NOT PROVIDED'}`);
+      console.log(`🔧 [Webhook] Is Echo (Bot Message): ${messageData.is_echo || false}`);
       console.log(`🔧 [Webhook] Full messageData:`, JSON.stringify(messageData, null, 2));
 
       // Check if message already exists (deduplication)
@@ -339,14 +341,17 @@ export class InstagramWebhookService {
         return;
       }
 
-      // NEW STRATEGY: Use PSID-based account identification first
-      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id);
+      // NEW STRATEGY: Use is_echo flag for bot detection, then PSID-based account identification
+      const isBotMessage = messageData.is_echo === true;
+      console.log(`🤖 [Bot Detection] is_echo flag: ${messageData.is_echo}, isBotMessage: ${isBotMessage}`);
+      
+      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, isBotMessage);
       if (!accountResult) {
         console.error('❌ No Instagram account found for PSID:', messageData.psid);
         return;
       }
 
-      const { account: instagramAccount, isBotMessage } = accountResult;
+      const { account: instagramAccount } = accountResult;
       
       if (isBotMessage) {
         console.log(`🤖 Bot message detected by PSID matching, skipping processing to avoid loops: ${messageData.mid}`);
@@ -744,7 +749,7 @@ export class InstagramWebhookService {
    * Identify Instagram account by PSID matching (NEW STRATEGY)
    * This uses the same logic as bot detection to find the correct account
    */
-  private async identifyAccountByPSID(psid: string, recipientId?: string): Promise<any> {
+  private async identifyAccountByPSID(psid: string, recipientId?: string, isBotMessage?: boolean): Promise<any> {
     try {
       console.log(`🔍 [PSID Matching] Looking for account with PSID: ${psid}, recipientId: ${recipientId}`);
       
@@ -758,31 +763,36 @@ export class InstagramWebhookService {
         userEmail: acc.userEmail 
       })));
       
-      // Check if PSID matches any account ID (this would be a bot message)
-      for (const account of allAccounts) {
-        console.log(`🔍 [PSID Matching] Checking account ${account.accountName}: PSID=${psid} vs AccountID=${account.accountId}`);
-        
-        if (psid === account.accountId) {
-          console.log(`🤖 [PSID Matching] PSID matches account ID - this is a bot message from ${account.accountName}`);
-          return { account, isBotMessage: true };
-        }
-      }
-      
-      // If PSID doesn't match any account ID, it's a user message
-      // Find which account received this message using recipientId (Page-Scoped ID)
-      if (recipientId) {
-        console.log(`🔍 [PSID Matching] User message - looking for recipient account: ${recipientId}`);
-        
+      // Use is_echo flag to determine if this is a bot message
+      if (isBotMessage) {
+        console.log(`🤖 [PSID Matching] Bot message detected by is_echo flag`);
+        // For bot messages, find account by PSID matching accountId
         for (const account of allAccounts) {
-          if (recipientId === account.pageScopedId) {
-            console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by pageScopedId`);
-            return { account, isBotMessage: false };
+          console.log(`🔍 [PSID Matching] Checking bot account ${account.accountName}: PSID=${psid} vs AccountID=${account.accountId}`);
+          
+          if (psid === account.accountId) {
+            console.log(`🤖 [PSID Matching] Bot message from account: ${account.accountName} (${account.userEmail})`);
+            return { account, isBotMessage: true };
           }
         }
         
-        console.warn(`⚠️ [PSID Matching] Recipient ID ${recipientId} not found in active accounts (checked pageScopedId)`);
+        console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts`);
       } else {
-        console.warn(`⚠️ [PSID Matching] No recipient ID provided for user message`);
+        // User message - find which account received this message using recipientId (Page-Scoped ID)
+        if (recipientId) {
+          console.log(`🔍 [PSID Matching] User message - looking for recipient account: ${recipientId}`);
+          
+          for (const account of allAccounts) {
+            if (recipientId === account.pageScopedId) {
+              console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by pageScopedId`);
+              return { account, isBotMessage: false };
+            }
+          }
+          
+          console.warn(`⚠️ [PSID Matching] Recipient ID ${recipientId} not found in active accounts (checked pageScopedId)`);
+        } else {
+          console.warn(`⚠️ [PSID Matching] No recipient ID provided for user message`);
+        }
       }
       
       // Fallback to first active account if recipientId not found or not provided
