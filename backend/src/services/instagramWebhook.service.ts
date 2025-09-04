@@ -424,8 +424,9 @@ export class InstagramWebhookService {
    */
   private async getOrCreateInstagramAccount(recipientId?: string): Promise<any> {
     try {
-      // Find account by recipient ID (Instagram account ID)
-      // This ensures we get the correct user's account
+      console.log(`🔧 [Webhook] Searching for Instagram account with recipientId: ${recipientId}`);
+      
+      // First, try to find account by recipient ID (Instagram account ID)
       let account = null;
       
       if (recipientId) {
@@ -433,40 +434,51 @@ export class InstagramWebhookService {
           accountId: recipientId,
           isActive: true 
         });
-        console.log(`🔧 [Webhook] Looking for account with recipientId: ${recipientId}`);
+        console.log(`🔧 [Webhook] Account search by recipientId result:`, account ? 'Found' : 'Not found');
       }
       
-      // Fallback: use the first active account if no specific recipient
+      // If not found by recipientId, try to find any active account
       if (!account) {
-        account = await InstagramAccount.findOne({ isActive: true });
-        console.log('⚠️ [Webhook] No specific account found, using first active account');
+        console.log('🔧 [Webhook] Searching for any active Instagram account...');
+        const allAccounts = await InstagramAccount.find({ isActive: true });
+        console.log(`🔧 [Webhook] Found ${allAccounts.length} active accounts:`, allAccounts.map(acc => ({
+          accountId: acc.accountId,
+          accountName: acc.accountName,
+          userId: acc.userId,
+          userEmail: acc.userEmail
+        })));
+        
+        account = allAccounts[0]; // Use the first active account
+        if (account) {
+          console.log(`⚠️ [Webhook] Using first active account: ${account.accountName} (${account.userEmail})`);
+        }
       }
 
       if (!account) {
-        console.warn('⚠️ No active Instagram account found, creating default account');
-        
-        // Create a default account for development/testing
-        account = new InstagramAccount({
-          userId: 'default_user',
-          userEmail: 'default@example.com',
-          accountId: 'default',
-          accountName: 'Default Account',
-          accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || 'dummy_token',
-          tokenExpiry: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
-          webhook: {
-            verifyToken: this.verifyToken || 'default_verify_token',
-            isActive: true
-          }
-        });
-
-        await account.save();
-        console.log('✅ Created default Instagram account');
+        console.error('❌ [Webhook] No active Instagram account found in database!');
+        console.error('❌ [Webhook] This means no user has connected their Instagram account yet.');
+        console.error('❌ [Webhook] Webhook cannot process messages without a valid Instagram account.');
+        return null;
       }
 
       console.log(`✅ [Webhook] Found account: ${account.accountName} (User: ${account.userEmail})`);
+      console.log(`🔧 [Webhook] Account details:`, {
+        accountId: account.accountId,
+        userId: account.userId,
+        hasValidToken: !!account.accessToken && account.accessToken !== 'dummy_token',
+        tokenExpiry: account.tokenExpiry
+      });
+      
+      // Validate that we have a real token, not dummy_token
+      if (!account.accessToken || account.accessToken === 'dummy_token') {
+        console.error('❌ [Webhook] Account has invalid token (dummy_token or empty)!');
+        console.error('❌ [Webhook] This account cannot send messages. User needs to reconnect Instagram.');
+        return null;
+      }
+      
       return account;
     } catch (error) {
-      console.error('❌ Error getting/creating Instagram account:', error);
+      console.error('❌ Error getting Instagram account:', error);
       return null;
     }
   }
