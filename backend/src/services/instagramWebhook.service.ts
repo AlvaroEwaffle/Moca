@@ -778,12 +778,22 @@ export class InstagramWebhookService {
         
         console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts`);
       } else {
-        // User message - fetch Business Account ID from Page-Scoped ID, then match against our accounts
+        // User message - first try to match by stored pageScopedId, then fetch if needed
         if (recipientId) {
-          console.log(`🔍 [PSID Matching] User message - fetching Business Account ID for Page-Scoped ID: ${recipientId}`);
+          console.log(`🔍 [PSID Matching] User message - looking for recipient account: ${recipientId}`);
+          
+          // First, try to match against stored pageScopedId
+          for (const account of allAccounts) {
+            if (recipientId === account.pageScopedId) {
+              console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by cached pageScopedId`);
+              return { account, isBotMessage: false };
+            }
+          }
+          
+          // If not found in cache, fetch Business Account ID from Instagram API
+          console.log(`🔍 [PSID Matching] Page-Scoped ID not in cache, fetching Business Account ID for: ${recipientId}`);
           
           try {
-            // Fetch Business Account ID from Instagram API using Page-Scoped ID
             const businessAccountId = await this.fetchBusinessAccountIdFromPageScopedId(recipientId);
             
             if (businessAccountId) {
@@ -793,6 +803,10 @@ export class InstagramWebhookService {
               for (const account of allAccounts) {
                 if (businessAccountId === account.accountId) {
                   console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by Business Account ID`);
+                  
+                  // Cache the pageScopedId for future use
+                  await this.cachePageScopedId(account.id, recipientId);
+                  
                   return { account, isBotMessage: false };
                 }
               }
@@ -856,6 +870,23 @@ export class InstagramWebhookService {
     } catch (error) {
       console.error('❌ Error fetching Business Account ID from Page-Scoped ID:', error);
       return null;
+    }
+  }
+
+  /**
+   * Cache Page-Scoped ID for future webhook matching
+   */
+  private async cachePageScopedId(accountId: string, pageScopedId: string): Promise<void> {
+    try {
+      console.log(`💾 [Cache] Caching Page-Scoped ID ${pageScopedId} for account ${accountId}`);
+      
+      await InstagramAccount.findByIdAndUpdate(accountId, {
+        pageScopedId: pageScopedId
+      });
+      
+      console.log(`✅ [Cache] Successfully cached Page-Scoped ID ${pageScopedId} for account ${accountId}`);
+    } catch (error) {
+      console.error(`❌ [Cache] Error caching Page-Scoped ID:`, error);
     }
   }
 }
