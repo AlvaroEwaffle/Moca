@@ -523,8 +523,10 @@ export class InstagramWebhookService {
           lastActivity: new Date(messageData.timestamp)
         });
 
+        console.log(`🔍 [Contact Creation] Instagram data being saved:`, instagramData);
         await contact.save();
         console.log(`✅ Created new contact: ${contact.id}`);
+        console.log(`🔍 [Contact Creation] Saved contact metadata:`, contact.metadata);
       } else {
         console.log(`👤 Updating existing contact: ${contact.id}`);
         
@@ -536,8 +538,10 @@ export class InstagramWebhookService {
         // Fetch username if not already stored or if it's been a while
         if (instagramAccount?.accessToken && (!contact.metadata.instagramData?.username || 
             (Date.now() - contact.metadata.instagramData.lastFetched.getTime()) > 24 * 60 * 60 * 1000)) { // 24 hours
+          console.log(`🔍 [Contact Update] Fetching username for existing contact: ${contact.id}`);
           const username = await this.getInstagramUsername(psid, instagramAccount.accessToken);
           if (username) {
+            console.log(`🔍 [Contact Update] Username fetched: ${username}`);
             contact.metadata.instagramData = {
               username,
               lastFetched: new Date(),
@@ -545,10 +549,12 @@ export class InstagramWebhookService {
               isPrivate: false,
               ...contact.metadata.instagramData
             };
+            console.log(`🔍 [Contact Update] Updated instagramData:`, contact.metadata.instagramData);
           }
         }
 
         await contact.save();
+        console.log(`🔍 [Contact Update] Saved contact metadata:`, contact.metadata);
       }
 
       return contact;
