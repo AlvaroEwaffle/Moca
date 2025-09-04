@@ -273,6 +273,7 @@ export class InstagramWebhookService {
         messageData = {
           mid: messaging.message.mid,
           psid,
+          recipient: { id: recipientId },
           text: messaging.message.text,
           attachments: messaging.message.attachments?.map((att: any) => ({
             type: att.type,
@@ -288,6 +289,7 @@ export class InstagramWebhookService {
         messageData = {
           mid: `postback_${timestamp}_${psid}`,
           psid,
+          recipient: { id: recipientId },
           text: messaging.postback.title,
           timestamp,
           type: 'postback'
@@ -316,6 +318,7 @@ export class InstagramWebhookService {
   private async processMessage(messageData: InstagramMessage): Promise<void> {
     try {
       console.log(`📨 Processing message from PSID: ${messageData.psid}, MID: ${messageData.mid}`);
+      console.log(`🔧 [Webhook] Message recipient ID: ${messageData.recipient?.id || 'NOT PROVIDED'}`);
 
       // Check if message already exists (deduplication)
       const existingMessage = await Message.findOne({ mid: messageData.mid });
