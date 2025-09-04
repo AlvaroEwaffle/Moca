@@ -390,9 +390,11 @@ export class InstagramWebhookService {
 
       // Get or create contact
       const contact = await this.upsertContact(messageData.psid, messageData, instagramAccount);
+      console.log(`🔍 [Message Processing] Using contact: ${contact.id} for PSID: ${messageData.psid}`);
 
       // Get or create conversation
       const conversation = await this.getOrCreateConversation(contact.id, instagramAccount.accountId);
+      console.log(`🔍 [Message Processing] Using conversation: ${conversation.id} for contact: ${contact.id}`);
 
       // Create message record
       const message = await this.createMessage(messageData, conversation.id, contact.id, instagramAccount.accountId);
@@ -485,7 +487,9 @@ export class InstagramWebhookService {
    */
   private async upsertContact(psid: string, messageData: InstagramMessage, instagramAccount?: any): Promise<IContact> {
     try {
+      console.log(`🔍 [Contact Lookup] Looking for contact with PSID: ${psid}`);
       let contact = await Contact.findOne({ psid });
+      console.log(`🔍 [Contact Lookup] Found contact:`, contact ? contact.id : 'null');
 
       if (!contact) {
         console.log(`👤 Creating new contact for PSID: ${psid}`);
