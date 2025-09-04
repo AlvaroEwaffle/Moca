@@ -782,42 +782,17 @@ export class InstagramWebhookService {
         if (recipientId) {
           console.log(`🔍 [Account Identification] User message - looking for which account received this message: ${recipientId}`);
           
-          // First, try to match against stored pageScopedId
+          // Match against stored pageScopedId (should be set during OAuth)
           for (const account of allAccounts) {
             if (recipientId === account.pageScopedId) {
-              console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by cached pageScopedId`);
+              console.log(`👤 [Account Identification] User message to account: ${account.accountName} (${account.userEmail}) - matched by pageScopedId`);
               return { account, isBotMessage: false };
             }
           }
           
-          // If not found in cache, fetch Business Account ID from Instagram API
-          console.log(`🔍 [Account Identification] Page-Scoped ID not in cache, fetching Business Account ID for: ${recipientId}`);
-          
-          try {
-            const businessAccountId = await this.fetchBusinessAccountIdFromPageScopedId(recipientId);
-            
-            if (businessAccountId) {
-              console.log(`🔍 [PSID Matching] Fetched Business Account ID: ${businessAccountId} for Page-Scoped ID: ${recipientId}`);
-              
-              // Match against our stored accounts
-              for (const account of allAccounts) {
-                if (businessAccountId === account.accountId) {
-                  console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by Business Account ID`);
-                  
-                  // Cache the pageScopedId for future use
-                  await this.cachePageScopedId(account.id, recipientId);
-                  
-                  return { account, isBotMessage: false };
-                }
-              }
-              
-              console.warn(`⚠️ [PSID Matching] Business Account ID ${businessAccountId} not found in active accounts`);
-            } else {
-              console.warn(`⚠️ [PSID Matching] Failed to fetch Business Account ID for Page-Scoped ID: ${recipientId}`);
-            }
-          } catch (error) {
-            console.error(`❌ [PSID Matching] Error fetching Business Account ID:`, error);
-          }
+          // If not found, this means the pageScopedId wasn't set during OAuth
+          console.warn(`⚠️ [Account Identification] Page-Scoped ID ${recipientId} not found in any account. This should have been set during OAuth.`);
+          console.warn(`⚠️ [Account Identification] Available pageScopedIds:`, allAccounts.map(acc => ({ accountName: acc.accountName, pageScopedId: acc.pageScopedId })));
         } else {
           console.warn(`⚠️ [PSID Matching] No recipient ID provided for user message`);
         }

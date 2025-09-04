@@ -136,11 +136,13 @@ router.post('/callback', authenticateToken, async (req, res) => {
     const profileData = await profileResponse.json();
     console.log('✅ [OAuth Callback] Instagram profile fetched successfully:', profileData);
 
-    // Get Page-Scoped ID for webhook matching
+    // Get Page-Scoped ID for webhook matching (this is the user_id from the API response)
     let pageScopedId = null;
     try {
       console.log(`🔧 [OAuth Callback] Fetching Page-Scoped ID for Business Account: ${profileData.id}`);
-      const pageScopedResponse = await fetch(`https://graph.instagram.com/v23.0/${profileData.id}?fields=username&access_token=${finalAccessToken}`, {
+      console.log(`🔧 [OAuth Callback] API Call: https://graph.instagram.com/v23.0/${profileData.id}?fields=username,user_id`);
+      
+      const pageScopedResponse = await fetch(`https://graph.instagram.com/v23.0/${profileData.id}?fields=username,user_id&access_token=${finalAccessToken}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -149,10 +151,16 @@ router.post('/callback', authenticateToken, async (req, res) => {
       
       if (pageScopedResponse.ok) {
         const pageScopedData = await pageScopedResponse.json();
-        pageScopedId = pageScopedData.id; // This should be the Page-Scoped ID
-        console.log('✅ [OAuth Callback] Page-Scoped ID fetched successfully:', pageScopedData);
+        pageScopedId = pageScopedData.user_id; // This is the Page-Scoped ID we need for webhook matching
+        console.log('✅ [OAuth Callback] Page-Scoped ID API response:', pageScopedData);
+        console.log('✅ [OAuth Callback] Using user_id as pageScopedId for webhook matching:', pageScopedId);
+        console.log('✅ [OAuth Callback] This will be used to match recipientId in webhooks');
       } else {
-        console.warn('⚠️ [OAuth Callback] Failed to fetch Page-Scoped ID:', pageScopedResponse.status);
+        const errorData = await pageScopedResponse.json().catch(() => ({}));
+        console.warn('⚠️ [OAuth Callback] Failed to fetch Page-Scoped ID:', {
+          status: pageScopedResponse.status,
+          error: errorData
+        });
       }
     } catch (error) {
       console.error('❌ [OAuth Callback] Error fetching Page-Scoped ID:', error);
@@ -169,6 +177,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       existingAccount.accountName = profileData.username;
       existingAccount.tokenExpiry = tokenExpiry;
       existingAccount.isActive = true;
+      existingAccount.pageScopedId = pageScopedId; // Update Page-Scoped ID for webhook matching
       
       // Update settings with onboarding data if provided
       if (agentBehavior || user?.agentSettings) {
@@ -182,6 +191,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       await existingAccount.save();
 
       console.log(`✅ Updated existing Instagram account: ${profileData.id}`);
+      console.log(`✅ [OAuth Callback] Stored pageScopedId for webhook matching: ${pageScopedId}`);
 
       return res.json({
         success: true,
@@ -232,6 +242,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
     await newAccount.save();
 
     console.log(`✅ Created new Instagram account for user ${req.user!.email}: ${profileData.id}`);
+    console.log(`✅ [OAuth Callback] Stored pageScopedId for webhook matching: ${pageScopedId}`);
     console.log(`🔧 [OAuth Callback] Saved account settings:`, JSON.stringify(newAccount.settings, null, 2));
 
     res.status(201).json({
