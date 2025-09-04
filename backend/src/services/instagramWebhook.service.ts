@@ -338,13 +338,21 @@ export class InstagramWebhookService {
         return;
       }
 
-      // CRITICAL FIX: Check if this is a bot message by comparing PSID with our account ID
-      const instagramAccount = await this.getOrCreateInstagramAccount();
-      console.log(`🔍 PSID Check: messageData.psid=${messageData.psid}, account.accountId=${instagramAccount?.accountId}`);
-      if (instagramAccount && messageData.psid === instagramAccount.accountId) {
-        console.log(`🤖 Bot message detected by PSID match (${messageData.psid} === ${instagramAccount.accountId}), skipping processing to avoid loops`);
+      // NEW STRATEGY: Use PSID-based account identification first
+      const accountResult = await this.identifyAccountByPSID(messageData.psid);
+      if (!accountResult) {
+        console.error('❌ No Instagram account found for PSID:', messageData.psid);
         return;
       }
+
+      const { account: instagramAccount, isBotMessage } = accountResult;
+      
+      if (isBotMessage) {
+        console.log(`🤖 Bot message detected by PSID matching, skipping processing to avoid loops: ${messageData.mid}`);
+        return;
+      }
+      
+      console.log(`✅ Using Instagram account: ${instagramAccount.accountName} (${instagramAccount.userEmail})`);
 
       // Check if we have a recent message with same text from same user (Meta duplicate webhook)
       const recentDuplicate = await Message.findOne({
@@ -374,34 +382,14 @@ export class InstagramWebhookService {
         return;
       }
 
-          // Get or create Instagram account using recipient ID
-    const account = await this.getOrCreateInstagramAccount(messageData.recipient?.id);
-      if (!account) {
-        console.error('❌ No Instagram account found for webhook processing');
-        return;
-      }
-      
-      console.log(`🔍 Using Instagram account: ${account.accountId} (${account.accountName})`);
-
       // Get or create contact
       const contact = await this.upsertContact(messageData.psid, messageData);
 
       // Get or create conversation
-              const conversation = await this.getOrCreateConversation(contact.id, account.accountId);
+      const conversation = await this.getOrCreateConversation(contact.id, instagramAccount.accountId);
 
-      // Check if this is a bot message (from our own Instagram account)
-      const isBotMessage = messageData.psid === account.accountId;
-      
-      if (isBotMessage) {
-        console.log(`🤖 Bot message detected, skipping processing to avoid loops: ${messageData.mid}`);
-        // Still create the message record for logging, but don't trigger responses
-        const message = await this.createMessage(messageData, conversation.id, contact.id, account.accountId);
-        console.log(`✅ Bot message logged: ${message.id}`);
-        return;
-      }
-
-      // Create message record for user messages
-      const message = await this.createMessage(messageData, conversation.id, contact.id, account.accountId);
+      // Create message record
+      const message = await this.createMessage(messageData, conversation.id, contact.id, instagramAccount.accountId);
 
       // Update conversation metadata
       await this.updateConversationMetadata(conversation.id, messageData);
@@ -744,6 +732,47 @@ export class InstagramWebhookService {
       }
     } catch (error) {
       console.error('❌ Error processing read receipt:', error);
+    }
+  }
+
+  /**
+   * Identify Instagram account by PSID matching (NEW STRATEGY)
+   * This uses the same logic as bot detection to find the correct account
+   */
+  private async identifyAccountByPSID(psid: string): Promise<any> {
+    try {
+      console.log(`🔍 [PSID Matching] Looking for account with PSID: ${psid}`);
+      
+      // Get all active Instagram accounts
+      const allAccounts = await InstagramAccount.find({ isActive: true });
+      console.log(`🔍 [PSID Matching] Found ${allAccounts.length} active accounts`);
+      
+      // Check if PSID matches any account ID (this would be a bot message)
+      for (const account of allAccounts) {
+        console.log(`🔍 [PSID Matching] Checking account ${account.accountName}: PSID=${psid} vs AccountID=${account.accountId}`);
+        
+        if (psid === account.accountId) {
+          console.log(`🤖 [PSID Matching] PSID matches account ID - this is a bot message from ${account.accountName}`);
+          return { account, isBotMessage: true };
+        }
+      }
+      
+      // If PSID doesn't match any account ID, it's a user message
+      // We need to determine which account this user is messaging
+      // For now, we'll use the first active account as the recipient
+      // TODO: Implement proper user-to-account mapping when we have multiple accounts
+      const account = allAccounts[0];
+      
+      if (account) {
+        console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail})`);
+        return { account, isBotMessage: false };
+      }
+      
+      console.error('❌ [PSID Matching] No active Instagram account found!');
+      return null;
+    } catch (error) {
+      console.error('❌ Error identifying Instagram account by PSID:', error);
+      return null;
     }
   }
 }
