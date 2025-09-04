@@ -63,11 +63,16 @@
 - **Error Handling**: Moca handles Instagram API errors gracefully
 - **Security**: Moca validates all incoming webhooks securely
 - **🎯 MESSAGE SENDING**: Moca successfully sends responses via Instagram Graph API!
+- **👤 USERNAME DISPLAY**: Moca fetches and displays Instagram usernames in conversations
+- **🎨 CLEAN UI**: Streamlined conversations interface with essential information
+- **🔗 DATA POPULATION**: Proper contact data population with metadata
 
 ### 🔄 **What's Next (Frontend Development)**
-- **Conversations Dashboard**: View and manage all Instagram conversations
+- **✅ Conversations Dashboard**: View and manage all Instagram conversations (COMPLETE)
+- **Agent Toggle Backend**: Connect frontend toggle to backend API for per-conversation control
 - **Conversation Detail View**: See full message history and respond manually
 - **Settings Panel**: Configure Moca's behavior and responses
+- **JSON Response Format**: Implement structured AI responses for better conversation management
 - **Real-time Updates**: See new messages as they arrive
 
 ---
@@ -318,9 +323,9 @@ The user interface is next! We need to build:
 
 ---
 
-## **🚀 Latest Working Version - Multi-Account Support Complete**
+## **🚀 Latest Working Version - Username Display & UI Complete**
 
-**Commit:** `72d8a24` - "Implement clean Page-Scoped ID solution for multi-account support"
+**Commit:** `7d30064` - "Clean up conversations UI layout"
 
 ### **✅ What's Working:**
 - **Multi-Account Support**: ✅ Perfect account identification
@@ -329,6 +334,23 @@ The user interface is next! We need to build:
 - **Clean OAuth Flow**: ✅ Page-Scoped ID fetched during account creation
 - **Perfect Logging**: ✅ Clear account identification logs
 - **No Fallback Warnings**: ✅ No more "Using first active account"
+- **Username Display**: ✅ Instagram usernames fetched and displayed in conversations
+- **Clean UI**: ✅ Streamlined conversations list with essential information
+- **Contact Population**: ✅ Fixed contactId reference for proper data display
+- **Agent Toggle UI**: ✅ Ready for backend integration
+
+### **🎯 Recent Achievements:**
+- **Fixed ContactId Reference**: Changed from String to ObjectId with proper Contact reference
+- **Fixed Virtual Fields**: Added null checks to prevent crashes in Contact model
+- **Username Fetching**: End-to-end implementation of Instagram username retrieval
+- **UI Cleanup**: Removed unnecessary elements, improved layout
+- **Data Population**: Conversations API now properly populates contact data
+
+### **📱 Current UI Features:**
+- **Clean Layout**: @username, status, message count + time
+- **Details Button**: Moved to top right for easy access
+- **Agent Toggle**: Ready for backend integration
+- **Responsive Design**: Works on all screen sizes
 
 ### **🎯 Key Achievement:**
 **Multi-account Instagram support is now PERFECT!** The system correctly identifies which account receives each message using Page-Scoped ID matching, with zero API calls during webhook processing.
@@ -337,7 +359,7 @@ The user interface is next! We need to build:
 
 ## **📋 Next Goals:**
 
-1) **Get user sender messaging account username to store them in the contacts and showing them in the conversations page** This includes getting the details of the conversation.
+1) **Get user sender messaging account username to store them in the contacts and showing them in the conversations page** This includes adding this e2e from database, backend and to front end.
 
 1) **Activate the toggle functionality** - so we can decide which conversations will be handled by the Agent. 
 

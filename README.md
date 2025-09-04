@@ -8,6 +8,25 @@
 
 **Moca** is an intelligent Instagram DM agent that handles lead communication automatically, preventing spam, consolidating messages, and providing a professional back office for team management. Built on a solid foundation with AI-powered responses and comprehensive analytics.
 
+## 🚀 **Current Status**
+
+**Latest Working Version:** `7d30064` - "Clean up conversations UI layout"
+
+### ✅ **What's Working:**
+- **Multi-Account Support**: Perfect account identification with Page-Scoped ID matching
+- **Username Display**: Instagram usernames fetched and displayed in conversations
+- **Clean UI**: Streamlined conversations interface with essential information
+- **Message Processing**: Real-time webhook processing with spam prevention
+- **AI Responses**: Intelligent response generation with context awareness
+- **Data Population**: Proper contact data population with metadata
+- **Agent Toggle UI**: Ready for backend integration
+
+### 🎯 **Recent Achievements:**
+- Fixed ContactId reference for proper data population
+- Implemented end-to-end username fetching and display
+- Cleaned up UI layout for better user experience
+- Added proper error handling for Contact model virtual fields
+
 ## 🌟 **Features**
 
 ### **🤖 AI-Powered Communication**
@@ -21,12 +40,15 @@
 - **Rate Limiting**: Instagram API compliance with intelligent throttling
 - **Message Consolidation**: Debouncing rapid messages to prevent spam
 - **Attachment Support**: Images, videos, and files with captions
+- **Multi-Account Support**: Handle multiple Instagram business accounts seamlessly
+- **Username Display**: Fetch and display actual Instagram usernames in conversations
 
 ### **💼 Lead Management**
 - **Contact Database**: Comprehensive contact profiles with business information
 - **Conversation Tracking**: Full conversation history with context
 - **Lead Qualification**: AI-powered lead scoring and categorization
 - **Business Intelligence**: Sector analysis, budget tracking, and timeline management
+- **Clean UI**: Streamlined conversations interface with essential information
 
 ### **⚡ Smart Automation**
 - **Debounce Worker**: Consolidates multiple rapid messages
