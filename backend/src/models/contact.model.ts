@@ -1,5 +1,18 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+// Instagram data sub-schema
+const InstagramDataSchema = new Schema({
+  username: { type: String, required: false }, // Instagram username
+  profilePicture: { type: String, required: false }, // Instagram profile picture URL
+  bio: { type: String, required: false }, // Instagram bio
+  followersCount: { type: Number, required: false }, // Instagram followers count
+  followingCount: { type: Number, required: false }, // Instagram following count
+  postsCount: { type: Number, required: false }, // Instagram posts count
+  isVerified: { type: Boolean, default: false }, // Instagram verification status
+  isPrivate: { type: Boolean, default: false }, // Instagram privacy status
+  lastFetched: { type: Date, default: Date.now } // When we last fetched this data
+});
+
 // Contact metadata sub-schema
 const ContactMetadataSchema = new Schema({
   firstSeen: { type: Date, default: Date.now },
@@ -10,7 +23,8 @@ const ContactMetadataSchema = new Schema({
   averageResponseTime: { type: Number, default: 0 }, // in seconds
   engagementScore: { type: Number, default: 0 }, // 0-100 score
   source: { type: String, default: 'instagram_dm' }, // How they found us
-  referrer: { type: String, required: false } // If they came from somewhere specific
+  referrer: { type: String, required: false }, // If they came from somewhere specific
+  instagramData: { type: InstagramDataSchema, required: false } // Instagram-specific data
 });
 
 // Contact preferences sub-schema
@@ -53,6 +67,17 @@ export interface IContact extends Document {
     engagementScore: number;
     source: string;
     referrer?: string;
+    instagramData?: {
+      username?: string;
+      profilePicture?: string;
+      bio?: string;
+      followersCount?: number;
+      followingCount?: number;
+      postsCount?: number;
+      isVerified: boolean;
+      isPrivate: boolean;
+      lastFetched: Date;
+    };
   };
   preferences: {
     language: string;

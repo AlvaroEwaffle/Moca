@@ -389,7 +389,7 @@ export class InstagramWebhookService {
       }
 
       // Get or create contact
-      const contact = await this.upsertContact(messageData.psid, messageData);
+      const contact = await this.upsertContact(messageData.psid, messageData, instagramAccount);
 
       // Get or create conversation
       const conversation = await this.getOrCreateConversation(contact.id, instagramAccount.accountId);
@@ -483,12 +483,26 @@ export class InstagramWebhookService {
   /**
    * Upsert contact based on PSID
    */
-  private async upsertContact(psid: string, messageData: InstagramMessage): Promise<IContact> {
+  private async upsertContact(psid: string, messageData: InstagramMessage, instagramAccount?: any): Promise<IContact> {
     try {
       let contact = await Contact.findOne({ psid });
 
       if (!contact) {
         console.log(`👤 Creating new contact for PSID: ${psid}`);
+        
+        // Fetch Instagram username if account is available
+        let instagramData = undefined;
+        if (instagramAccount?.accessToken) {
+          const username = await this.getInstagramUsername(psid, instagramAccount.accessToken);
+          if (username) {
+            instagramData = {
+              username,
+              lastFetched: new Date(),
+              isVerified: false,
+              isPrivate: false
+            };
+          }
+        }
         
         contact = new Contact({
           psid,
@@ -497,7 +511,8 @@ export class InstagramWebhookService {
             lastSeen: new Date(messageData.timestamp),
             messageCount: 1,
             responseCount: 0,
-            source: 'instagram_dm'
+            source: 'instagram_dm',
+            instagramData
           },
           preferences: {
             language: 'es', // Default to Spanish
@@ -517,6 +532,21 @@ export class InstagramWebhookService {
         contact.metadata.lastSeen = new Date(messageData.timestamp);
         contact.metadata.messageCount += 1;
         contact.lastActivity = new Date(messageData.timestamp);
+
+        // Fetch username if not already stored or if it's been a while
+        if (instagramAccount?.accessToken && (!contact.metadata.instagramData?.username || 
+            (Date.now() - contact.metadata.instagramData.lastFetched.getTime()) > 24 * 60 * 60 * 1000)) { // 24 hours
+          const username = await this.getInstagramUsername(psid, instagramAccount.accessToken);
+          if (username) {
+            contact.metadata.instagramData = {
+              username,
+              lastFetched: new Date(),
+              isVerified: false,
+              isPrivate: false,
+              ...contact.metadata.instagramData
+            };
+          }
+        }
 
         await contact.save();
       }
@@ -862,6 +892,34 @@ export class InstagramWebhookService {
       console.log(`✅ [Cache] Successfully cached Page-Scoped ID ${pageScopedId} for account ${accountId}`);
     } catch (error) {
       console.error(`❌ [Cache] Error caching Page-Scoped ID:`, error);
+    }
+  }
+
+  /**
+   * Get Instagram username for a PSID
+   */
+  private async getInstagramUsername(psid: string, accessToken: string): Promise<string | null> {
+    try {
+      console.log(`🔍 [Username] Fetching Instagram username for PSID: ${psid}`);
+      
+      const response = await fetch(`https://graph.instagram.com/v23.0/${psid}?fields=username&access_token=${accessToken}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ [Username] Instagram username fetched: ${data.username}`);
+        return data.username;
+      } else {
+        console.warn(`⚠️ [Username] Failed to fetch username for PSID ${psid}: ${response.status}`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`❌ [Username] Error fetching Instagram username:`, error);
+      return null;
     }
   }
 }

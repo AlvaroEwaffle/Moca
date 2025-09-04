@@ -166,7 +166,7 @@ router.get('/conversations', authenticateToken, async (req, res) => {
       .sort({ 'timestamps.lastActivity': -1 })
       .skip(skip)
       .limit(parseInt(limit as string))
-      .populate('contactId', 'name psid email')
+      .populate('contactId', 'name psid email metadata')
       .select('-__v');
 
     const total = await Conversation.countDocuments(query);
@@ -197,7 +197,7 @@ router.get('/conversations', authenticateToken, async (req, res) => {
 router.get('/conversations/:id', async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.id)
-      .populate('contactId', 'name psid email profilePicture')
+      .populate('contactId', 'name psid email profilePicture metadata')
       .select('-__v');
 
     if (!conversation) {
