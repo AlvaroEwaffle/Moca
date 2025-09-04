@@ -778,18 +778,32 @@ export class InstagramWebhookService {
         
         console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts`);
       } else {
-        // User message - find which account received this message using recipientId (Page-Scoped ID)
+        // User message - fetch Business Account ID from Page-Scoped ID, then match against our accounts
         if (recipientId) {
-          console.log(`🔍 [PSID Matching] User message - looking for recipient account: ${recipientId}`);
+          console.log(`🔍 [PSID Matching] User message - fetching Business Account ID for Page-Scoped ID: ${recipientId}`);
           
-          for (const account of allAccounts) {
-            if (recipientId === account.pageScopedId) {
-              console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by pageScopedId`);
-              return { account, isBotMessage: false };
+          try {
+            // Fetch Business Account ID from Instagram API using Page-Scoped ID
+            const businessAccountId = await this.fetchBusinessAccountIdFromPageScopedId(recipientId);
+            
+            if (businessAccountId) {
+              console.log(`🔍 [PSID Matching] Fetched Business Account ID: ${businessAccountId} for Page-Scoped ID: ${recipientId}`);
+              
+              // Match against our stored accounts
+              for (const account of allAccounts) {
+                if (businessAccountId === account.accountId) {
+                  console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by Business Account ID`);
+                  return { account, isBotMessage: false };
+                }
+              }
+              
+              console.warn(`⚠️ [PSID Matching] Business Account ID ${businessAccountId} not found in active accounts`);
+            } else {
+              console.warn(`⚠️ [PSID Matching] Failed to fetch Business Account ID for Page-Scoped ID: ${recipientId}`);
             }
+          } catch (error) {
+            console.error(`❌ [PSID Matching] Error fetching Business Account ID:`, error);
           }
-          
-          console.warn(`⚠️ [PSID Matching] Recipient ID ${recipientId} not found in active accounts (checked pageScopedId)`);
         } else {
           console.warn(`⚠️ [PSID Matching] No recipient ID provided for user message`);
         }
@@ -806,6 +820,41 @@ export class InstagramWebhookService {
       return null;
     } catch (error) {
       console.error('❌ Error identifying Instagram account by PSID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch Business Account ID from Page-Scoped ID using Instagram Graph API
+   */
+  private async fetchBusinessAccountIdFromPageScopedId(pageScopedId: string): Promise<string | null> {
+    try {
+      // We need to use any active account's access token to make this API call
+      const activeAccount = await InstagramAccount.findOne({ isActive: true });
+      if (!activeAccount) {
+        console.error('❌ No active Instagram account found for API call');
+        return null;
+      }
+
+      console.log(`🔍 [API Call] Fetching Business Account ID for Page-Scoped ID: ${pageScopedId}`);
+      
+      const response = await fetch(`https://graph.instagram.com/v23.0/${pageScopedId}?fields=id,username&access_token=${activeAccount.accessToken}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ [API Call] Instagram API response:`, data);
+        return data.id; // This should be the Business Account ID
+      } else {
+        console.error(`❌ [API Call] Instagram API error: ${response.status}`, await response.text());
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error fetching Business Account ID from Page-Scoped ID:', error);
       return null;
     }
   }
