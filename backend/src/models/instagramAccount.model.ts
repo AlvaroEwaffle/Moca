@@ -38,7 +38,8 @@ export interface IInstagramAccount extends Document {
   id: string;
   userId: string; // Moca user ID (links to User model)
   userEmail: string; // User email for quick access
-  accountId: string; // Instagram account ID
+  accountId: string; // Instagram Business Account ID
+  pageScopedId?: string; // Instagram Page-Scoped ID (for webhook matching)
   accountName: string; // Instagram username
   accessToken: string; // Instagram Graph API token
   refreshToken?: string; // For token refresh
@@ -88,6 +89,7 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
   userId: { type: String, required: true },
   userEmail: { type: String, required: true },
   accountId: { type: String, required: true, unique: true },
+  pageScopedId: { type: String, required: false },
   accountName: { type: String, required: true },
   accessToken: { type: String, required: true },
   refreshToken: { type: String, required: false },

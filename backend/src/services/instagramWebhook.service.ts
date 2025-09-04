@@ -754,6 +754,7 @@ export class InstagramWebhookService {
       console.log(`🔍 [PSID Matching] Account details:`, allAccounts.map(acc => ({ 
         accountName: acc.accountName, 
         accountId: acc.accountId, 
+        pageScopedId: acc.pageScopedId,
         userEmail: acc.userEmail 
       })));
       
@@ -768,18 +769,18 @@ export class InstagramWebhookService {
       }
       
       // If PSID doesn't match any account ID, it's a user message
-      // Find which account received this message using recipientId
+      // Find which account received this message using recipientId (Page-Scoped ID)
       if (recipientId) {
         console.log(`🔍 [PSID Matching] User message - looking for recipient account: ${recipientId}`);
         
         for (const account of allAccounts) {
-          if (recipientId === account.accountId) {
-            console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail})`);
+          if (recipientId === account.pageScopedId) {
+            console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail}) - matched by pageScopedId`);
             return { account, isBotMessage: false };
           }
         }
         
-        console.warn(`⚠️ [PSID Matching] Recipient ID ${recipientId} not found in active accounts`);
+        console.warn(`⚠️ [PSID Matching] Recipient ID ${recipientId} not found in active accounts (checked pageScopedId)`);
       } else {
         console.warn(`⚠️ [PSID Matching] No recipient ID provided for user message`);
       }

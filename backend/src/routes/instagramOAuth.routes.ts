@@ -136,6 +136,28 @@ router.post('/callback', authenticateToken, async (req, res) => {
     const profileData = await profileResponse.json();
     console.log('✅ [OAuth Callback] Instagram profile fetched successfully:', profileData);
 
+    // Get Page-Scoped ID for webhook matching
+    let pageScopedId = null;
+    try {
+      console.log(`🔧 [OAuth Callback] Fetching Page-Scoped ID for Business Account: ${profileData.id}`);
+      const pageScopedResponse = await fetch(`https://graph.instagram.com/v23.0/${profileData.id}?fields=username&access_token=${finalAccessToken}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (pageScopedResponse.ok) {
+        const pageScopedData = await pageScopedResponse.json();
+        pageScopedId = pageScopedData.id; // This should be the Page-Scoped ID
+        console.log('✅ [OAuth Callback] Page-Scoped ID fetched successfully:', pageScopedData);
+      } else {
+        console.warn('⚠️ [OAuth Callback] Failed to fetch Page-Scoped ID:', pageScopedResponse.status);
+      }
+    } catch (error) {
+      console.error('❌ [OAuth Callback] Error fetching Page-Scoped ID:', error);
+    }
+
     // Check if account already exists for this user
     const existingAccount = await InstagramAccount.findOne({ 
       accountId: profileData.id, // Use the Instagram Business Account ID from profile
@@ -180,6 +202,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       userId: req.user!.userId,
       userEmail: req.user!.email,
       accountId: profileData.id, // Use the Instagram Business Account ID from profile
+      pageScopedId: pageScopedId, // Page-Scoped ID for webhook matching
       accountName: profileData.username,
       accessToken: finalAccessToken,
       tokenExpiry: tokenExpiry,
