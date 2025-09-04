@@ -339,7 +339,7 @@ export class InstagramWebhookService {
       }
 
       // NEW STRATEGY: Use PSID-based account identification first
-      const accountResult = await this.identifyAccountByPSID(messageData.psid);
+      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id);
       if (!accountResult) {
         console.error('❌ No Instagram account found for PSID:', messageData.psid);
         return;
@@ -606,6 +606,7 @@ export class InstagramWebhookService {
         conversationId,
         contactId,
         accountId,
+        recipientId: messageData.recipient?.id,
         role: messageRole,
         content: {
           text: messageData.text || messageData.type,
@@ -739,7 +740,7 @@ export class InstagramWebhookService {
    * Identify Instagram account by PSID matching (NEW STRATEGY)
    * This uses the same logic as bot detection to find the correct account
    */
-  private async identifyAccountByPSID(psid: string): Promise<any> {
+  private async identifyAccountByPSID(psid: string, recipientId?: string): Promise<any> {
     try {
       console.log(`🔍 [PSID Matching] Looking for account with PSID: ${psid}`);
       
@@ -758,13 +759,26 @@ export class InstagramWebhookService {
       }
       
       // If PSID doesn't match any account ID, it's a user message
-      // We need to determine which account this user is messaging
-      // For now, we'll use the first active account as the recipient
-      // TODO: Implement proper user-to-account mapping when we have multiple accounts
-      const account = allAccounts[0];
+      // Find which account received this message using recipientId
+      if (recipientId) {
+        console.log(`🔍 [PSID Matching] User message - looking for recipient account: ${recipientId}`);
+        
+        for (const account of allAccounts) {
+          if (recipientId === account.accountId) {
+            console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail})`);
+            return { account, isBotMessage: false };
+          }
+        }
+        
+        console.warn(`⚠️ [PSID Matching] Recipient ID ${recipientId} not found in active accounts`);
+      } else {
+        console.warn(`⚠️ [PSID Matching] No recipient ID provided for user message`);
+      }
       
+      // Fallback to first active account if recipientId not found or not provided
+      const account = allAccounts[0];
       if (account) {
-        console.log(`👤 [PSID Matching] User message to account: ${account.accountName} (${account.userEmail})`);
+        console.log(`👤 [PSID Matching] User message to fallback account: ${account.accountName} (${account.userEmail})`);
         return { account, isBotMessage: false };
       }
       

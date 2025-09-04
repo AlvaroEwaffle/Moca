@@ -51,6 +51,7 @@ export interface IMessage extends Document {
   conversationId: string; // Reference to Conversation
   contactId: string; // Reference to Contact (for quick access)
   accountId: string; // Reference to InstagramAccount
+  recipientId?: string; // Instagram recipient ID (which account received the message)
   role: 'user' | 'assistant' | 'system'; // Message sender role
   content: {
     text: string;
@@ -108,6 +109,7 @@ const MessageSchema = new Schema<IMessage>({
   conversationId: { type: String, required: true },
   contactId: { type: String, required: true },
   accountId: { type: String, required: true },
+  recipientId: { type: String, required: false }, // Instagram recipient ID
   role: { type: String, enum: ['user', 'assistant', 'system'], required: true },
   content: { type: MessageContentSchema, required: true },
   metadata: { type: MessageMetadataSchema, default: () => ({}) },
@@ -129,6 +131,7 @@ const MessageSchema = new Schema<IMessage>({
 MessageSchema.index({ conversationId: 1 });
 MessageSchema.index({ contactId: 1 });
 MessageSchema.index({ accountId: 1 });
+MessageSchema.index({ recipientId: 1 });
 MessageSchema.index({ role: 1 });
 MessageSchema.index({ status: 1 });
 MessageSchema.index({ priority: 1 });
