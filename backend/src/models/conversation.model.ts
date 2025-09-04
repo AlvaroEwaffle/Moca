@@ -49,7 +49,7 @@ const ConversationSettingsSchema = new Schema({
 
 export interface IConversation extends Document {
   id: string;
-  contactId: string; // Reference to Contact
+  contactId: string | any; // Reference to Contact (ObjectId or populated object)
   accountId: string; // Reference to InstagramAccount
   status: 'open' | 'scheduled' | 'closed' | 'archived';
   timestamps: {
@@ -98,7 +98,7 @@ export interface IConversation extends Document {
 }
 
 const ConversationSchema = new Schema<IConversation>({
-  contactId: { type: String, required: true },
+  contactId: { type: Schema.Types.ObjectId, ref: 'Contact', required: true },
   accountId: { type: String, required: true },
   status: { type: String, enum: ['open', 'scheduled', 'closed', 'archived'], default: 'open' },
   timestamps: { type: ConversationTimestampsSchema, default: () => ({}) },
