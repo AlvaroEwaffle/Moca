@@ -153,7 +153,8 @@ ContactSchema.pre('save', function(next) {
 // Virtual for days since first contact
 ContactSchema.virtual('daysSinceFirstContact').get(function() {
   const now = new Date();
-  const firstSeen = this.metadata.firstSeen;
+  const firstSeen = this.metadata?.firstSeen;
+  if (!firstSeen) return 0;
   return Math.floor((now.getTime() - firstSeen.getTime()) / (1000 * 60 * 60 * 24));
 });
 
@@ -161,6 +162,7 @@ ContactSchema.virtual('daysSinceFirstContact').get(function() {
 ContactSchema.virtual('daysSinceLastActivity').get(function() {
   const now = new Date();
   const lastActivity = this.lastActivity;
+  if (!lastActivity) return 0;
   return Math.floor((now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24));
 });
 
