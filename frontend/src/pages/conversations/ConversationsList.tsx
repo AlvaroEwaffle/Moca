@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, MessageCircle, Clock, User, Filter, RefreshCw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye } from "lucide-react";
 import { Helmet } from "react-helmet";
 
 interface Conversation {
@@ -27,6 +28,7 @@ interface Conversation {
   messageCount: number;
   createdAt: Date;
   updatedAt: Date;
+  agentEnabled?: boolean;
 }
 
 const ConversationsList = () => {
@@ -37,6 +39,20 @@ const ConversationsList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("recent");
+
+  const handleAgentToggle = (conversationId: string, enabled: boolean) => {
+    // TODO: Implement API call to toggle agent status
+    console.log(`Toggle agent for conversation ${conversationId}: ${enabled}`);
+    
+    // Update local state for now
+    setConversations(prev => 
+      prev.map(conv => 
+        conv.id === conversationId 
+          ? { ...conv, agentEnabled: enabled }
+          : conv
+      )
+    );
+  };
 
   useEffect(() => {
     fetchConversations();
@@ -72,12 +88,13 @@ const ConversationsList = () => {
           },
           contact: {
             name: conv.contactId?.name || 'Unknown Contact',
-            username: conv.contactId?.psid || 'unknown',
+            username: conv.contactId?.metadata?.instagramData?.username || conv.contactId?.psid || 'unknown',
             profilePicture: conv.contactId?.profilePicture
           },
           messageCount: conv.messageCount || 0,
           createdAt: conv.createdAt || new Date(),
-          updatedAt: conv.updatedAt || conv.timestamps?.lastActivity || new Date()
+          updatedAt: conv.updatedAt || conv.timestamps?.lastActivity || new Date(),
+          agentEnabled: conv.settings?.aiEnabled !== false // Default to true if not specified
         }));
         
         setConversations(transformedConversations);
@@ -169,7 +186,7 @@ const ConversationsList = () => {
         <meta name="description" content="Manage your Instagram conversations and messages" />
       </Helmet>
 
-      <div className="space-y-6">
+      <div className="space-y-6 p-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -245,8 +262,7 @@ const ConversationsList = () => {
             filteredConversations.map((conversation) => (
               <Card 
                 key={conversation.id} 
-                className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/app/conversations/${conversation.id}`)}
+                className="hover:shadow-md transition-shadow"
               >
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
@@ -283,12 +299,34 @@ const ConversationsList = () => {
                       </div>
                     </div>
                     
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500 mb-1">
-                        {conversation.lastMessage?.sender === 'bot' ? 'Bot' : 'User'}
+                    <div className="flex flex-col items-end space-y-3">
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500 mb-1">
+                          {conversation.lastMessage?.sender === 'bot' ? 'Bot' : 'User'}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {formatTimeAgo(conversation.updatedAt)}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {formatTimeAgo(conversation.updatedAt)}
+                      
+                      <div className="flex items-center space-x-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/app/conversations/${conversation.id}`)}
+                          className="flex items-center space-x-1"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span>Details</span>
+                        </Button>
+                        
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-gray-600">Agent</span>
+                          <Switch
+                            checked={conversation.agentEnabled}
+                            onCheckedChange={(checked) => handleAgentToggle(conversation.id, checked)}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

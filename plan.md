@@ -337,7 +337,9 @@ The user interface is next! We need to build:
 
 ## **📋 Next Goals:**
 
-1) **Activate the toggle functionality** - so we can decide which conversations will be handled by the Agent. This includes getting the details of the conversation.
+1) **Get user sender messaging account username to store them in the contacts and showing them in the conversations page** This includes getting the details of the conversation.
+
+1) **Activate the toggle functionality** - so we can decide which conversations will be handled by the Agent. 
 
 2) **Improve agent capabilities** - have a standard response format, something like a JSON:
 ```json
