@@ -161,7 +161,7 @@ export class InstagramWebhookService {
             await this.processMessageEvent(message);
           }
         } else {
-          console.log('⚠️ Unknown entry structure:', JSON.stringify(entry, null, 2));
+          console.log('⚠️ Unknown entry structure detected');
         }
       }
 
@@ -321,7 +321,7 @@ export class InstagramWebhookService {
       console.log(`📨 Processing message from PSID: ${messageData.psid}, MID: ${messageData.mid}`);
       console.log(`🔧 [Webhook] Message recipient ID: ${messageData.recipient?.id || 'NOT PROVIDED'}`);
       console.log(`🔧 [Webhook] Is Echo (Bot Message): ${messageData.is_echo || false}`);
-      console.log(`🔧 [Webhook] Full messageData:`, JSON.stringify(messageData, null, 2));
+      console.log(`🔧 [Webhook] Processing message from PSID: ${messageData.psid || 'unknown'}`);
 
       // Check if message already exists (deduplication)
       const existingMessage = await Message.findOne({ mid: messageData.mid });
@@ -558,7 +558,7 @@ export class InstagramWebhookService {
         }
 
         await contact.save();
-        console.log(`🔍 [Contact Update] Saved contact metadata:`, contact.metadata);
+        console.log(`🔍 [Contact Update] Saved contact metadata for PSID: ${psid}`);
       }
 
       return contact;
@@ -796,12 +796,7 @@ export class InstagramWebhookService {
       // Get all active Instagram accounts
       const allAccounts = await InstagramAccount.find({ isActive: true });
       console.log(`🔍 [Account Identification] Found ${allAccounts.length} active accounts in database`);
-      console.log(`🔍 [Account Identification] Account details:`, allAccounts.map(acc => ({ 
-        accountName: acc.accountName, 
-        accountId: acc.accountId, 
-        pageScopedId: acc.pageScopedId, 
-        userEmail: acc.userEmail 
-      })));
+      console.log(`🔍 [Account Identification] Account details: [${allAccounts.length} accounts]`);
       
       // Use is_echo flag to determine if this is a bot message
       if (isBotMessage) {

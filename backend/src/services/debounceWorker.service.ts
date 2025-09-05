@@ -638,18 +638,12 @@ class DebounceWorkerService {
         return;
       }
 
-      // Log all existing queue items for this conversation for debugging
+      // Check for existing queue items
       const allQueueItems = await OutboundQueue.find({
         conversationId: conversation.id
       }).sort({ createdAt: -1 });
       
-      console.log(`🔍 All queue items for conversation ${conversation.id}:`, allQueueItems.map(item => ({
-        id: item.id,
-        accountId: item.accountId,
-        status: item.status,
-        createdAt: (item as any).createdAt,
-        content: item.content.text
-      })));
+      console.log(`🔍 All queue items for conversation ${conversation.id}: [${allQueueItems.length} items]`);
 
       // Create bot message record
       console.log(`🔍 Creating bot message for conversation ${conversation.id} with accountId: ${conversation.accountId}`);
@@ -722,11 +716,7 @@ class DebounceWorkerService {
       console.log(`🔍 DebounceWorkerService: Found ${existingMessages.length} existing messages out of ${messageIds.length} requested`);
       
       if (existingMessages.length > 0) {
-        console.log(`🔍 DebounceWorkerService: Sample message structure:`, {
-          id: existingMessages[0].id,
-          metadata: existingMessages[0].metadata,
-          hasProcessedField: 'processed' in existingMessages[0].metadata
-        });
+        console.log(`🔍 DebounceWorkerService: Sample message structure: [${existingMessages.length} messages]`);
       }
       
       const result = await Message.updateMany(

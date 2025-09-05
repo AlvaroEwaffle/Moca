@@ -131,7 +131,7 @@ class InstagramApiService {
    */
   async sendMessage(psid: string, message: any): Promise<any> {
     console.log(`📤 InstagramApiService: Sending message to PSID: ${psid}`);
-    console.log(`📤 InstagramApiService: Message content:`, JSON.stringify(message, null, 2));
+    console.log(`📤 InstagramApiService: Message content: ${message.text || 'media/attachment'}`);
 
     if (!this.accessToken) {
       console.log(`❌ InstagramApiService: No access token available`);
@@ -145,8 +145,7 @@ class InstagramApiService {
       message: message
     };
 
-    console.log(`📤 InstagramApiService: Sending to URL: ${url}`);
-    console.log(`📤 InstagramApiService: Payload:`, JSON.stringify(payload, null, 2));
+    console.log(`📤 InstagramApiService: Sending message to PSID: ${psid}`);
 
     try {
       const response = await fetch(url, {
@@ -159,13 +158,11 @@ class InstagramApiService {
       });
 
       console.log(`📤 InstagramApiService: Response status: ${response.status}`);
-      console.log(`📤 InstagramApiService: Response headers:`, Object.fromEntries(response.headers.entries()));
 
       const responseData = await response.json();
-      console.log(`📤 InstagramApiService: Response data:`, JSON.stringify(responseData, null, 2));
 
       if (!response.ok) {
-        console.error(`❌ InstagramApiService: API error - Status: ${response.status}, Data:`, responseData);
+        console.error(`❌ InstagramApiService: API error - Status: ${response.status}`);
         
         // If we get a 401 error, try to refresh the token
         if (response.status === 401) {
@@ -209,7 +206,7 @@ class InstagramApiService {
   async sendQuickReplies(psid: string, text: string, quickReplies: any[]): Promise<any> {
     console.log(`⚡ InstagramApiService: Sending quick replies to PSID: ${psid}`);
     console.log(`⚡ InstagramApiService: Text: "${text}"`);
-    console.log(`⚡ InstagramApiService: Quick replies:`, JSON.stringify(quickReplies, null, 2));
+    console.log(`⚡ InstagramApiService: Quick replies: [${quickReplies.length} options]`);
     
     return this.sendMessage(psid, {
       text,
@@ -223,7 +220,7 @@ class InstagramApiService {
   async sendButtons(psid: string, text: string, buttons: any[]): Promise<any> {
     console.log(`🔘 InstagramApiService: Sending buttons to PSID: ${psid}`);
     console.log(`🔘 InstagramApiService: Text: "${text}"`);
-    console.log(`🔘 InstagramApiService: Buttons:`, JSON.stringify(buttons, null, 2));
+    console.log(`🔘 InstagramApiService: Buttons: [${buttons.length} buttons]`);
     
     return this.sendMessage(psid, {
       attachment: {
@@ -242,7 +239,7 @@ class InstagramApiService {
    */
   async sendGenericTemplate(psid: string, elements: any[]): Promise<any> {
     console.log(`📋 InstagramApiService: Sending generic template to PSID: ${psid}`);
-    console.log(`📋 InstagramApiService: Elements:`, JSON.stringify(elements, null, 2));
+    console.log(`📋 InstagramApiService: Elements: [${elements.length} items]`);
     
     return this.sendMessage(psid, {
       attachment: {
@@ -260,7 +257,7 @@ class InstagramApiService {
    */
   async sendMediaMessage(psid: string, attachment: any): Promise<any> {
     console.log(`📷 InstagramApiService: Sending media message to PSID: ${psid}`);
-    console.log(`📷 InstagramApiService: Attachment:`, JSON.stringify(attachment, null, 2));
+    console.log(`📷 InstagramApiService: Attachment: ${attachment.type || 'unknown'}`);
     
     return this.sendMessage(psid, { attachment });
   }
@@ -279,7 +276,7 @@ class InstagramApiService {
       sender_action: action
     };
 
-    console.log(`⌨️ InstagramApiService: Typing payload:`, JSON.stringify(payload, null, 2));
+    console.log(`⌨️ InstagramApiService: Sending typing indicator to PSID: ${psid}`);
 
     try {
       const response = await fetch(url, {
@@ -319,7 +316,7 @@ class InstagramApiService {
       sender_action: 'mark_seen'
     };
 
-    console.log(`👁️ InstagramApiService: Mark as seen payload:`, JSON.stringify(payload, null, 2));
+    console.log(`👁️ InstagramApiService: Marking message as seen for PSID: ${psid}`);
 
     try {
       const response = await fetch(url, {
@@ -361,7 +358,7 @@ class InstagramApiService {
       console.log(`👤 InstagramApiService: Profile response status: ${response.status}`);
       
       const data = await response.json();
-      console.log(`👤 InstagramApiService: Profile data:`, JSON.stringify(data, null, 2));
+      console.log(`👤 InstagramApiService: Profile data received for PSID: ${psid}`);
       
       if (!response.ok) {
         console.error(`❌ InstagramApiService: Profile error:`, data);
@@ -390,7 +387,7 @@ class InstagramApiService {
       console.log(`🧪 InstagramApiService: Test response status: ${response.status}`);
       
       const data = await response.json();
-      console.log(`🧪 InstagramApiService: Test response data:`, JSON.stringify(data, null, 2));
+      console.log(`🧪 InstagramApiService: Test response received`);
       
       if (!response.ok) {
         console.error(`❌ InstagramApiService: Connection test failed:`, data);

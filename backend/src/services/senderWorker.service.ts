@@ -134,9 +134,7 @@ class SenderWorkerService {
       // Send the message
       let response;
       try {
-        console.log(`📤 SenderWorkerService: Attempting to send message to PSID: ${contact.psid}`);
-        console.log(`📤 SenderWorkerService: Message content: "${queueItem.content.text}"`);
-        console.log(`📤 SenderWorkerService: Queue item ID: ${queueItem.id}`);
+        console.log(`📤 SenderWorkerService: Sending message to PSID: ${contact.psid}`);
         
         // For now, just send text messages
         response = await instagramService.sendTextMessage(contact.psid, queueItem.content.text);
@@ -155,9 +153,7 @@ class SenderWorkerService {
         return true; // Successfully processed
 
       } catch (error) {
-        console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error);
-        console.error(`❌ SenderWorkerService: Error details:`, JSON.stringify(error, null, 2));
-        console.error(`❌ SenderWorkerService: Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+        console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error instanceof Error ? error.message : String(error));
         
         // Check if this is a "user not found" error
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
