@@ -19,9 +19,6 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import {
-  Calendar,
-  Users,
-  DollarSign,
   Settings,
   LogOut,
   Menu,
@@ -29,13 +26,8 @@ import {
   Search,
   ChevronDown,
   Home,
-  FileText,
   MessageSquare,
-  BarChart3,
-  Instagram,
-  Activity,
-  Send,
-  Clock
+  Instagram
 } from "lucide-react";
 
 const MainLayout = () => {
@@ -73,28 +65,10 @@ const MainLayout = () => {
       current: location.pathname.startsWith('/app/conversations')
     },
     {
-      name: 'Enviar Mensaje',
-      href: '/app/send-message',
-      icon: Send,
-      current: location.pathname.startsWith('/app/send-message')
-    },
-    {
       name: 'Instagram',
       href: '/app/instagram',
       icon: Instagram,
       current: location.pathname.startsWith('/app/instagram')
-    },
-    {
-      name: 'Cola de Mensajes',
-      href: '/app/queue',
-      icon: Clock,
-      current: location.pathname.startsWith('/app/queue')
-    },
-    {
-      name: 'Logs del Sistema',
-      href: '/app/logs',
-      icon: Activity,
-      current: location.pathname.startsWith('/app/logs')
     },
     {
       name: 'Configuración',

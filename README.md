@@ -10,7 +10,7 @@
 
 ## 🚀 **Current Status**
 
-**Latest Working Version:** `5bab597` - "Simplified UI with enhanced conversation details and streamlined conversation list"
+**Latest Working Version:** `98c3f984` - "Instagram Account Management with Custom System Prompts"
 
 ### ✅ **What's Working:**
 - **Multi-Account Support**: Perfect account identification with Page-Scoped ID matching
@@ -24,8 +24,13 @@
 - **Agent Toggle UI**: Ready for backend integration
 - **Conversation Details**: Comprehensive AI metadata display with organized sections
 - **Streamlined List**: Clean conversation list with essential metrics only
+- **Instagram Account Management**: Custom system prompt editor for each account
+- **Simplified Navigation**: Clean sidebar with essential features only
 
 ### 🎯 **Recent Achievements:**
+- **Instagram Account Management**: Complete system for managing Instagram accounts and custom AI prompts
+- **Custom System Prompts**: Per-account AI instruction editor with real-time updates
+- **Simplified Navigation**: Clean sidebar with only essential features (Dashboard, Conversations, Instagram, Configuration)
 - **Enhanced Conversation Details**: Comprehensive AI metadata display with organized sections
 - **Streamlined Conversation List**: Clean interface with essential metrics only
 - **UI Simplification**: Removed redundant information and improved focus
@@ -106,6 +111,8 @@
 - **Attachment Support**: Images, videos, and files with captions
 - **Multi-Account Support**: Handle multiple Instagram business accounts seamlessly
 - **Username Display**: Fetch and display actual Instagram usernames in conversations
+- **Account Management**: Centralized Instagram account configuration and settings
+- **Custom System Prompts**: Per-account AI instruction editor for personalized responses
 
 ### **💼 Lead Management**
 - **Contact Database**: Comprehensive contact profiles with business information
@@ -430,9 +437,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 # 📋 **Development Roadmap & Plan**
 
-## 🚀 **Latest Working Version - AI Enhancement Complete**
+## 🚀 **Latest Working Version - Instagram Account Management Complete**
 
-**Commit:** `f4c4ddc` - "Implement structured AI responses with lead scoring system"
+**Commit:** `98c3f984` - "Instagram Account Management with Custom System Prompts"
 
 ### **✅ Current Status:**
 - **Multi-Account Support**: ✅ Complete
@@ -440,6 +447,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Clean UI**: ✅ Complete
 - **Contact Population**: ✅ Complete
 - **Agent Toggle UI**: ✅ Complete
+- **Instagram Account Management**: ✅ Complete
+- **Custom System Prompts**: ✅ Complete
+- **Simplified Navigation**: ✅ Complete
 - **Structured AI Responses**: ✅ Complete
 - **Lead Scoring System**: ✅ Complete
 - **Repetition Prevention**: ✅ Complete
@@ -509,7 +519,13 @@ All AI enhancement features are now implemented and working! The system now prov
 3. ✅ **UI Simplification** and better organization
 4. ✅ **Max Score Display** and improved visual hierarchy
 
-### **Phase 5: Testing & Validation**
+### **✅ Phase 5: Instagram Account Management - COMPLETED**
+1. ✅ **Instagram Account Management UI** with custom system prompt editor
+2. ✅ **Backend API Endpoint** for updating custom instructions
+3. ✅ **Simplified Navigation** with essential features only
+4. ✅ **Real-time System Prompt Updates** with proper error handling
+
+### **Phase 6: Testing & Validation**
 1. **End-to-End Testing** of structured responses
 2. **Lead Scoring Accuracy** validation
 3. **Account-Specific Instructions** testing

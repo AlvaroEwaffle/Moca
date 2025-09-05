@@ -65,7 +65,12 @@ const InstagramAccounts = () => {
   };
 
   const startEditing = (account: InstagramAccount) => {
-    setEditingAccount(account.id);
+    console.log('🔧 [Frontend] Starting edit for account:', {
+      id: account.id,
+      accountId: account.accountId,
+      accountName: account.accountName
+    });
+    setEditingAccount(account.accountId);
     setCustomInstructions(account.settings?.systemPrompt || "");
   };
 
@@ -75,6 +80,7 @@ const InstagramAccounts = () => {
   };
 
   const saveInstructions = async (accountId: string) => {
+    console.log('🔧 [Frontend] Saving instructions for accountId:', accountId);
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -97,7 +103,7 @@ const InstagramAccounts = () => {
       if (response.ok) {
         // Update local state
         setAccounts(accounts.map(account => 
-          account.id === accountId 
+          account.accountId === accountId 
             ? { 
                 ...account, 
                 settings: { 
@@ -218,7 +224,7 @@ const InstagramAccounts = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => startEditing(account)}
-                        disabled={editingAccount === account.id}
+                        disabled={editingAccount === account.accountId}
                       >
                         <Settings className="w-4 h-4 mr-2" />
                         Edit Prompt
@@ -233,7 +239,7 @@ const InstagramAccounts = () => {
                       <h4 className="text-sm font-medium text-gray-700">AI System Prompt</h4>
                     </div>
                     
-                    {editingAccount === account.id ? (
+                    {editingAccount === account.accountId ? (
                       <div className="space-y-4">
                         <div>
                           <Label htmlFor="instructions">Custom Instructions</Label>
@@ -251,7 +257,7 @@ const InstagramAccounts = () => {
                         
                         <div className="flex space-x-2">
                           <Button 
-                            onClick={() => saveInstructions(account.id)}
+                            onClick={() => saveInstructions(account.accountId)}
                             disabled={saving}
                             size="sm"
                           >
