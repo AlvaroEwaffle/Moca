@@ -11,6 +11,8 @@ import { authenticateToken } from '../middleware/auth';
 const router = express.Router();
 const webhookService = new InstagramWebhookService();
 
+console.log('🔧 [Instagram Routes] Router initialized with custom instructions endpoint');
+
 // Webhook verification and message reception
 router.get('/webhook', (req, res) => {
   try {
@@ -655,18 +657,35 @@ router.get('/test-connection', async (req, res) => {
 // Update Instagram account custom instructions
 router.put('/accounts/:accountId/instructions', authenticateToken, async (req, res) => {
   try {
+    console.log('🔧 [Custom Instructions] PUT request received');
+    console.log('🔧 [Custom Instructions] URL:', req.url);
+    console.log('🔧 [Custom Instructions] Params:', req.params);
+    console.log('🔧 [Custom Instructions] Body:', req.body);
+    
     const { accountId } = req.params;
     const { customInstructions } = req.body;
 
     if (!customInstructions) {
+      console.log('🔧 [Custom Instructions] Missing customInstructions in body');
       return res.status(400).json({
         success: false,
         error: 'Custom instructions are required'
       });
     }
 
+    console.log('🔧 [Custom Instructions] Searching for account with ID:', accountId);
     const account = await InstagramAccount.findOne({ accountId });
+    console.log('🔧 [Custom Instructions] Account found:', !!account);
+    if (account) {
+      console.log('🔧 [Custom Instructions] Account details:', {
+        id: account._id,
+        accountId: account.accountId,
+        accountName: account.accountName
+      });
+    }
+    
     if (!account) {
+      console.log('🔧 [Custom Instructions] Account not found for ID:', accountId);
       return res.status(404).json({
         success: false,
         error: 'Instagram account not found'
@@ -674,8 +693,10 @@ router.put('/accounts/:accountId/instructions', authenticateToken, async (req, r
     }
 
     // Update the system prompt in settings
+    console.log('🔧 [Custom Instructions] Updating system prompt...');
     account.settings.systemPrompt = customInstructions;
     await account.save();
+    console.log('🔧 [Custom Instructions] Account saved successfully');
 
     console.log(`✅ Updated custom instructions for account: ${accountId}`);
 
