@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye } from "lucide-react";
 import { Helmet } from "react-helmet";
+import LeadScoreIndicator from "@/components/LeadScoreIndicator";
 
 interface Conversation {
   id: string;
@@ -29,6 +30,28 @@ interface Conversation {
   createdAt: Date;
   updatedAt: Date;
   agentEnabled?: boolean;
+  leadScoring?: {
+    currentScore: number;
+    previousScore?: number;
+    progression: 'increased' | 'decreased' | 'maintained';
+    confidence: number;
+  };
+  aiResponseMetadata?: {
+    lastResponseType: 'structured' | 'fallback';
+    lastIntent?: string;
+    lastNextAction?: string;
+    repetitionDetected: boolean;
+    contextAwareness: boolean;
+    responseQuality: number;
+  };
+  analytics?: {
+    leadProgression: {
+      trend: 'improving' | 'declining' | 'stable';
+      averageScore: number;
+      peakScore: number;
+    };
+    repetitionPatterns: string[];
+  };
 }
 
 const ConversationsList = () => {
@@ -279,6 +302,17 @@ const ConversationsList = () => {
                           {getStatusBadge(conversation.status)}
                         </div>
                         
+                        {/* Lead Score Indicator */}
+                        {conversation.leadScoring && (
+                          <div className="mb-2">
+                            <LeadScoreIndicator
+                              score={conversation.leadScoring.currentScore}
+                              progression={conversation.leadScoring.progression}
+                              confidence={conversation.leadScoring.confidence}
+                            />
+                          </div>
+                        )}
+                        
                         <div className="flex items-center space-x-1 text-xs text-gray-500">
                           <MessageCircle className="w-3 h-3" />
                           <span>{conversation.messageCount} messages</span>
@@ -286,6 +320,28 @@ const ConversationsList = () => {
                           <Clock className="w-3 h-3" />
                           <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
                         </div>
+                        
+                        {/* AI Response Quality Indicator */}
+                        {conversation.aiResponseMetadata && (
+                          <div className="mt-2 flex items-center space-x-2">
+                            <Badge 
+                              variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
+                              className="text-xs"
+                            >
+                              {conversation.aiResponseMetadata.lastResponseType}
+                            </Badge>
+                            {conversation.aiResponseMetadata.repetitionDetected && (
+                              <Badge variant="destructive" className="text-xs">
+                                Repetition
+                              </Badge>
+                            )}
+                            {conversation.aiResponseMetadata.contextAwareness && (
+                              <Badge variant="outline" className="text-xs">
+                                Context Aware
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     

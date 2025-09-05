@@ -167,6 +167,7 @@ router.get('/conversations', authenticateToken, async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit as string))
       .populate('contactId', 'name psid email metadata')
+      .select('+leadScoring +aiResponseMetadata +analytics')
       .select('-__v');
 
     console.log(`🔍 [API] Found ${conversations.length} conversations`);
@@ -211,7 +212,7 @@ router.get('/conversations/:id', async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.id)
       .populate('contactId', 'name psid email profilePicture metadata')
-      .select('-__v');
+      .select('+leadScoring +aiResponseMetadata +analytics -__v');
 
     if (!conversation) {
       return res.status(404).json({

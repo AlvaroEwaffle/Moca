@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Send, User, Bot, Clock, MessageCircle, Archive, Trash2 } from "lucide-react";
 import { Helmet } from "react-helmet";
+import LeadScoreIndicator from "@/components/LeadScoreIndicator";
+import ConversationAnalytics from "@/components/ConversationAnalytics";
 
 interface Message {
   id: string;
@@ -26,13 +28,43 @@ interface Conversation {
   accountId: string;
   status: 'open' | 'closed' | 'archived';
   contact: {
-    name: string;
-    username: string;
+    name?: string;
+    username?: string;
     profilePicture?: string;
   };
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
+  leadScoring?: {
+    currentScore: number;
+    previousScore?: number;
+    progression: 'increased' | 'decreased' | 'maintained';
+    confidence: number;
+  };
+  aiResponseMetadata?: {
+    lastResponseType: 'structured' | 'fallback';
+    lastIntent?: string;
+    lastNextAction?: string;
+    repetitionDetected: boolean;
+    contextAwareness: boolean;
+    businessNameUsed?: string;
+    responseQuality: number;
+  };
+  analytics?: {
+    leadProgression: {
+      trend: 'improving' | 'declining' | 'stable';
+      averageScore: number;
+      peakScore: number;
+      progressionRate: number;
+    };
+    repetitionPatterns: string[];
+    conversationFlow: {
+      totalTurns: number;
+      averageTurnLength: number;
+      questionCount: number;
+      responseCount: number;
+    };
+  };
 }
 
 const ConversationDetail = () => {
@@ -161,8 +193,8 @@ const ConversationDetail = () => {
   return (
     <>
       <Helmet>
-        <title>{conversation.contact.name} | Moca - Instagram DM Agent</title>
-        <meta name="description" content={`Conversation with ${conversation.contact.name}`} />
+        <title>{conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'} | Moca - Instagram DM Agent</title>
+        <meta name="description" content={`Conversation with ${conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}`} />
       </Helmet>
 
       <div className="space-y-6">
@@ -178,13 +210,51 @@ const ConversationDetail = () => {
               Back
             </Button>
             
-            <div>
+            <div className="flex-1">
               <h1 className="text-2xl font-bold text-gray-900">
-                {conversation.contact.name}
+                {conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}
               </h1>
-              <p className="text-gray-600">
-                @{conversation.contact.username} • {getStatusBadge(conversation.status)}
+              <p className="text-gray-600 mb-3">
+                @{conversation.contact?.username || 'unknown'} • {getStatusBadge(conversation.status)}
               </p>
+              
+              {/* Lead Score Indicator */}
+              {conversation.leadScoring && (
+                <div className="mb-2">
+                  <LeadScoreIndicator
+                    score={conversation.leadScoring.currentScore}
+                    progression={conversation.leadScoring.progression}
+                    confidence={conversation.leadScoring.confidence}
+                  />
+                </div>
+              )}
+              
+              {/* AI Response Quality Indicators */}
+              {conversation.aiResponseMetadata && (
+                <div className="flex items-center space-x-2">
+                  <Badge 
+                    variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
+                    className="text-xs"
+                  >
+                    {conversation.aiResponseMetadata.lastResponseType}
+                  </Badge>
+                  {conversation.aiResponseMetadata.repetitionDetected && (
+                    <Badge variant="destructive" className="text-xs">
+                      Repetition Detected
+                    </Badge>
+                  )}
+                  {conversation.aiResponseMetadata.contextAwareness && (
+                    <Badge variant="outline" className="text-xs">
+                      Context Aware
+                    </Badge>
+                  )}
+                  {conversation.aiResponseMetadata.lastIntent && (
+                    <Badge variant="secondary" className="text-xs">
+                      {conversation.aiResponseMetadata.lastIntent}
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -277,8 +347,9 @@ const ConversationDetail = () => {
           </CardContent>
         </Card>
 
-        {/* Conversation Info */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Conversation Info and Analytics */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Contact Info */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">Contact Info</CardTitle>
@@ -287,16 +358,21 @@ const ConversationDetail = () => {
               <div className="space-y-2">
                 <div>
                   <span className="text-sm font-medium">Name:</span>
-                  <p className="text-sm text-gray-600">{conversation.contact.name}</p>
+                  <p className="text-sm text-gray-600">{conversation.contact?.name || 'Not available'}</p>
                 </div>
                 <div>
                   <span className="text-sm font-medium">Username:</span>
-                  <p className="text-sm text-gray-600">@{conversation.contact.username}</p>
+                  <p className="text-sm text-gray-600">@{conversation.contact?.username || 'unknown'}</p>
+                </div>
+                <div>
+                  <span className="text-sm font-medium">Status:</span>
+                  <div className="mt-1">{getStatusBadge(conversation.status)}</div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Conversation Stats */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">Conversation Stats</CardTitle>
@@ -311,28 +387,55 @@ const ConversationDetail = () => {
                   <span className="text-sm font-medium">Started:</span>
                   <p className="text-sm text-gray-600">{formatTime(conversation.createdAt)}</p>
                 </div>
+                <div>
+                  <span className="text-sm font-medium">Last Updated:</span>
+                  <p className="text-sm text-gray-600">{formatTime(conversation.updatedAt)}</p>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Last Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div>
-                  <span className="text-sm font-medium">Updated:</span>
-                  <p className="text-sm text-gray-600">{formatTime(conversation.updatedAt)}</p>
+          {/* Lead Scoring Summary */}
+          {conversation.leadScoring && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600">Lead Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium">Current Score:</span>
+                    <p className="text-sm text-gray-600">{conversation.leadScoring.currentScore}/10</p>
+                  </div>
+                  {conversation.leadScoring.previousScore && (
+                    <div>
+                      <span className="text-sm font-medium">Previous Score:</span>
+                      <p className="text-sm text-gray-600">{conversation.leadScoring.previousScore}/10</p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-sm font-medium">Progression:</span>
+                    <p className="text-sm text-gray-600 capitalize">{conversation.leadScoring.progression}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium">Confidence:</span>
+                    <p className="text-sm text-gray-600">{Math.round(conversation.leadScoring.confidence * 100)}%</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-sm font-medium">Status:</span>
-                  <div className="mt-1">{getStatusBadge(conversation.status)}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
+
+        {/* Detailed Analytics */}
+        {conversation.analytics && conversation.aiResponseMetadata && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ConversationAnalytics
+              analytics={conversation.analytics}
+              aiResponseMetadata={conversation.aiResponseMetadata}
+            />
+          </div>
+        )}
       </div>
     </>
   );
