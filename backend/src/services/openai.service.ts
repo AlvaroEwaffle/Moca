@@ -2,6 +2,15 @@ import OpenAI from 'openai'
 import { v4 as uuid } from 'uuid'
 import dotenv from 'dotenv'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import { 
+  StructuredResponse, 
+  ConversationContext, 
+  AIResponseConfig,
+  validateStructuredResponse,
+  createDefaultResponse
+} from '../types/aiResponse'
+import { generateContextualInstructions } from '../templates/aiInstructions'
+import { LeadScoringService } from './leadScoring.service'
 
 // Ensure environment variables are loaded
 dotenv.config()
@@ -127,6 +136,172 @@ Respuesta:`;
     // Fallback to simple rule-based response
     return generateFallbackResponse(context);
   }
+}
+
+/**
+ * Generate structured AI response with lead scoring and context awareness
+ */
+export async function generateStructuredResponse(
+  conversationContext: ConversationContext,
+  config: AIResponseConfig
+): Promise<StructuredResponse> {
+  try {
+    console.log('🤖 Generating structured Instagram DM response with AI');
+
+    // Generate contextual instructions
+    const contextualInstructions = generateContextualInstructions(
+      conversationContext.conversationHistory,
+      conversationContext.businessName,
+      config.customInstructions
+    );
+
+    // Analyze conversation for repetition patterns
+    const repetitionPatterns = LeadScoringService.detectRepetition(conversationContext);
+    
+    // Calculate lead score
+    const leadScoringData = LeadScoringService.calculateLeadScore(
+      conversationContext.lastMessage,
+      conversationContext
+    );
+
+    // Determine intent and next action
+    const intent = LeadScoringService.determineIntent(
+      conversationContext.lastMessage,
+      conversationContext
+    );
+
+    const nextAction = LeadScoringService.determineNextAction(
+      leadScoringData.currentScore,
+      intent,
+      conversationContext
+    );
+
+    // Build conversation context for AI
+    const conversationText = conversationContext.conversationHistory
+      .map(msg => `${msg.role === 'user' ? '👤 Cliente' : '🤖 Asistente'}: ${msg.content}`)
+      .join('\n');
+
+    const userPrompt = `Analiza esta conversación y genera una respuesta estructurada:
+
+CONVERSACIÓN:
+${conversationText}
+
+MENSAJE ACTUAL DEL CLIENTE:
+${conversationContext.lastMessage}
+
+CONTEXTO:
+- Tiempo desde último mensaje: ${conversationContext.timeSinceLastMessage} minutos
+- Patrones de repetición detectados: ${repetitionPatterns.join(', ') || 'ninguno'}
+- Puntuación de lead actual: ${leadScoringData.currentScore}/10
+- Puntuación anterior: ${leadScoringData.previousScore || 'N/A'}/10
+- Progresión: ${leadScoringData.progression}
+
+INSTRUCCIONES:
+${contextualInstructions}
+
+RESPONDE SOLO CON JSON VÁLIDO:
+{
+  "status": number (1-10),
+  "responseText": "string",
+  "leadScore": number (1-10),
+  "intent": "string",
+  "nextAction": "string",
+  "confidence": number (0-1),
+  "metadata": {
+    "greetingUsed": boolean,
+    "previousContextReferenced": boolean,
+    "businessNameUsed": "string"
+  }
+}`;
+
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: contextualInstructions },
+      { role: 'user', content: userPrompt }
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+      messages,
+      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '200'),
+      temperature: 0.7,
+      presence_penalty: 0.1,
+      frequency_penalty: 0.1
+    });
+
+    const aiResponse = response.choices[0]?.message?.content || '';
+    console.log('🤖 Raw AI response:', aiResponse);
+
+    // Parse and validate JSON response
+    let structuredResponse: StructuredResponse;
+    try {
+      const parsedResponse = JSON.parse(aiResponse);
+      
+      if (validateStructuredResponse(parsedResponse)) {
+        structuredResponse = parsedResponse;
+      } else {
+        console.warn('⚠️ Invalid structured response format, using fallback');
+        structuredResponse = createFallbackStructuredResponse(conversationContext, leadScoringData);
+      }
+    } catch (parseError) {
+      console.error('❌ Error parsing AI response as JSON:', parseError);
+      structuredResponse = createFallbackStructuredResponse(conversationContext, leadScoringData);
+    }
+
+    // Enhance with lead scoring data
+    structuredResponse.leadScore = leadScoringData.currentScore;
+    structuredResponse.metadata.leadProgression = leadScoringData.progression;
+    structuredResponse.metadata.repetitionDetected = repetitionPatterns.length > 0;
+
+    console.log('✅ Structured response generated successfully:', {
+      status: structuredResponse.status,
+      leadScore: structuredResponse.leadScore,
+      intent: structuredResponse.intent,
+      nextAction: structuredResponse.nextAction
+    });
+
+    return structuredResponse;
+
+  } catch (error) {
+    console.error('❌ Error generating structured response:', error);
+    
+    // Return fallback structured response
+    return createDefaultResponse();
+  }
+}
+
+/**
+ * Create fallback structured response when AI fails
+ */
+function createFallbackStructuredResponse(
+  conversationContext: ConversationContext,
+  leadScoringData: any
+): StructuredResponse {
+  const isFirstMessage = conversationContext.conversationHistory.length === 1;
+  const timeSinceLastMessage = conversationContext.timeSinceLastMessage;
+  
+  let responseText = "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.";
+  
+  if (isFirstMessage || timeSinceLastMessage > 30) {
+    responseText = `Hola, gracias por contactarnos. ¿En qué podemos ayudarte?`;
+  } else {
+    responseText = `Perfecto, te ayudo con eso. ¿Necesitas más información?`;
+  }
+
+  return {
+    status: leadScoringData.currentScore,
+    responseText,
+    leadScore: leadScoringData.currentScore,
+    intent: 'inquiry',
+    nextAction: 'follow_up',
+    confidence: 0.5,
+    metadata: {
+      greetingUsed: isFirstMessage || timeSinceLastMessage > 30,
+      previousContextReferenced: false,
+      businessNameUsed: conversationContext.businessName,
+      repetitionDetected: false,
+      leadProgression: leadScoringData.progression
+    }
+  };
 }
 
 // Fallback response generation when AI is unavailable

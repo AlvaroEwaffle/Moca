@@ -1,0 +1,132 @@
+/**
+ * TypeScript interfaces for structured AI responses
+ */
+
+export interface StructuredResponse {
+  status: number; // Lead progression level (1-10)
+  responseText: string; // Actual response to customer
+  leadScore: number; // Customer interest level (1-10)
+  intent: string; // Customer's apparent intent
+  nextAction: string; // Recommended next step
+  confidence: number; // Confidence in assessment (0-1)
+  metadata: ResponseMetadata;
+}
+
+export interface ResponseMetadata {
+  greetingUsed: boolean;
+  previousContextReferenced: boolean;
+  businessNameUsed: string;
+  repetitionDetected?: boolean;
+  contextType?: 'greeting' | 'continuation' | 'question' | 'closing';
+  leadProgression?: 'increased' | 'decreased' | 'maintained';
+}
+
+export interface LeadScoringData {
+  currentScore: number;
+  previousScore?: number;
+  progression: 'increased' | 'decreased' | 'maintained';
+  reasons: string[];
+  confidence: number;
+}
+
+export interface ConversationContext {
+  businessName: string;
+  conversationHistory: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: Date;
+  }>;
+  lastMessage: string;
+  timeSinceLastMessage: number; // minutes
+  repetitionPatterns: string[];
+  leadHistory: number[];
+}
+
+export interface AIResponseConfig {
+  useStructuredResponse: boolean;
+  enableLeadScoring: boolean;
+  enableRepetitionPrevention: boolean;
+  enableContextAwareness: boolean;
+  customInstructions?: string;
+  businessContext?: {
+    company: string;
+    sector: string;
+    services: string[];
+  };
+}
+
+// Lead scoring constants
+export const LEAD_SCORES = {
+  CONTACTED: 1,
+  ANSWERED: 2,
+  SHOWS_INTEREST: 3,
+  PRODUCT_INTEREST: 4,
+  INFORMATION_REQUEST: 5,
+  DEMO_REQUEST: 6,
+  SCHEDULING: 7,
+  PROPOSAL_REQUEST: 8,
+  NEGOTIATING: 9,
+  READY_TO_CLOSE: 10
+} as const;
+
+// Intent types
+export const INTENT_TYPES = {
+  GREETING: 'greeting',
+  INQUIRY: 'inquiry',
+  COMPLAINT: 'complaint',
+  PURCHASE_INTEREST: 'purchase_interest',
+  INFORMATION_REQUEST: 'information_request',
+  DEMO_REQUEST: 'demo_request',
+  PRICING_INQUIRY: 'pricing_inquiry',
+  TECHNICAL_SUPPORT: 'technical_support',
+  GENERAL_QUESTION: 'general_question'
+} as const;
+
+// Next action types
+export const NEXT_ACTIONS = {
+  PROVIDE_DETAILS: 'provide_details',
+  SCHEDULE_DEMO: 'schedule_demo',
+  SEND_PROPOSAL: 'send_proposal',
+  ESCALATE_TO_HUMAN: 'escalate_to_human',
+  FOLLOW_UP: 'follow_up',
+  CLOSE_CONVERSATION: 'close_conversation',
+  ASK_QUALIFYING_QUESTIONS: 'ask_qualifying_questions',
+  SEND_INFORMATION: 'send_information'
+} as const;
+
+// Validation functions
+export function validateStructuredResponse(response: any): response is StructuredResponse {
+  return (
+    typeof response === 'object' &&
+    typeof response.status === 'number' &&
+    response.status >= 1 && response.status <= 10 &&
+    typeof response.responseText === 'string' &&
+    response.responseText.length > 0 &&
+    typeof response.leadScore === 'number' &&
+    response.leadScore >= 1 && response.leadScore <= 10 &&
+    typeof response.intent === 'string' &&
+    typeof response.nextAction === 'string' &&
+    typeof response.confidence === 'number' &&
+    response.confidence >= 0 && response.confidence <= 1 &&
+    typeof response.metadata === 'object' &&
+    typeof response.metadata.greetingUsed === 'boolean' &&
+    typeof response.metadata.previousContextReferenced === 'boolean' &&
+    typeof response.metadata.businessNameUsed === 'string'
+  );
+}
+
+export function createDefaultResponse(): StructuredResponse {
+  return {
+    status: 1,
+    responseText: "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.",
+    leadScore: 1,
+    intent: 'greeting',
+    nextAction: 'follow_up',
+    confidence: 0.5,
+    metadata: {
+      greetingUsed: false,
+      previousContextReferenced: false,
+      businessNameUsed: 'Business'
+    }
+  };
+}

@@ -8,6 +8,13 @@ import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
 import instagramService from './instagramApi.service';
 import * as openaiService from './openai.service';
+import { generateStructuredResponse } from './openai.service';
+import { 
+  ConversationContext, 
+  AIResponseConfig, 
+  StructuredResponse 
+} from '../types/aiResponse';
+import { LeadScoringService } from './leadScoring.service';
 
 class DebounceWorkerService {
   private isRunning: boolean = false;
@@ -175,14 +182,16 @@ class DebounceWorkerService {
       // Mark messages as processed FIRST to prevent race conditions
       await this.markMessagesAsProcessed(unprocessedMessages.map(msg => msg.id));
 
-      // Generate response with full conversation context
-      const response = await this.generateResponse(conversation, unprocessedMessages);
+      // Generate structured response with full conversation context
+      const responseData = await this.generateStructuredResponseForConversation(conversation, unprocessedMessages);
       
-      if (!response) {
+      if (!responseData) {
         console.log(`⚠️ DebounceWorkerService: No response generated for conversation ${conversation.id}`);
         return false;
       }
-      
+
+      const response = responseData.responseText;
+
       // Queue response
       await this.queueResponse(conversation, response, unprocessedMessages.map(msg => msg.mid));
       
@@ -245,8 +254,8 @@ class DebounceWorkerService {
     const collection = this.pendingMessages.get(conversationId);
     if (!collection) {
       console.log(`⚠️ DebounceWorkerService: No collection found for conversation ${conversationId}`);
-      return;
-    }
+        return;
+      }
 
     // Remove from pending messages
     this.pendingMessages.delete(conversationId);
@@ -306,6 +315,78 @@ class DebounceWorkerService {
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error generating context-aware response:`, error);
       return "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.";
+    }
+  }
+
+  /**
+   * Generate structured response for a message
+   */
+  private async generateStructuredResponseForConversation(
+    conversation: IConversation, 
+    newMessages: IMessage[]
+  ): Promise<{ responseText: string; structuredResponse?: StructuredResponse } | null> {
+    console.log(`🤖 DebounceWorkerService: Generating structured response for ${newMessages.length} messages`);
+    
+    try {
+      // Check business hours
+      if (!this.isWithinBusinessHours(conversation)) {
+        console.log(`🏢 DebounceWorkerService: Outside business hours for conversation: ${conversation.id}`);
+        return null;
+      }
+
+      // Get full conversation history for context
+      const conversationHistory = await this.getConversationHistory(conversation.id);
+      
+      // Get user context and business information
+      const userContext = await this.getUserContext(conversation.contactId, conversation.accountId);
+      
+      // Create conversation context for structured response
+      const conversationContext: ConversationContext = {
+        businessName: userContext.businessName || 'Business',
+        conversationHistory: conversationHistory
+          .filter(msg => msg.role !== 'system')
+          .map(msg => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content.text,
+            timestamp: msg.metadata.timestamp
+          })),
+        lastMessage: newMessages.map(msg => msg.content.text).join('\n\n'),
+        timeSinceLastMessage: this.calculateTimeSinceLastMessage(conversationHistory),
+        repetitionPatterns: [],
+        leadHistory: conversation.leadScoring?.scoreHistory?.map(h => h.score) || []
+      };
+
+      // Create AI response config
+      const aiConfig: AIResponseConfig = {
+        useStructuredResponse: true,
+        enableLeadScoring: true,
+        enableRepetitionPrevention: true,
+        enableContextAwareness: true,
+        customInstructions: userContext.agentBehavior?.systemPrompt,
+        businessContext: {
+          company: userContext.businessName || 'Business',
+          sector: userContext.specialization || 'General',
+          services: ['desarrollo web', 'marketing digital', 'consultoría']
+        }
+      };
+
+      // Generate structured response
+      const structuredResponse = await generateStructuredResponse(conversationContext, aiConfig);
+      
+      // Update conversation with structured response data
+      await this.updateConversationWithStructuredResponse(conversation.id, structuredResponse);
+      
+      console.log(`✅ DebounceWorkerService: Structured response generated: "${structuredResponse.responseText}"`);
+      return {
+        responseText: structuredResponse.responseText,
+        structuredResponse
+      };
+
+    } catch (error) {
+      console.error(`❌ DebounceWorkerService: Error generating structured response:`, error);
+      return {
+        responseText: "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto."
+      };
     }
   }
 
@@ -372,8 +453,9 @@ class DebounceWorkerService {
       // Combine new messages into a single text
       const newMessageText = newMessages.map(msg => msg.content.text).join('\n\n');
       
-      // Create context for AI service
-      const context = {
+      // Create conversation context for structured response
+      const conversationContext: ConversationContext = {
+        businessName: userContext.businessName || 'Business',
         conversationHistory: conversationHistory
           .filter(msg => msg.role !== 'system')
           .map(msg => ({
@@ -381,32 +463,131 @@ class DebounceWorkerService {
             content: msg.content.text,
             timestamp: msg.metadata.timestamp
           })),
-        newMessages: newMessageText,
-        userContext: userContext,
-        businessInfo: userContext.businessName,
-        agentBehavior: userContext.agentBehavior
+        lastMessage: newMessageText,
+        timeSinceLastMessage: this.calculateTimeSinceLastMessage(conversationHistory),
+        repetitionPatterns: [],
+        leadHistory: [] // Will be populated from conversation data
       };
 
-      // Call OpenAI service with full context including agent behavior
-      const response = await openaiService.generateInstagramResponse({
-        conversationHistory: context.conversationHistory,
-        userIntent: 'general_inquiry',
-        conversationTopic: 'general',
-        userSentiment: 'neutral',
+      // Create AI response config
+      const aiConfig: AIResponseConfig = {
+        useStructuredResponse: true,
+        enableLeadScoring: true,
+        enableRepetitionPrevention: true,
+        enableContextAwareness: true,
+        customInstructions: userContext.agentBehavior?.systemPrompt,
         businessContext: {
-          company: context.businessInfo,
-          sector: userContext.specialization,
+          company: userContext.businessName || 'Business',
+          sector: userContext.specialization || 'General',
           services: ['desarrollo web', 'marketing digital', 'consultoría']
-        },
-        language: 'es',
-        agentBehavior: userContext.agentBehavior
+        }
+      };
+
+      // Generate structured response
+      const structuredResponse = await generateStructuredResponse(conversationContext, aiConfig);
+      
+      console.log('✅ DebounceWorkerService: Structured response generated:', {
+        status: structuredResponse.status,
+        leadScore: structuredResponse.leadScore,
+        intent: structuredResponse.intent,
+        nextAction: structuredResponse.nextAction
       });
       
-      return response || "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.";
-      
+      return structuredResponse.responseText;
+
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error generating contextual response:`, error);
       return "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.";
+    }
+  }
+
+  /**
+   * Calculate time since last message in minutes
+   */
+  private calculateTimeSinceLastMessage(conversationHistory: IMessage[]): number {
+    if (conversationHistory.length === 0) return 0;
+    
+    const lastMessage = conversationHistory[conversationHistory.length - 1];
+    const lastMessageTime = new Date(lastMessage.metadata.timestamp);
+    const now = new Date();
+    
+    return Math.floor((now.getTime() - lastMessageTime.getTime()) / (1000 * 60));
+  }
+
+  /**
+   * Update conversation with structured response data
+   */
+  private async updateConversationWithStructuredResponse(
+    conversationId: string,
+    structuredResponse: StructuredResponse
+  ): Promise<void> {
+    try {
+      const conversation = await Conversation.findById(conversationId);
+      if (!conversation) {
+        console.warn(`⚠️ DebounceWorkerService: Conversation not found for ID: ${conversationId}`);
+        return;
+      }
+
+      // Update lead scoring
+      const previousScore = conversation.leadScoring?.currentScore || 1;
+      conversation.leadScoring = {
+        currentScore: structuredResponse.leadScore,
+        previousScore: previousScore,
+        progression: structuredResponse.metadata.leadProgression || 'maintained',
+        scoreHistory: [
+          ...(conversation.leadScoring?.scoreHistory || []),
+          {
+            score: structuredResponse.leadScore,
+            timestamp: new Date(),
+            reason: `Intent: ${structuredResponse.intent}, Action: ${structuredResponse.nextAction}`
+          }
+        ],
+        lastScoredAt: new Date(),
+        confidence: structuredResponse.confidence
+      };
+
+      // Update AI response metadata
+      conversation.aiResponseMetadata = {
+        lastResponseType: 'structured',
+        lastIntent: structuredResponse.intent,
+        lastNextAction: structuredResponse.nextAction,
+        repetitionDetected: structuredResponse.metadata.repetitionDetected || false,
+        contextAwareness: structuredResponse.metadata.previousContextReferenced,
+        businessNameUsed: structuredResponse.metadata.businessNameUsed,
+        responseQuality: structuredResponse.confidence
+      };
+
+      // Update analytics
+      const leadProgression = LeadScoringService.analyzeLeadProgression({
+        businessName: conversation.contactId?.name || 'Business',
+        conversationHistory: [],
+        lastMessage: '',
+        timeSinceLastMessage: 0,
+        repetitionPatterns: [],
+        leadHistory: conversation.leadScoring?.scoreHistory?.map(h => h.score) || []
+      });
+
+      conversation.analytics = {
+        leadProgression: {
+          trend: leadProgression.trend,
+          averageScore: leadProgression.averageScore,
+          peakScore: leadProgression.peakScore,
+          progressionRate: leadProgression.progressionRate
+        },
+        repetitionPatterns: structuredResponse.metadata.repetitionDetected ? ['detected'] : [],
+        conversationFlow: {
+          totalTurns: conversation.metrics.totalMessages,
+          averageTurnLength: 0, // Will be calculated elsewhere
+          questionCount: 0, // Will be calculated elsewhere
+          responseCount: conversation.metrics.botMessages
+        }
+      };
+
+      await conversation.save();
+      console.log('✅ DebounceWorkerService: Conversation updated with structured response data');
+
+    } catch (error) {
+      console.error('❌ DebounceWorkerService: Error updating conversation with structured response:', error);
     }
   }
 

@@ -47,6 +47,48 @@ const ConversationSettingsSchema = new Schema({
   businessHoursOnly: { type: Boolean, default: false } // Only respond during business hours
 });
 
+// Lead scoring sub-schema
+const LeadScoringSchema = new Schema({
+  currentScore: { type: Number, min: 1, max: 10, default: 1 }, // Current lead score (1-10)
+  previousScore: { type: Number, min: 1, max: 10, required: false }, // Previous lead score
+  progression: { type: String, enum: ['increased', 'decreased', 'maintained'], default: 'maintained' },
+  scoreHistory: [{ 
+    score: { type: Number, min: 1, max: 10 },
+    timestamp: { type: Date, default: Date.now },
+    reason: { type: String }
+  }], // History of lead score changes
+  lastScoredAt: { type: Date, default: Date.now }, // When lead was last scored
+  confidence: { type: Number, min: 0, max: 1, default: 0.5 } // Confidence in lead assessment
+});
+
+// AI response metadata sub-schema
+const AIResponseMetadataSchema = new Schema({
+  lastResponseType: { type: String, enum: ['structured', 'fallback'], default: 'fallback' },
+  lastIntent: { type: String, required: false }, // Last detected intent
+  lastNextAction: { type: String, required: false }, // Last recommended next action
+  repetitionDetected: { type: Boolean, default: false }, // Whether repetition was detected
+  contextAwareness: { type: Boolean, default: false }, // Whether context was properly used
+  businessNameUsed: { type: String, required: false }, // Business name used in response
+  responseQuality: { type: Number, min: 0, max: 1, default: 0.5 } // Quality score of last response
+});
+
+// Conversation analytics sub-schema
+const ConversationAnalyticsSchema = new Schema({
+  leadProgression: {
+    trend: { type: String, enum: ['improving', 'declining', 'stable'], default: 'stable' },
+    averageScore: { type: Number, min: 1, max: 10, default: 1 },
+    peakScore: { type: Number, min: 1, max: 10, default: 1 },
+    progressionRate: { type: Number, min: 0, max: 1, default: 0 }
+  },
+  repetitionPatterns: [{ type: String }], // Detected repetition patterns
+  conversationFlow: {
+    totalTurns: { type: Number, default: 0 },
+    averageTurnLength: { type: Number, default: 0 },
+    questionCount: { type: Number, default: 0 },
+    responseCount: { type: Number, default: 0 }
+  }
+});
+
 export interface IConversation extends Document {
   id: string;
   contactId: string | any; // Reference to Contact (ObjectId or populated object)
@@ -91,6 +133,42 @@ export interface IConversation extends Document {
     followUpDate?: Date;
     businessHoursOnly: boolean;
   };
+  leadScoring: {
+    currentScore: number;
+    previousScore?: number;
+    progression: 'increased' | 'decreased' | 'maintained';
+    scoreHistory: Array<{
+      score: number;
+      timestamp: Date;
+      reason: string;
+    }>;
+    lastScoredAt: Date;
+    confidence: number;
+  };
+  aiResponseMetadata: {
+    lastResponseType: 'structured' | 'fallback';
+    lastIntent?: string;
+    lastNextAction?: string;
+    repetitionDetected: boolean;
+    contextAwareness: boolean;
+    businessNameUsed?: string;
+    responseQuality: number;
+  };
+  analytics: {
+    leadProgression: {
+      trend: 'improving' | 'declining' | 'stable';
+      averageScore: number;
+      peakScore: number;
+      progressionRate: number;
+    };
+    repetitionPatterns: string[];
+    conversationFlow: {
+      totalTurns: number;
+      averageTurnLength: number;
+      questionCount: number;
+      responseCount: number;
+    };
+  };
   isActive: boolean; // Whether conversation is currently active
   lastMessageId?: string; // ID of the last message in the conversation
   messageCount: number; // Total number of messages
@@ -105,6 +183,9 @@ const ConversationSchema = new Schema<IConversation>({
   context: { type: ConversationContextSchema, default: () => ({}) },
   metrics: { type: ConversationMetricsSchema, default: () => ({}) },
   settings: { type: ConversationSettingsSchema, default: () => ({}) },
+  leadScoring: { type: LeadScoringSchema, default: () => ({}) },
+  aiResponseMetadata: { type: AIResponseMetadataSchema, default: () => ({}) },
+  analytics: { type: ConversationAnalyticsSchema, default: () => ({}) },
   isActive: { type: Boolean, default: true },
   lastMessageId: { type: String, required: false },
   messageCount: { type: Number, default: 0 },
@@ -126,6 +207,17 @@ ConversationSchema.index({ 'settings.assignedAgent': 1 });
 ConversationSchema.index({ 'context.urgency': 1 });
 ConversationSchema.index({ 'context.sentiment': 1 });
 ConversationSchema.index({ isActive: 1 });
+// Lead scoring indexes
+ConversationSchema.index({ 'leadScoring.currentScore': -1 });
+ConversationSchema.index({ 'leadScoring.progression': 1 });
+ConversationSchema.index({ 'leadScoring.lastScoredAt': -1 });
+// AI response metadata indexes
+ConversationSchema.index({ 'aiResponseMetadata.lastResponseType': 1 });
+ConversationSchema.index({ 'aiResponseMetadata.lastIntent': 1 });
+ConversationSchema.index({ 'aiResponseMetadata.repetitionDetected': 1 });
+// Analytics indexes
+ConversationSchema.index({ 'analytics.leadProgression.trend': 1 });
+ConversationSchema.index({ 'analytics.leadProgression.averageScore': -1 });
 
 // Pre-save middleware to update timestamps and metrics
 ConversationSchema.pre('save', function(next) {
