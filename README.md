@@ -10,7 +10,7 @@
 
 ## 🚀 **Current Status**
 
-**Latest Working Version:** `98c3f984` - "Instagram Account Management with Custom System Prompts"
+**Latest Working Version:** `86db3cd` - "Complete Agent Toggle System with Backend Integration"
 
 ### ✅ **What's Working:**
 - **Multi-Account Support**: Perfect account identification with Page-Scoped ID matching
@@ -21,13 +21,15 @@
 - **Lead Scoring System**: 1-10 scale tracking customer interest progression
 - **Repetition Prevention**: Smart context-aware responses that avoid repetition
 - **Data Population**: Proper contact data population with metadata
-- **Agent Toggle UI**: Ready for backend integration
+- **Agent Toggle System**: Complete frontend and backend integration for per-conversation control
 - **Conversation Details**: Comprehensive AI metadata display with organized sections
 - **Streamlined List**: Clean conversation list with essential metrics only
 - **Instagram Account Management**: Custom system prompt editor for each account
 - **Simplified Navigation**: Clean sidebar with essential features only
 
 ### 🎯 **Recent Achievements:**
+- **Complete Agent Toggle System**: Full frontend and backend integration for per-conversation AI control
+- **Real-time Agent Control**: Toggle AI responses on/off per conversation with immediate effect
 - **Instagram Account Management**: Complete system for managing Instagram accounts and custom AI prompts
 - **Custom System Prompts**: Per-account AI instruction editor with real-time updates
 - **Simplified Navigation**: Clean sidebar with only essential features (Dashboard, Conversations, Instagram, Configuration)
@@ -101,6 +103,8 @@
 - **Intent Analysis**: Automatic detection of user intentions and sentiment
 - **Context Awareness**: Full conversation history analysis for better responses
 - **Generic AI Instructions**: Template-based system for consistent responses
+- **Per-Conversation Control**: Toggle AI responses on/off for individual conversations
+- **Real-time Agent Management**: Instant enable/disable of AI responses with backend integration
 - **Multi-language Support**: Spanish and English with automatic language detection
 - **Fallback Responses**: Rule-based responses when AI is unavailable
 
@@ -437,16 +441,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 # 📋 **Development Roadmap & Plan**
 
-## 🚀 **Latest Working Version - Instagram Account Management Complete**
+## 🚀 **Latest Working Version - Complete Agent Toggle System**
 
-**Commit:** `98c3f984` - "Instagram Account Management with Custom System Prompts"
+**Commit:** `86db3cd` - "Complete Agent Toggle System with Backend Integration"
 
 ### **✅ Current Status:**
 - **Multi-Account Support**: ✅ Complete
 - **Username Display**: ✅ Complete  
 - **Clean UI**: ✅ Complete
 - **Contact Population**: ✅ Complete
-- **Agent Toggle UI**: ✅ Complete
+- **Agent Toggle System**: ✅ Complete
 - **Instagram Account Management**: ✅ Complete
 - **Custom System Prompts**: ✅ Complete
 - **Simplified Navigation**: ✅ Complete
@@ -462,6 +466,15 @@ All AI enhancement features are now implemented and working! The system now prov
 - **Repetition prevention** with smart context-aware responses
 - **Generic AI instructions** template for consistent responses
 - **Comprehensive analytics** and conversation metadata tracking
+
+### **🎯 Agent Control Phase Complete:**
+Complete agent management system is now implemented and working! The system now provides:
+- **Per-conversation AI control** with instant toggle functionality
+- **Real-time backend integration** for immediate effect
+- **Debounce worker respect** for AI enabled/disabled status
+- **Error handling** with UI state reversion on failures
+- **Instagram account management** with custom system prompts
+- **Simplified navigation** with essential features only
 
 ---
 
@@ -525,7 +538,13 @@ All AI enhancement features are now implemented and working! The system now prov
 3. ✅ **Simplified Navigation** with essential features only
 4. ✅ **Real-time System Prompt Updates** with proper error handling
 
-### **Phase 6: Testing & Validation**
+### **✅ Phase 6: Agent Toggle System - COMPLETED**
+1. ✅ **Backend API Endpoint** for toggling AI responses per conversation
+2. ✅ **Frontend Integration** with real-time toggle functionality
+3. ✅ **Debounce Worker Integration** to respect AI enabled/disabled status
+4. ✅ **Error Handling** with UI state reversion on API failures
+
+### **Phase 7: Testing & Validation**
 1. **End-to-End Testing** of structured responses
 2. **Lead Scoring Accuracy** validation
 3. **Account-Specific Instructions** testing
