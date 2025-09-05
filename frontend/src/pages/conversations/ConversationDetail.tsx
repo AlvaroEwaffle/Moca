@@ -235,7 +235,7 @@ const ConversationDetail: React.FC = () => {
         <meta name="description" content={`Conversation with ${conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}`} />
       </Helmet>
 
-      <div className="space-y-6">
+      <div className="space-y-6 p-6">
         {/* Simplified Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -413,27 +413,160 @@ const ConversationDetail: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Simplified Contact Info */}
+          {/* Enhanced Contact Info with AI Details */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <User className="w-5 h-5" />
-                <span>Contact Info</span>
+                <span>Contact & AI Info</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Username</p>
-                <p className="text-lg font-semibold">@{conversation.contact?.username || 'unknown'}</p>
+            <CardContent className="space-y-6">
+              {/* Basic Contact Info */}
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Username</p>
+                  <p className="text-lg font-semibold">@{conversation.contact?.username || 'unknown'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">First Contact</p>
+                  <p className="text-sm">{formatTime(conversation.timestamps?.createdAt || new Date())}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Last Activity</p>
+                  <p className="text-sm">{formatTime(conversation.timestamps?.lastActivity || new Date())}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">First Contact</p>
-                <p className="text-sm">{formatTime(conversation.timestamps?.createdAt || new Date())}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">Last Activity</p>
-                <p className="text-sm">{formatTime(conversation.timestamps?.lastActivity || new Date())}</p>
-              </div>
+
+              {/* AI Response Quality Indicators */}
+              {conversation.aiResponseMetadata && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">AI Response Quality</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Response Type</span>
+                      <Badge 
+                        variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
+                        className="text-xs"
+                      >
+                        {conversation.aiResponseMetadata.lastResponseType}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Intent</span>
+                      <Badge variant="outline" className="text-xs">
+                        {conversation.aiResponseMetadata.lastIntent || 'unknown'}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Context Aware</span>
+                      <div className={`w-3 h-3 rounded-full ${conversation.aiResponseMetadata.contextAwareness ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Repetition Detected</span>
+                      <div className={`w-3 h-3 rounded-full ${conversation.aiResponseMetadata.repetitionDetected ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Response Quality</span>
+                      <span className="text-sm font-medium">
+                        {Math.round((conversation.aiResponseMetadata.responseQuality || 0) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Lead Scoring Details */}
+              {conversation.leadScoring && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Lead Scoring Details</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Current Score</span>
+                      <span className="text-sm font-bold">{conversation.leadScoring.currentScore}/10</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Previous Score</span>
+                      <span className="text-sm font-medium">{conversation.leadScoring.previousScore}/10</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Progression</span>
+                      <Badge 
+                        variant={
+                          conversation.leadScoring.progression === 'increased' ? 'default' :
+                          conversation.leadScoring.progression === 'decreased' ? 'destructive' : 'secondary'
+                        }
+                        className="text-xs"
+                      >
+                        {conversation.leadScoring.progression}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Confidence</span>
+                      <span className="text-sm font-medium">
+                        {Math.round((conversation.leadScoring.confidence || 0) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Analytics Summary */}
+              {conversation.analytics && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Analytics Summary</h4>
+                  <div className="space-y-3">
+                    {conversation.analytics.leadProgression && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Lead Trend</span>
+                        <Badge 
+                          variant={
+                            conversation.analytics.leadProgression.trend === 'improving' ? 'default' :
+                            conversation.analytics.leadProgression.trend === 'declining' ? 'destructive' : 'secondary'
+                          }
+                          className="text-xs"
+                        >
+                          {conversation.analytics.leadProgression.trend}
+                        </Badge>
+                      </div>
+                    )}
+
+                    {conversation.analytics.leadProgression && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Average Score</span>
+                        <span className="text-sm font-medium">
+                          {conversation.analytics.leadProgression.averageScore?.toFixed(1) || 'N/A'}/10
+                        </span>
+                      </div>
+                    )}
+
+                    {conversation.analytics.leadProgression && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Peak Score</span>
+                        <span className="text-sm font-medium">
+                          {conversation.analytics.leadProgression.peakScore || 'N/A'}/10
+                        </span>
+                      </div>
+                    )}
+
+                    {conversation.analytics.conversationFlow && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Total Turns</span>
+                        <span className="text-sm font-medium">
+                          {conversation.analytics.conversationFlow.totalTurns || 0}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
