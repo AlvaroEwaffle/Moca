@@ -117,7 +117,30 @@ const ConversationsList = () => {
           messageCount: conv.messageCount || 0,
           createdAt: conv.createdAt || new Date(),
           updatedAt: conv.updatedAt || conv.timestamps?.lastActivity || new Date(),
-          agentEnabled: conv.settings?.aiEnabled !== false // Default to true if not specified
+          agentEnabled: conv.settings?.aiEnabled !== false, // Default to true if not specified
+          // Add structured AI response fields
+          leadScoring: conv.leadScoring ? {
+            currentScore: conv.leadScoring.currentScore || 1,
+            previousScore: conv.leadScoring.previousScore,
+            progression: conv.leadScoring.progression || 'maintained',
+            confidence: conv.leadScoring.confidence || 0.5
+          } : undefined,
+          aiResponseMetadata: conv.aiResponseMetadata ? {
+            lastResponseType: conv.aiResponseMetadata.lastResponseType || 'fallback',
+            lastIntent: conv.aiResponseMetadata.lastIntent,
+            lastNextAction: conv.aiResponseMetadata.lastNextAction,
+            repetitionDetected: conv.aiResponseMetadata.repetitionDetected || false,
+            contextAwareness: conv.aiResponseMetadata.contextAwareness || false,
+            responseQuality: conv.aiResponseMetadata.responseQuality || 0.5
+          } : undefined,
+          analytics: conv.analytics ? {
+            leadProgression: conv.analytics.leadProgression ? {
+              trend: conv.analytics.leadProgression.trend || 'stable',
+              averageScore: conv.analytics.leadProgression.averageScore || 1,
+              peakScore: conv.analytics.leadProgression.peakScore || 1
+            } : undefined,
+            repetitionPatterns: conv.analytics.repetitionPatterns || []
+          } : undefined
         }));
         
         setConversations(transformedConversations);
