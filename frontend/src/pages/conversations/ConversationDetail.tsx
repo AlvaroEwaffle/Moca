@@ -257,11 +257,14 @@ const ConversationDetail = () => {
             </Button>
             
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900">
-                {conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}
-              </h1>
+              <div className="flex items-center space-x-3 mb-2">
+                <h1 className="text-2xl font-bold text-gray-900">
+                  {conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}
+                </h1>
+                {getStatusBadge(conversation.status)}
+              </div>
               <p className="text-gray-600 mb-3">
-                @{conversation.contact?.username || 'unknown'} • {getStatusBadge(conversation.status)}
+                @{conversation.contact?.username || 'unknown'}
               </p>
               
               {/* Lead Score Indicator */}
@@ -277,7 +280,7 @@ const ConversationDetail = () => {
               
               {/* AI Response Quality Indicators */}
               {conversation.aiResponseMetadata && (
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2 mt-2">
                   <Badge 
                     variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
                     className="text-xs"
@@ -327,33 +330,35 @@ const ConversationDetail = () => {
                   <p className="text-gray-600">No messages yet</p>
                 </div>
               ) : (
-                conversation.messages.map((message) => (
+                conversation.messages
+                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .map((message) => (
                   <div
                     key={message.id}
                     className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                      className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
                         message.sender === 'user'
-                          ? 'bg-violet-600 text-white'
-                          : 'bg-gray-100 text-gray-900'
+                          ? 'bg-violet-600 text-white ml-auto'
+                          : 'bg-gray-100 text-gray-900 mr-auto'
                       }`}
                     >
                       <div className="flex items-start space-x-2">
                         {message.sender === 'bot' && (
-                          <Bot className="w-4 h-4 mt-0.5 text-violet-600" />
+                          <Bot className="w-4 h-4 mt-0.5 text-violet-600 flex-shrink-0" />
                         )}
                         {message.sender === 'user' && (
-                          <User className="w-4 h-4 mt-0.5 text-white" />
+                          <User className="w-4 h-4 mt-0.5 text-white flex-shrink-0" />
                         )}
-                        <div className="flex-1">
-                          <p className="text-sm">{message.text}</p>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-xs opacity-70">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm leading-relaxed break-words">{message.text}</p>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className={`text-xs ${message.sender === 'user' ? 'text-violet-100' : 'text-gray-500'}`}>
                               {formatTimeAgo(message.timestamp)}
                             </span>
                             {message.sender === 'user' && (
-                              <span className="text-xs opacity-70">
+                              <span className="text-xs text-violet-100">
                                 {message.status}
                               </span>
                             )}
