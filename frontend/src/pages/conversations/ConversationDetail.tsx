@@ -98,10 +98,17 @@ const ConversationDetail = () => {
         // Transform the conversation data to match our interface
         const transformedConversation = {
           ...conversationData,
+          // Map contact information correctly
+          contact: {
+            name: conversationData.contactId?.metadata?.instagramData?.username || 'Unknown Contact',
+            username: conversationData.contactId?.metadata?.instagramData?.username || 'unknown',
+            psid: conversationData.contactId?.psid,
+            metadata: conversationData.contactId?.metadata
+          },
           messages: messages.map((msg: any) => ({
             id: msg._id || msg.id,
             text: msg.text || msg.content?.text || '',
-            sender: msg.sender || (msg.isFromBot ? 'bot' : 'user'),
+            sender: msg.role === 'assistant' ? 'bot' : (msg.role === 'user' ? 'user' : (msg.isFromBot ? 'bot' : 'user')),
             timestamp: msg.metadata?.timestamp || msg.createdAt || new Date(),
             status: msg.status || 'sent',
             metadata: msg.metadata
