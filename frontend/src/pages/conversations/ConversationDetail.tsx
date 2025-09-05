@@ -29,9 +29,9 @@ interface Conversation {
   messageCount: number;
   messages: Message[];
   timestamps?: {
-    createdAt: Date;
-    lastUserMessage: Date;
-    lastActivity: Date;
+    createdAt?: Date;
+    lastUserMessage?: Date;
+    lastActivity?: Date;
   };
   leadScoring?: {
     currentScore: number;
@@ -93,12 +93,12 @@ const ConversationDetail: React.FC = () => {
         // Transform the conversation data to match our interface
         const transformedConversation = {
           ...conversationData,
-          // Map contact information correctly
+          // Map contact information correctly with safe access
           contact: {
-            name: conversationData.contactId?.metadata?.instagramData?.username || 'Unknown Contact',
-            username: conversationData.contactId?.metadata?.instagramData?.username || 'unknown',
-            psid: conversationData.contactId?.psid,
-            metadata: conversationData.contactId?.metadata
+            name: conversationData?.contactId?.metadata?.instagramData?.username || 'Unknown Contact',
+            username: conversationData?.contactId?.metadata?.instagramData?.username || 'unknown',
+            psid: conversationData?.contactId?.psid || '',
+            metadata: conversationData?.contactId?.metadata || {}
           },
           messages: messages.map((msg: any) => ({
             id: msg._id || msg.id,
@@ -138,7 +138,13 @@ const ConversationDetail: React.FC = () => {
               questionCount: conversationData.analytics.conversationFlow.questionCount || 0,
               responseCount: conversationData.analytics.conversationFlow.responseCount || 0
             } : undefined
-          } : undefined
+          } : undefined,
+          // Add timestamps with safe access
+          timestamps: {
+            createdAt: conversationData?.timestamps?.createdAt ? new Date(conversationData.timestamps.createdAt) : new Date(),
+            lastUserMessage: conversationData?.timestamps?.lastUserMessage ? new Date(conversationData.timestamps.lastUserMessage) : new Date(),
+            lastActivity: conversationData?.timestamps?.lastActivity ? new Date(conversationData.timestamps.lastActivity) : new Date()
+          }
         };
 
         setConversation(transformedConversation);
@@ -228,7 +234,7 @@ const ConversationDetail: React.FC = () => {
                 {getStatusBadge(conversation.status)}
               </div>
               <p className="text-gray-600">
-                @{conversation.contact?.username || 'unknown'} • Last contact: {formatTimeAgo(conversation.timestamps?.lastUserMessage || conversation.updatedAt)}
+                @{conversation.contact?.username || 'unknown'} • Last contact: {formatTimeAgo(conversation.timestamps?.lastUserMessage || conversation.timestamps?.lastActivity || new Date())}
               </p>
             </div>
           </div>
