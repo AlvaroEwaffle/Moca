@@ -151,6 +151,12 @@ class DebounceWorkerService {
    */
   private async processConversationBatch(conversation: IConversation, preCollectedMessages?: IMessage[]): Promise<boolean> {
     try {
+      // Check if AI is enabled for this conversation
+      if (conversation.settings?.aiEnabled === false) {
+        console.log(`🤖 DebounceWorkerService: AI disabled for conversation ${conversation.id}, skipping automatic response`);
+        return false;
+      }
+
       // Check if there's already a pending response for this conversation
       const existingQueueItem = await OutboundQueue.findOne({
         conversationId: conversation.id,
