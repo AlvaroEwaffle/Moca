@@ -92,7 +92,53 @@ const ConversationDetail = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setConversation(data.data?.conversation);
+        const conversationData = data.data?.conversation;
+        const messages = data.data?.messages || [];
+        
+        // Transform the conversation data to match our interface
+        const transformedConversation = {
+          ...conversationData,
+          messages: messages.map((msg: any) => ({
+            id: msg._id || msg.id,
+            text: msg.text || msg.content?.text || '',
+            sender: msg.sender || (msg.isFromBot ? 'bot' : 'user'),
+            timestamp: msg.metadata?.timestamp || msg.createdAt || new Date(),
+            status: msg.status || 'sent',
+            metadata: msg.metadata
+          })),
+          // Add structured AI response fields
+          leadScoring: conversationData?.leadScoring ? {
+            currentScore: conversationData.leadScoring.currentScore || 1,
+            previousScore: conversationData.leadScoring.previousScore,
+            progression: conversationData.leadScoring.progression || 'maintained',
+            confidence: conversationData.leadScoring.confidence || 0.5
+          } : undefined,
+          aiResponseMetadata: conversationData?.aiResponseMetadata ? {
+            lastResponseType: conversationData.aiResponseMetadata.lastResponseType || 'fallback',
+            lastIntent: conversationData.aiResponseMetadata.lastIntent,
+            lastNextAction: conversationData.aiResponseMetadata.lastNextAction,
+            repetitionDetected: conversationData.aiResponseMetadata.repetitionDetected || false,
+            contextAwareness: conversationData.aiResponseMetadata.contextAwareness || false,
+            responseQuality: conversationData.aiResponseMetadata.responseQuality || 0.5
+          } : undefined,
+          analytics: conversationData?.analytics ? {
+            leadProgression: conversationData.analytics.leadProgression ? {
+              trend: conversationData.analytics.leadProgression.trend || 'stable',
+              averageScore: conversationData.analytics.leadProgression.averageScore || 1,
+              peakScore: conversationData.analytics.leadProgression.peakScore || 1,
+              progressionRate: conversationData.analytics.leadProgression.progressionRate || 0
+            } : undefined,
+            repetitionPatterns: conversationData.analytics.repetitionPatterns || [],
+            conversationFlow: conversationData.analytics.conversationFlow ? {
+              totalTurns: conversationData.analytics.conversationFlow.totalTurns || 0,
+              averageTurnLength: conversationData.analytics.conversationFlow.averageTurnLength || 0,
+              questionCount: conversationData.analytics.conversationFlow.questionCount || 0,
+              responseCount: conversationData.analytics.conversationFlow.responseCount || 0
+            } : undefined
+          } : undefined
+        };
+        
+        setConversation(transformedConversation);
       }
     } catch (error) {
       console.error('Error fetching conversation:', error);
@@ -275,7 +321,7 @@ const ConversationDetail = () => {
           <CardContent className="p-0 h-full flex flex-col">
             {/* Messages List */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {conversation.messages.length === 0 ? (
+              {(!conversation.messages || conversation.messages.length === 0) ? (
                 <div className="text-center py-8">
                   <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">No messages yet</p>
@@ -381,7 +427,7 @@ const ConversationDetail = () => {
               <div className="space-y-2">
                 <div>
                   <span className="text-sm font-medium">Messages:</span>
-                  <p className="text-sm text-gray-600">{conversation.messages.length}</p>
+                  <p className="text-sm text-gray-600">{conversation.messages?.length || 0}</p>
                 </div>
                 <div>
                   <span className="text-sm font-medium">Started:</span>
