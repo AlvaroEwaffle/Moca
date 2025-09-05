@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
+import { Helmet } from 'react-helmet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -69,6 +69,7 @@ const ConversationDetail: React.FC = () => {
   const navigate = useNavigate();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -78,6 +79,7 @@ const ConversationDetail: React.FC = () => {
 
   const fetchConversation = async () => {
     try {
+      setError(null);
       const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/conversations/${id}`, {
         headers: {
@@ -89,6 +91,11 @@ const ConversationDetail: React.FC = () => {
         const data = await response.json();
         const conversationData = data.data?.conversation;
         const messages = data.data?.messages || [];
+
+        // Validate that we have the required data
+        if (!conversationData) {
+          throw new Error('No conversation data received');
+        }
         
         // Transform the conversation data to match our interface
         const transformedConversation = {
@@ -149,10 +156,12 @@ const ConversationDetail: React.FC = () => {
 
         setConversation(transformedConversation);
       } else {
-        console.error('Failed to fetch conversation');
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch conversation: ${response.status} ${errorText}`);
       }
     } catch (error) {
       console.error('Error fetching conversation:', error);
+      setError(error instanceof Error ? error.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }
@@ -189,6 +198,19 @@ const ConversationDetail: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Error loading conversation</h2>
+        <p className="text-gray-600 mb-4">{error}</p>
+        <Button onClick={() => navigate('/app/conversations')}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Conversations
+        </Button>
       </div>
     );
   }
