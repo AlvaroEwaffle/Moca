@@ -27,6 +27,54 @@
 - Cleaned up UI layout for better user experience
 - Added proper error handling for Contact model virtual fields
 
+## 📖 **What is Moca?**
+
+**Moca** is your intelligent Instagram DM assistant that automatically handles customer conversations, prevents spam, and helps your team manage leads effectively. Think of it as a smart receptionist for your Instagram business account.
+
+**Key Benefits:**
+- 🤖 **Auto-responds** to customer messages intelligently
+- 🛡️ **Prevents spam** by consolidating multiple messages
+- 📊 **Organizes conversations** for easy team management
+- ⚡ **Works 24/7** without human intervention
+- 🎯 **Captures leads** automatically from Instagram DMs
+
+## 🎯 **What Moca Does (User Stories)**
+
+### **For Instagram Customers:**
+- **"I send a message to a business Instagram account"**
+  - ✅ Moca receives the message instantly
+  - ✅ Moca responds intelligently within seconds
+  - ✅ Moca remembers our conversation history
+  - ✅ Moca doesn't spam me with multiple responses
+
+### **For Business Owners:**
+- **"I want to see all my Instagram conversations in one place"**
+  - ✅ Moca shows all active conversations
+  - ✅ Moca displays customer info and message history
+  - ✅ Moca highlights urgent conversations
+  - ✅ Moca tracks conversation status (new, active, closed)
+
+- **"I want to respond manually when needed"**
+  - ✅ Moca lets me send manual responses
+  - ✅ Moca shows me the full conversation context
+  - ✅ Moca keeps track of who responded when
+
+- **"I want to configure how Moca responds"**
+  - ✅ Moca lets me set auto-response rules
+  - ✅ Moca lets me enable/disable AI responses
+  - ✅ Moca lets me customize response timing
+
+### **For Team Members:**
+- **"I want to manage multiple Instagram accounts"**
+  - ✅ Moca handles multiple Instagram business accounts
+  - ✅ Moca keeps conversations organized by account
+  - ✅ Moca shows account-specific settings
+
+- **"I want to see conversation analytics"**
+  - ✅ Moca tracks response times
+  - ✅ Moca shows conversation volume
+  - ✅ Moca identifies peak activity times
+
 ## 🌟 **Features**
 
 ### **🤖 AI-Powered Communication**
@@ -82,6 +130,52 @@
 - **Conversation**: Chat threads with context and analytics
 - **Message**: Individual messages with metadata and status
 - **OutboundQueue**: Message queuing with retry and rate limiting
+
+## 🎬 **How Moca Works (Simple Flow)**
+
+### **1. Customer Sends Message**
+```
+Customer → Instagram → Moca Webhook → Database → Response Queue
+```
+
+**What happens:**
+- Customer sends message to your Instagram business account
+- Instagram notifies Moca instantly
+- Moca saves the message and customer info
+- Moca decides if a response is needed
+
+### **2. Moca Generates Response**
+```
+Message Analysis → AI Decision → Response Generation → Queue for Sending
+```
+
+**What happens:**
+- Moca analyzes the message content
+- Moca checks if customer is in cooldown (prevents spam)
+- Moca uses AI to generate appropriate response
+- Moca adds response to sending queue
+
+### **3. Moca Sends Response**
+```
+Queue → Rate Limit Check → Instagram API → Success/Failure Logging
+```
+
+**What happens:**
+- Moca checks Instagram's rate limits
+- Moca sends response through Instagram Graph API ✅ **WORKING!**
+- Moca logs success or handles errors
+- Moca updates conversation status
+
+### **4. Team Manages Conversations**
+```
+Dashboard → Conversation List → Detail View → Manual Response
+```
+
+**What happens:**
+- Team sees all active conversations
+- Team clicks on conversation to see full history
+- Team can send manual responses when needed
+- Team can close or manage conversation status
 
 ## 🚀 **Quick Start**
 
@@ -318,6 +412,124 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+# 📋 **Development Roadmap & Plan**
+
+## 🚀 **Latest Working Version - AI Improvements Ready**
+
+**Commit:** `c361e30` - "Update documentation with current status and latest working version"
+
+### **✅ Current Status:**
+- **Multi-Account Support**: ✅ Complete
+- **Username Display**: ✅ Complete  
+- **Clean UI**: ✅ Complete
+- **Contact Population**: ✅ Complete
+- **Agent Toggle UI**: ✅ Complete
+
+### **🎯 Ready for Next Phase:**
+All core functionality is working perfectly. The system is now ready for advanced AI improvements.
+
+---
+
+## **📋 Next Goals - AI Enhancement Phase:**
+
+### **1. Structured AI Responses with Lead Scoring**
+- **Generic AI Instructions**: Avoid repetition, check conversation history, context-aware responses
+- **Account-Specific Instructions**: Merge with generic instructions for personalized responses  
+- **Structured JSON Responses**: Capture lead scoring and response data
+- **Lead Scoring System**: Track customer interest levels from 1-10
+
+#### **Lead Scoring Scale:**
+- **1**: Contacted (initial contact)
+- **2**: Answered (responded to greeting)
+- **3**: Shows Interest (asked questions)
+- **4**: Product Interest (asked about specific services)
+- **5**: Product Sent (requested information)
+- **6**: Demo Requested (asked for demo/meeting)
+- **7**: Agenda Scheduled (meeting scheduled)
+- **8**: Proposal Sent (sent pricing/proposal)
+- **9**: Negotiating (discussing terms)
+- **10**: Closed (deal completed)
+
+#### **JSON Response Format:**
+```json
+{
+  "status": 2,
+  "responseText": "Gracias por tu interés en nuestros servicios de fidelización. ¿Te gustaría conocer más detalles?",
+  "leadScore": 2,
+  "intent": "shows_interest",
+  "nextAction": "provide_details",
+  "confidence": 0.85,
+  "metadata": {
+    "greetingUsed": false,
+    "previousContextReferenced": true,
+    "businessNameUsed": "Fidelidapp"
+  }
+}
+```
+
+### **2. Agent Toggle Backend**
+- Connect frontend toggle to backend API
+- Per-conversation agent control
+- Real-time toggle updates
+
+### **3. Advanced Conversation Management**
+- Lead progression tracking
+- Intent analysis and categorization
+- Response confidence scoring
+- Conversation metadata storage
+
+---
+
+## **🔧 Implementation Plan**
+
+### **Phase 1: Core Infrastructure**
+1. **Create Generic AI Instructions Template** (`backend/src/templates/aiInstructions.ts`)
+2. **Update OpenAI Service** for structured JSON responses
+3. **Update Instagram Account Model** with custom instructions
+4. **Create Lead Scoring Service** (`backend/src/services/leadScoring.service.ts`)
+
+### **Phase 2: Response Processing**
+1. **Update Debounce Worker Service** for structured responses
+2. **Update Conversation Model** with lead scoring fields
+3. **Update Webhook Service** for response metadata
+4. **Create Response Validator** (`backend/src/utils/responseValidator.ts`)
+
+### **Phase 3: Frontend Integration**
+1. **Update Conversations List** with lead scores
+2. **Update Conversation Detail** with structured data
+3. **Create Lead Score Indicator** component
+4. **Add Response Metadata Display**
+
+### **Phase 4: Testing & Validation**
+1. **End-to-End Testing** of structured responses
+2. **Lead Scoring Accuracy** validation
+3. **Account-Specific Instructions** testing
+4. **Conversation Context** handling verification
+
+---
+
+## **🎯 Success Metrics**
+
+### **AI Response Quality**
+- **Repetition Rate**: < 5% of responses repeat previous content
+- **Context Awareness**: 90%+ responses reference conversation history
+- **Lead Scoring Accuracy**: 85%+ correct lead level identification
+- **Response Relevance**: 90%+ responses directly address user queries
+
+### **System Performance**
+- **Response Time**: < 2 seconds for structured AI responses
+- **JSON Validation**: 100% valid JSON response format
+- **Lead Progression**: Accurate tracking of customer journey
+- **Error Handling**: < 1% failed structured responses
+
+### **Business Impact**
+- **Lead Qualification**: Improved lead scoring and categorization
+- **Conversation Management**: Better context awareness and flow
+- **Team Efficiency**: Enhanced conversation insights and metadata
+- **Customer Experience**: More natural and contextual responses
+
+---
+
 **Built with ❤️ by the Moca Team**
 
-Transform your Instagram business communication with intelligent automation and AI-powered responses. Moca makes managing Instagram DMs effortless and professional. 
+Transform your Instagram business communication with intelligent automation and AI-powered responses. Moca makes managing Instagram DMs effortless and professional.
