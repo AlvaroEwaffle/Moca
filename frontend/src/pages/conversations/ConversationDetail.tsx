@@ -1,79 +1,74 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { BACKEND_URL } from "@/utils/config";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Send, User, Bot, Clock, MessageCircle, Archive, Trash2 } from "lucide-react";
-import { Helmet } from "react-helmet";
-import LeadScoreIndicator from "@/components/LeadScoreIndicator";
-import ConversationAnalytics from "@/components/ConversationAnalytics";
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { 
+  ArrowLeft, 
+  Archive, 
+  Trash2, 
+  MessageCircle, 
+  User, 
+  Bot, 
+  TrendingUp,
+  ArrowRight
+} from 'lucide-react';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
+interface Conversation {
+  _id: string;
+  contact?: {
+    name?: string;
+    username?: string;
+    psid?: string;
+    metadata?: any;
+  };
+  status: string;
+  messageCount: number;
+  messages: Message[];
+  timestamps?: {
+    createdAt: Date;
+    lastUserMessage: Date;
+    lastActivity: Date;
+  };
+  leadScoring?: {
+    currentScore: number;
+    previousScore: number;
+    progression: string;
+    confidence: number;
+  };
+  aiResponseMetadata?: {
+    lastResponseType: string;
+    lastIntent: string;
+    lastNextAction: string;
+    repetitionDetected: boolean;
+    contextAwareness: boolean;
+    responseQuality: number;
+  };
+  metrics?: {
+    userMessages: number;
+    botMessages: number;
+  };
+  analytics?: any;
+}
 
 interface Message {
   id: string;
   text: string;
   sender: 'user' | 'bot';
   timestamp: Date;
-  status: 'sent' | 'delivered' | 'read' | 'failed';
-  metadata?: {
-    messageId?: string;
-    attachments?: any[];
-  };
-}
-
-interface Conversation {
-  id: string;
-  contactId: string;
-  accountId: string;
-  status: 'open' | 'closed' | 'archived';
-  contact: {
-    name?: string;
-    username?: string;
-    profilePicture?: string;
-  };
-  messages: Message[];
   createdAt: Date;
-  updatedAt: Date;
-  leadScoring?: {
-    currentScore: number;
-    previousScore?: number;
-    progression: 'increased' | 'decreased' | 'maintained';
-    confidence: number;
-  };
-  aiResponseMetadata?: {
-    lastResponseType: 'structured' | 'fallback';
-    lastIntent?: string;
-    lastNextAction?: string;
-    repetitionDetected: boolean;
-    contextAwareness: boolean;
-    businessNameUsed?: string;
-    responseQuality: number;
-  };
-  analytics?: {
-    leadProgression: {
-      trend: 'improving' | 'declining' | 'stable';
-      averageScore: number;
-      peakScore: number;
-      progressionRate: number;
-    };
-    repetitionPatterns: string[];
-    conversationFlow: {
-      totalTurns: number;
-      averageTurnLength: number;
-      questionCount: number;
-      responseCount: number;
-    };
-  };
+  status: string;
+  metadata?: any;
 }
 
-const ConversationDetail = () => {
+const ConversationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [newMessage, setNewMessage] = useState("");
 
   useEffect(() => {
     if (id) {
@@ -145,54 +140,15 @@ const ConversationDetail = () => {
             } : undefined
           } : undefined
         };
-        
+
         setConversation(transformedConversation);
+      } else {
+        console.error('Failed to fetch conversation');
       }
     } catch (error) {
       console.error('Error fetching conversation:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !conversation) return;
-
-    setSending(true);
-    try {
-      const backendUrl = BACKEND_URL;
-      const response = await fetch(`${backendUrl}/api/instagram/queue`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify({
-          contactId: conversation.contactId,
-          accountId: conversation.accountId,
-          content: {
-            text: newMessage.trim()
-          },
-          priority: 'normal'
-        })
-      });
-
-      if (response.ok) {
-        setNewMessage("");
-        // Refresh conversation to show the new message
-        fetchConversation();
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
     }
   };
 
@@ -252,7 +208,7 @@ const ConversationDetail = () => {
       </Helmet>
 
       <div className="space-y-6">
-        {/* Header */}
+        {/* Simplified Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Button 
@@ -271,47 +227,9 @@ const ConversationDetail = () => {
                 </h1>
                 {getStatusBadge(conversation.status)}
               </div>
-              <p className="text-gray-600 mb-3">
-                @{conversation.contact?.username || 'unknown'}
+              <p className="text-gray-600">
+                @{conversation.contact?.username || 'unknown'} • Last contact: {formatTimeAgo(conversation.timestamps?.lastUserMessage || conversation.updatedAt)}
               </p>
-              
-              {/* Lead Score Indicator */}
-              {conversation.leadScoring && (
-                <div className="mb-2">
-                  <LeadScoreIndicator
-                    score={conversation.leadScoring.currentScore}
-                    progression={conversation.leadScoring.progression}
-                    confidence={conversation.leadScoring.confidence}
-                  />
-                </div>
-              )}
-              
-              {/* AI Response Quality Indicators */}
-              {conversation.aiResponseMetadata && (
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <Badge 
-                    variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
-                    className="text-xs"
-                  >
-                    {conversation.aiResponseMetadata.lastResponseType}
-                  </Badge>
-                  {conversation.aiResponseMetadata.repetitionDetected && (
-                    <Badge variant="destructive" className="text-xs">
-                      Repetition Detected
-                    </Badge>
-                  )}
-                  {conversation.aiResponseMetadata.contextAwareness && (
-                    <Badge variant="outline" className="text-xs">
-                      Context Aware
-                    </Badge>
-                  )}
-                  {conversation.aiResponseMetadata.lastIntent && (
-                    <Badge variant="secondary" className="text-xs">
-                      {conversation.aiResponseMetadata.lastIntent}
-                    </Badge>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -320,187 +238,177 @@ const ConversationDetail = () => {
               <Archive className="w-4 h-4 mr-2" />
               Archive
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </Button>
           </div>
         </div>
 
-        {/* Messages */}
-        <Card className="h-96 overflow-hidden">
-          <CardContent className="p-0 h-full flex flex-col">
-            {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {(!conversation.messages || conversation.messages.length === 0) ? (
-                <div className="text-center py-8">
-                  <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No messages yet</p>
+        {/* Key Metrics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Status Card */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Status</p>
+                  <p className="text-2xl font-bold text-gray-900">{conversation.status}</p>
                 </div>
-              ) : (
-                conversation.messages
-                  .sort((a, b) => {
-                    // Use createdAt for sorting as it's more reliable than timestamp
-                    // The timestamp field has corrupted dates for user messages
-                    const timeA = new Date(a.createdAt || a.metadata?.timestamp || 0).getTime();
-                    const timeB = new Date(b.createdAt || b.metadata?.timestamp || 0).getTime();
-                    return timeB - timeA; // Most recent first
-                  })
-                  .map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
+                <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                  <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Lead Score Card */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Lead Score</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {conversation.leadScoring?.currentScore || 1}/10
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {conversation.leadScoring?.confidence ? `${Math.round(conversation.leadScoring.confidence * 100)}% confidence` : ''}
+                  </p>
+                </div>
+                <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center">
+                  <TrendingUp className="h-4 w-4 text-violet-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Messages Card */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Messages</p>
+                  <p className="text-2xl font-bold text-gray-900">{conversation.messageCount || 0}</p>
+                  <p className="text-xs text-gray-500">
+                    {conversation.metrics?.userMessages || 0} user • {conversation.metrics?.botMessages || 0} bot
+                  </p>
+                </div>
+                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <MessageCircle className="h-4 w-4 text-blue-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Next Action Card */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Next Action</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {conversation.aiResponseMetadata?.lastNextAction || 'Continue conversation'}
+                  </p>
+                </div>
+                <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center">
+                  <ArrowRight className="h-4 w-4 text-orange-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Messages List - Bigger Chat */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <MessageCircle className="w-5 h-5" />
+                <span>Messages</span>
+                <Badge variant="outline">{conversation.messages?.length || 0}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[600px] overflow-hidden">
+              <div className="h-full overflow-y-auto p-6 space-y-4">
+                {(!conversation.messages || conversation.messages.length === 0) ? (
+                  <div className="text-center py-8">
+                    <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No messages yet</p>
+                  </div>
+                ) : (
+                  conversation.messages
+                    .sort((a, b) => {
+                      // Use createdAt for sorting as it's more reliable than timestamp
+                      // The timestamp field has corrupted dates for user messages
+                      const timeA = new Date(a.createdAt || a.metadata?.timestamp || 0).getTime();
+                      const timeB = new Date(b.createdAt || b.metadata?.timestamp || 0).getTime();
+                      return timeB - timeA; // Most recent first
+                    })
+                    .map((message) => (
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
-                        message.sender === 'user'
-                          ? 'bg-violet-600 text-white ml-auto'
-                          : 'bg-gray-100 text-gray-900 mr-auto'
-                      }`}
+                      key={message.id}
+                      className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      <div className="flex items-start space-x-2">
-                        {message.sender === 'bot' && (
-                          <Bot className="w-4 h-4 mt-0.5 text-violet-600 flex-shrink-0" />
-                        )}
-                        {message.sender === 'user' && (
-                          <User className="w-4 h-4 mt-0.5 text-white flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm leading-relaxed break-words">{message.text}</p>
-                          <div className="flex items-center justify-between mt-2">
-                            <span className={`text-xs ${message.sender === 'user' ? 'text-violet-100' : 'text-gray-500'}`}>
-                              {formatTimeAgo(message.timestamp)}
-                            </span>
-                            {message.sender === 'user' && (
-                              <span className="text-xs text-violet-100">
-                                {message.status}
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                          message.sender === 'user'
+                            ? 'bg-violet-600 text-white ml-auto'
+                            : 'bg-gray-100 text-gray-900 mr-auto'
+                        }`}
+                      >
+                        <div className="flex items-start space-x-2">
+                          {message.sender === 'bot' && (
+                            <Bot className="w-4 h-4 mt-0.5 text-violet-600 flex-shrink-0" />
+                          )}
+                          {message.sender === 'user' && (
+                            <User className="w-4 h-4 mt-0.5 text-white flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm leading-relaxed break-words">{message.text}</p>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className={`text-xs ${message.sender === 'user' ? 'text-violet-100' : 'text-gray-500'}`}>
+                                {formatTimeAgo(message.timestamp)}
                               </span>
-                            )}
+                              {message.sender === 'user' && (
+                                <span className="text-xs text-violet-100">
+                                  {message.status}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Message Input */}
-            <div className="border-t p-4">
-              <div className="flex space-x-2">
-                <Textarea
-                  placeholder="Type your message..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  className="flex-1 min-h-[60px] resize-none"
-                  disabled={sending}
-                />
-                <Button 
-                  onClick={sendMessage} 
-                  disabled={!newMessage.trim() || sending}
-                  className="px-4"
-                >
-                  {sending ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Conversation Info and Analytics */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Contact Info */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Contact Info</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div>
-                  <span className="text-sm font-medium">Name:</span>
-                  <p className="text-sm text-gray-600">{conversation.contact?.name || 'Not available'}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium">Username:</span>
-                  <p className="text-sm text-gray-600">@{conversation.contact?.username || 'unknown'}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium">Status:</span>
-                  <div className="mt-1">{getStatusBadge(conversation.status)}</div>
-                </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Conversation Stats */}
+          {/* Simplified Contact Info */}
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Conversation Stats</CardTitle>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <User className="w-5 h-5" />
+                <span>Contact Info</span>
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div>
-                  <span className="text-sm font-medium">Messages:</span>
-                  <p className="text-sm text-gray-600">{conversation.messages?.length || 0}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium">Started:</span>
-                  <p className="text-sm text-gray-600">{formatTime(conversation.createdAt)}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium">Last Updated:</span>
-                  <p className="text-sm text-gray-600">{formatTime(conversation.updatedAt)}</p>
-                </div>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Username</p>
+                <p className="text-lg font-semibold">@{conversation.contact?.username || 'unknown'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">First Contact</p>
+                <p className="text-sm">{formatTime(conversation.timestamps?.createdAt || new Date())}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Last Activity</p>
+                <p className="text-sm">{formatTime(conversation.timestamps?.lastActivity || new Date())}</p>
               </div>
             </CardContent>
           </Card>
-
-          {/* Lead Scoring Summary */}
-          {conversation.leadScoring && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600">Lead Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm font-medium">Current Score:</span>
-                    <p className="text-sm text-gray-600">{conversation.leadScoring.currentScore}/10</p>
-                  </div>
-                  {conversation.leadScoring.previousScore && (
-                    <div>
-                      <span className="text-sm font-medium">Previous Score:</span>
-                      <p className="text-sm text-gray-600">{conversation.leadScoring.previousScore}/10</p>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-sm font-medium">Progression:</span>
-                    <p className="text-sm text-gray-600 capitalize">{conversation.leadScoring.progression}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium">Confidence:</span>
-                    <p className="text-sm text-gray-600">{Math.round(conversation.leadScoring.confidence * 100)}%</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
-
-        {/* Detailed Analytics */}
-        {conversation.analytics && conversation.aiResponseMetadata && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ConversationAnalytics
-              analytics={conversation.analytics}
-              aiResponseMetadata={conversation.aiResponseMetadata}
-            />
-          </div>
-        )}
       </div>
     </>
   );
