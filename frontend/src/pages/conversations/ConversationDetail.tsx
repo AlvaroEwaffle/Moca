@@ -110,6 +110,7 @@ const ConversationDetail = () => {
             text: msg.text || msg.content?.text || '',
             sender: msg.role === 'assistant' ? 'bot' : (msg.role === 'user' ? 'user' : (msg.isFromBot ? 'bot' : 'user')),
             timestamp: msg.metadata?.timestamp || msg.createdAt || new Date(),
+            createdAt: msg.createdAt || new Date(),
             status: msg.status || 'sent',
             metadata: msg.metadata
           })),
@@ -338,7 +339,13 @@ const ConversationDetail = () => {
                 </div>
               ) : (
                 conversation.messages
-                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .sort((a, b) => {
+                    // Use createdAt for sorting as it's more reliable than timestamp
+                    // The timestamp field has corrupted dates for user messages
+                    const timeA = new Date(a.createdAt || a.metadata?.timestamp || 0).getTime();
+                    const timeB = new Date(b.createdAt || b.metadata?.timestamp || 0).getTime();
+                    return timeB - timeA; // Most recent first
+                  })
                   .map((message) => (
                   <div
                     key={message.id}
