@@ -321,31 +321,105 @@ const ConversationsList = () => {
                           <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
                         </div>
                         
-                        {/* AI Response Quality Indicator */}
-                        {conversation.aiResponseMetadata && (
-                          <div className="mt-2 flex items-center space-x-2">
-                            <Badge 
-                              variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
-                              className="text-xs"
-                            >
-                              {conversation.aiResponseMetadata.lastResponseType}
-                            </Badge>
-                            {conversation.aiResponseMetadata.repetitionDetected && (
-                              <Badge variant="destructive" className="text-xs">
-                                Repetition
+                        {/* Lead Status and Meta Information */}
+                        <div className="mt-2 space-y-2">
+                          {/* Lead Status Row */}
+                          {conversation.leadScoring && (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs text-gray-500">Lead Status:</span>
+                                <Badge 
+                                  variant={
+                                    conversation.leadScoring.currentScore >= 7 ? 'default' :
+                                    conversation.leadScoring.currentScore >= 4 ? 'secondary' : 'outline'
+                                  }
+                                  className="text-xs"
+                                >
+                                  {conversation.leadScoring.currentScore}/10
+                                </Badge>
+                                <span className="text-xs text-gray-400">
+                                  {conversation.leadScoring.progression === 'increased' ? '↗️' :
+                                   conversation.leadScoring.progression === 'decreased' ? '↘️' : '➡️'}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  {Math.round(conversation.leadScoring.confidence * 100)}% confidence
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* AI Response Quality Indicators */}
+                          {conversation.aiResponseMetadata && (
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs text-gray-500">AI Status:</span>
+                              <Badge 
+                                variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
+                                className="text-xs"
+                              >
+                                {conversation.aiResponseMetadata.lastResponseType}
                               </Badge>
-                            )}
-                            {conversation.aiResponseMetadata.contextAwareness && (
-                              <Badge variant="outline" className="text-xs">
-                                Context Aware
-                              </Badge>
-                            )}
-                          </div>
-                        )}
+                              {conversation.aiResponseMetadata.repetitionDetected && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Repetition
+                                </Badge>
+                              )}
+                              {conversation.aiResponseMetadata.contextAwareness && (
+                                <Badge variant="outline" className="text-xs">
+                                  Context Aware
+                                </Badge>
+                              )}
+                              {conversation.aiResponseMetadata.lastIntent && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {conversation.aiResponseMetadata.lastIntent}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Analytics Summary */}
+                          {conversation.analytics && (
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs text-gray-500">Analytics:</span>
+                              <span className="text-xs text-gray-400">
+                                {conversation.analytics.leadProgression?.trend === 'improving' ? '📈 Improving' :
+                                 conversation.analytics.leadProgression?.trend === 'declining' ? '📉 Declining' : '➡️ Stable'}
+                              </span>
+                              {conversation.analytics.repetitionPatterns && conversation.analytics.repetitionPatterns.length > 0 && (
+                                <Badge variant="destructive" className="text-xs">
+                                  {conversation.analytics.repetitionPatterns.length} patterns
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
                     <div className="flex flex-col items-end space-y-3">
+                      {/* Quick Status Summary */}
+                      <div className="text-right space-y-1">
+                        {conversation.leadScoring && (
+                          <div className="text-xs text-gray-500">
+                            Lead: {conversation.leadScoring.currentScore}/10
+                            {conversation.leadScoring.progression === 'increased' ? ' ↗️' :
+                             conversation.leadScoring.progression === 'decreased' ? ' ↘️' : ' ➡️'}
+                          </div>
+                        )}
+                        {conversation.aiResponseMetadata && (
+                          <div className="text-xs text-gray-500">
+                            AI: {conversation.aiResponseMetadata.lastResponseType}
+                            {conversation.aiResponseMetadata.repetitionDetected && ' ⚠️'}
+                            {conversation.aiResponseMetadata.contextAwareness && ' 🧠'}
+                          </div>
+                        )}
+                        {conversation.analytics?.leadProgression && (
+                          <div className="text-xs text-gray-500">
+                            Trend: {conversation.analytics.leadProgression.trend === 'improving' ? '📈' :
+                                   conversation.analytics.leadProgression.trend === 'declining' ? '📉' : '➡️'}
+                          </div>
+                        )}
+                      </div>
+
                       <Button
                         variant="outline"
                         size="sm"

@@ -170,7 +170,7 @@ const ConversationAnalytics: React.FC<ConversationAnalyticsProps> = ({
       </Card>
 
       {/* Repetition Patterns */}
-      {analytics.repetitionPatterns.length > 0 && (
+      {analytics.repetitionPatterns && analytics.repetitionPatterns.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Repetition Patterns</CardTitle>
