@@ -371,47 +371,16 @@ const ConversationsList = () => {
                             </div>
                           )}
 
-                          {/* AI Response Quality Indicators */}
-                          {conversation.aiResponseMetadata && (
+                          {/* Max Score */}
+                          {conversation.analytics?.leadProgression?.peakScore && (
                             <div className="flex items-center space-x-2">
-                              <span className="text-xs text-gray-500">AI Status:</span>
+                              <span className="text-xs text-gray-500">Max Score:</span>
                               <Badge 
-                                variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
+                                variant="outline"
                                 className="text-xs"
                               >
-                                {conversation.aiResponseMetadata.lastResponseType}
+                                {conversation.analytics.leadProgression.peakScore}/10
                               </Badge>
-                              {conversation.aiResponseMetadata.repetitionDetected && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Repetition
-                                </Badge>
-                              )}
-                              {conversation.aiResponseMetadata.contextAwareness && (
-                                <Badge variant="outline" className="text-xs">
-                                  Context Aware
-                                </Badge>
-                              )}
-                              {conversation.aiResponseMetadata.lastIntent && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {conversation.aiResponseMetadata.lastIntent}
-                                </Badge>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Analytics Summary */}
-                          {conversation.analytics && (
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs text-gray-500">Analytics:</span>
-                              <span className="text-xs text-gray-400">
-                                {conversation.analytics.leadProgression?.trend === 'improving' ? '📈 Improving' :
-                                 conversation.analytics.leadProgression?.trend === 'declining' ? '📉 Declining' : '➡️ Stable'}
-                              </span>
-                              {conversation.analytics.repetitionPatterns && conversation.analytics.repetitionPatterns.length > 0 && (
-                                <Badge variant="destructive" className="text-xs">
-                                  {conversation.analytics.repetitionPatterns.length} patterns
-                                </Badge>
-                              )}
                             </div>
                           )}
                         </div>
