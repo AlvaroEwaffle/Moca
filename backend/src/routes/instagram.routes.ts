@@ -722,4 +722,78 @@ router.put('/accounts/:accountId/instructions', authenticateToken, async (req, r
   }
 });
 
+// Toggle agent status for a conversation
+router.put('/conversations/:id/agent', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔧 [Agent Toggle] PUT request received');
+    console.log('🔧 [Agent Toggle] URL:', req.url);
+    console.log('🔧 [Agent Toggle] Params:', req.params);
+    console.log('🔧 [Agent Toggle] Body:', req.body);
+    
+    const { id } = req.params;
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      console.log('🔧 [Agent Toggle] Invalid enabled value:', enabled);
+      return res.status(400).json({
+        success: false,
+        error: 'enabled field must be a boolean'
+      });
+    }
+
+    console.log('🔧 [Agent Toggle] Searching for conversation with ID:', id);
+    const conversation = await Conversation.findById(id);
+    console.log('🔧 [Agent Toggle] Conversation found:', !!conversation);
+    
+    if (conversation) {
+      console.log('🔧 [Agent Toggle] Current AI enabled status:', conversation.settings?.aiEnabled);
+    }
+    
+    if (!conversation) {
+      console.log('🔧 [Agent Toggle] Conversation not found for ID:', id);
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+
+    // Update the AI enabled status
+    console.log('🔧 [Agent Toggle] Updating AI enabled status to:', enabled);
+    if (!conversation.settings) {
+      conversation.settings = {
+        autoRespond: true,
+        aiEnabled: true,
+        priority: 'normal',
+        tags: [],
+        notes: [],
+        followUpRequired: false,
+        businessHoursOnly: false
+      };
+    }
+    conversation.settings.aiEnabled = enabled;
+    await conversation.save();
+    console.log('🔧 [Agent Toggle] Conversation saved successfully');
+
+    console.log(`✅ Updated agent status for conversation: ${id} to ${enabled}`);
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Agent status updated successfully',
+        conversation: {
+          id: conversation._id,
+          agentEnabled: conversation.settings.aiEnabled
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating agent status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update agent status'
+    });
+  }
+});
+
 export default router;

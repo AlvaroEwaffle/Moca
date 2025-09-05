@@ -63,18 +63,56 @@ const ConversationsList = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("recent");
 
-  const handleAgentToggle = (conversationId: string, enabled: boolean) => {
-    // TODO: Implement API call to toggle agent status
-    console.log(`Toggle agent for conversation ${conversationId}: ${enabled}`);
+  const handleAgentToggle = async (conversationId: string, enabled: boolean) => {
+    console.log(`🔧 [Frontend] Toggle agent for conversation ${conversationId}: ${enabled}`);
     
-    // Update local state for now
-    setConversations(prev => 
-      prev.map(conv => 
-        conv.id === conversationId 
-          ? { ...conv, agentEnabled: enabled }
-          : conv
-      )
-    );
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/conversations/${conversationId}/agent`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          enabled: enabled
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log('✅ Agent status updated successfully');
+        // Update local state
+        setConversations(prev => 
+          prev.map(conv => 
+            conv.id === conversationId 
+              ? { ...conv, agentEnabled: enabled }
+              : conv
+          )
+        );
+      } else {
+        console.error('❌ Failed to update agent status:', data.error);
+        // Revert the toggle in UI
+        setConversations(prev => 
+          prev.map(conv => 
+            conv.id === conversationId 
+              ? { ...conv, agentEnabled: !enabled }
+              : conv
+          )
+        );
+      }
+    } catch (error) {
+      console.error('❌ Error updating agent status:', error);
+      // Revert the toggle in UI
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? { ...conv, agentEnabled: !enabled }
+            : conv
+        )
+      );
+    }
   };
 
   useEffect(() => {
