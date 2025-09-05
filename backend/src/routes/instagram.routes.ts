@@ -652,4 +652,53 @@ router.get('/test-connection', async (req, res) => {
   }
 });
 
+// Update Instagram account custom instructions
+router.put('/accounts/:accountId/instructions', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { customInstructions } = req.body;
+
+    if (!customInstructions) {
+      return res.status(400).json({
+        success: false,
+        error: 'Custom instructions are required'
+      });
+    }
+
+    const account = await InstagramAccount.findOne({ accountId });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    // Update the system prompt in settings
+    account.settings.systemPrompt = customInstructions;
+    await account.save();
+
+    console.log(`✅ Updated custom instructions for account: ${accountId}`);
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Custom instructions updated successfully',
+        account: {
+          id: account._id,
+          accountId: account.accountId,
+          accountName: account.accountName,
+          customInstructions: account.settings.systemPrompt
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating custom instructions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update custom instructions'
+    });
+  }
+});
+
 export default router;
