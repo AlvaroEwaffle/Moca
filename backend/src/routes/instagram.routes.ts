@@ -158,9 +158,19 @@ router.get('/conversations', authenticateToken, async (req, res) => {
     if (assignedAgent) query['settings.assignedAgent'] = assignedAgent;
 
     // Filter by user's Instagram accounts
-    const userAccounts = await InstagramAccount.find({ userId: req.user!.userId }).select('accountId');
+    console.log(`🔍 [API] Filtering conversations for user: ${req.user!.userId} (${req.user!.email})`);
+    
+    const userAccounts = await InstagramAccount.find({ userId: req.user!.userId }).select('accountId accountName userEmail');
+    console.log(`🔍 [API] Found ${userAccounts.length} Instagram accounts for user:`, userAccounts.map(acc => ({ 
+      accountId: acc.accountId, 
+      accountName: acc.accountName, 
+      userEmail: acc.userEmail 
+    })));
+    
     const userAccountIds = userAccounts.map(acc => acc.accountId);
     query.accountId = { $in: userAccountIds };
+    
+    console.log(`🔍 [API] Query filter:`, JSON.stringify(query, null, 2));
 
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
     
@@ -172,8 +182,13 @@ router.get('/conversations', authenticateToken, async (req, res) => {
       .select('+leadScoring +aiResponseMetadata +analytics');
 
     console.log(`🔍 [API] Found ${conversations.length} conversations`);
-    console.log(`🔍 [API] First conversation contactId:`, conversations[0]?.contactId);
-    console.log(`🔍 [API] ContactId type:`, typeof conversations[0]?.contactId);
+    console.log(`🔍 [API] Conversation accountIds:`, conversations.map(conv => conv.accountId));
+    console.log(`🔍 [API] First conversation details:`, {
+      id: conversations[0]?._id,
+      accountId: conversations[0]?.accountId,
+      contactId: conversations[0]?.contactId,
+      status: conversations[0]?.status
+    });
 
     // Check if contacts exist
     if (conversations.length > 0) {

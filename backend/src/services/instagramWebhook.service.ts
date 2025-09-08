@@ -483,6 +483,30 @@ export class InstagramWebhookService {
   }
 
   /**
+   * Validate and fix corrupted timestamps
+   */
+  private validateTimestamp(timestamp: any): Date {
+    try {
+      const date = new Date(timestamp);
+      
+      // Check if date is valid and not corrupted (not in far future or past)
+      const now = new Date();
+      const year = date.getFullYear();
+      
+      // If year is before 2020 or after 2030, it's likely corrupted
+      if (year < 2020 || year > 2030) {
+        console.warn(`⚠️ [Timestamp Fix] Corrupted timestamp detected: ${timestamp}, using current time`);
+        return new Date();
+      }
+      
+      return date;
+    } catch (error) {
+      console.warn(`⚠️ [Timestamp Fix] Invalid timestamp: ${timestamp}, using current time`);
+      return new Date();
+    }
+  }
+
+  /**
    * Upsert contact based on PSID
    */
   private async upsertContact(psid: string, messageData: InstagramMessage, instagramAccount?: any): Promise<IContact> {
@@ -508,11 +532,14 @@ export class InstagramWebhookService {
           }
         }
         
+        // Validate and fix timestamp
+        const messageTimestamp = this.validateTimestamp(messageData.timestamp);
+        
         contact = new Contact({
           psid,
           metadata: {
-            firstSeen: new Date(messageData.timestamp),
-            lastSeen: new Date(messageData.timestamp),
+            firstSeen: messageTimestamp,
+            lastSeen: messageTimestamp,
             messageCount: 1,
             responseCount: 0,
             source: 'instagram_dm',
@@ -524,7 +551,7 @@ export class InstagramWebhookService {
             contactMethod: 'instagram'
           },
           status: 'active',
-          lastActivity: new Date(messageData.timestamp)
+          lastActivity: messageTimestamp
         });
 
         console.log(`🔍 [Contact Creation] Instagram data being saved:`, instagramData);
@@ -534,10 +561,11 @@ export class InstagramWebhookService {
       } else {
         console.log(`👤 Updating existing contact: ${contact.id}`);
         
-        // Update last seen and message count
-        contact.metadata.lastSeen = new Date(messageData.timestamp);
+        // Update last seen and message count with validated timestamp
+        const messageTimestamp = this.validateTimestamp(messageData.timestamp);
+        contact.metadata.lastSeen = messageTimestamp;
         contact.metadata.messageCount += 1;
-        contact.lastActivity = new Date(messageData.timestamp);
+        contact.lastActivity = messageTimestamp;
 
         // Fetch username if not already stored or if it's been a while
         if (instagramAccount?.accessToken && (!contact.metadata.instagramData?.username || 
