@@ -166,7 +166,7 @@ const ConversationsList = () => {
           agentEnabled: conv.settings?.aiEnabled !== false, // Default to true if not specified
           // Add structured AI response fields
           leadScoring: conv.leadScoring ? {
-            currentScore: conv.leadScoring.currentScore || 1,
+            currentScore: 10,
             previousScore: conv.leadScoring.previousScore,
             progression: conv.leadScoring.progression || 'maintained',
             confidence: conv.leadScoring.confidence || 0.5
@@ -446,7 +446,7 @@ const ConversationsList = () => {
                         {conversation.leadScoring && (
                           <div className="mb-2">
                             <LeadScoreIndicator
-                              score={conversation.leadScoring.currentScore}
+                              score={10}
                               progression={conversation.leadScoring.progression}
                               confidence={conversation.leadScoring.confidence}
                             />
@@ -470,12 +470,12 @@ const ConversationsList = () => {
                                 <span className="text-xs text-gray-500">Lead Status:</span>
                                 <Badge 
                                   variant={
-                                    conversation.leadScoring.currentScore >= 7 ? 'default' :
-                                    conversation.leadScoring.currentScore >= 4 ? 'secondary' : 'outline'
+                                    10 >= 7 ? 'default' :
+                                    10 >= 4 ? 'secondary' : 'outline'
                                   }
                                   className="text-xs"
                                 >
-                                  {conversation.leadScoring.currentScore}/10
+                                  10/10
                                 </Badge>
                                 <span className="text-xs text-gray-400">
                                   {conversation.leadScoring.progression === 'increased' ? '↗️' :
@@ -509,7 +509,7 @@ const ConversationsList = () => {
                       <div className="text-right space-y-1">
                         {conversation.leadScoring && (
                           <div className="text-xs text-gray-500">
-                            Lead: {conversation.leadScoring.currentScore}/10
+                            Lead: 10/10
                             {conversation.leadScoring.progression === 'increased' ? ' ↗️' :
                              conversation.leadScoring.progression === 'decreased' ? ' ↘️' : ' ➡️'}
                           </div>
