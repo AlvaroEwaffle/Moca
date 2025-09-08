@@ -166,7 +166,7 @@ const ConversationsList = () => {
           agentEnabled: conv.settings?.aiEnabled !== false, // Default to true if not specified
           // Add structured AI response fields
           leadScoring: conv.leadScoring ? {
-            currentScore: 10,
+            currentScore: conv.analytics?.leadProgression?.peakScore || 1,
             previousScore: conv.leadScoring.previousScore,
             progression: conv.leadScoring.progression || 'maintained',
             confidence: conv.leadScoring.confidence || 0.5
@@ -461,43 +461,20 @@ const ConversationsList = () => {
                           <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
                         </div>
                         
-                        {/* Lead Status and Meta Information */}
+                        {/* Lead Score and Meta Information */}
                         <div className="mt-2 space-y-2">
-                          {/* Lead Status Row */}
-                          {conversation.leadScoring && (
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <span className="text-xs text-gray-500">Lead Status:</span>
-                                <Badge 
-                                  variant={
-                                    10 >= 7 ? 'default' :
-                                    10 >= 4 ? 'secondary' : 'outline'
-                                  }
-                                  className="text-xs"
-                                >
-                                  10/10
-                                </Badge>
-                                <span className="text-xs text-gray-400">
-                                  {conversation.leadScoring.progression === 'increased' ? '↗️' :
-                                   conversation.leadScoring.progression === 'decreased' ? '↘️' : '➡️'}
-                                </span>
-                                <span className="text-xs text-gray-400">
-                                  {Math.round(conversation.leadScoring.confidence * 100)}% confidence
-                                </span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Max Score */}
+                          {/* Lead Score Row */}
                           {conversation.analytics?.leadProgression?.peakScore && (
                             <div className="flex items-center space-x-2">
-                              <span className="text-xs text-gray-500">Max Score:</span>
-                              <Badge 
-                                variant="outline"
-                                className="text-xs"
-                              >
-                                {conversation.analytics.leadProgression.peakScore}/10
-                              </Badge>
+                              <span className="text-xs text-gray-500">🎯</span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {conversation.analytics.leadProgression.peakScore}/10 Lead Score
+                              </span>
+                              {conversation.leadScoring?.confidence && (
+                                <span className="text-xs text-gray-500">
+                                  ({Math.round(conversation.leadScoring.confidence * 100)}% confidence)
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -507,24 +484,17 @@ const ConversationsList = () => {
                     <div className="flex flex-col items-end space-y-3">
                       {/* Quick Status Summary */}
                       <div className="text-right space-y-1">
-                        {conversation.leadScoring && (
-                          <div className="text-xs text-gray-500">
-                            Lead: 10/10
-                            {conversation.leadScoring.progression === 'increased' ? ' ↗️' :
-                             conversation.leadScoring.progression === 'decreased' ? ' ↘️' : ' ➡️'}
-                          </div>
-                        )}
                         {conversation.aiResponseMetadata && (
                           <div className="text-xs text-gray-500">
-                            AI: {conversation.aiResponseMetadata.lastResponseType}
+                            🤖 AI: {conversation.aiResponseMetadata.lastResponseType}
                             {conversation.aiResponseMetadata.repetitionDetected && ' ⚠️'}
                             {conversation.aiResponseMetadata.contextAwareness && ' 🧠'}
                           </div>
                         )}
                         {conversation.analytics?.leadProgression && (
                           <div className="text-xs text-gray-500">
-                            Trend: {conversation.analytics.leadProgression.trend === 'improving' ? '📈' :
-                                   conversation.analytics.leadProgression.trend === 'declining' ? '📉' : '➡️'}
+                            📈 {conversation.analytics.leadProgression.trend === 'improving' ? 'Trending up' :
+                                conversation.analytics.leadProgression.trend === 'declining' ? 'Trending down' : 'Stable'}
                           </div>
                         )}
                       </div>
