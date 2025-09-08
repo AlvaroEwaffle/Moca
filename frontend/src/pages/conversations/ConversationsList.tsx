@@ -278,7 +278,10 @@ const ConversationsList = () => {
       if (milestone.target === 'custom' && milestone.customTarget) {
         return milestone.customTarget;
       }
-      return milestone.target?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Milestone';
+      if (milestone.target) {
+        return milestone.target.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      }
+      return 'Milestone';
     };
 
     const getBadgeVariant = () => {

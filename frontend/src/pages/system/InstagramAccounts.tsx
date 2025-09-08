@@ -487,7 +487,9 @@ const InstagramAccounts = () => {
                               <span className="text-sm font-medium text-gray-700">
                                 {account.settings.defaultMilestone.target === 'custom' 
                                   ? account.settings.defaultMilestone.customTarget 
-                                  : account.settings.defaultMilestone.target.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                  : account.settings.defaultMilestone.target 
+                                    ? account.settings.defaultMilestone.target.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                    : 'Milestone'
                                 }
                               </span>
                             </div>

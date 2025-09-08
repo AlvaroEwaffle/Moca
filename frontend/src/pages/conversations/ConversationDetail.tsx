@@ -563,7 +563,9 @@ const ConversationDetail: React.FC = () => {
                         <p className="text-sm font-medium text-gray-900">
                           {conversation.milestone.target === 'custom' 
                             ? conversation.milestone.customTarget 
-                            : conversation.milestone.target?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                            : conversation.milestone.target 
+                              ? conversation.milestone.target.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                              : 'Milestone'
                           }
                         </p>
                         <p className="text-xs text-gray-500">
