@@ -507,6 +507,12 @@ Complete agent management system is now implemented and working! The system now 
 - **Progress Tracking**: Visual milestone progress in conversation details
 - **Smart Closure**: Prevent infinite conversations with clear objectives
 
+### **🚨 Priority 1.5: Critical Instagram Integration Issues (1 semana) - High Impact**
+- **Comment-to-DM Automation**: Auto-send DM when users comment on posts
+- **Ad Click Handling**: Detect ad clicks and send structured welcome messages
+- **Empty Conversation Prevention**: Ensure all conversations start with proper context
+- **Lead Source Tracking**: Track leads from ads vs organic vs comments
+
 ### **🎯 Priority 2: Follow-up Automation (1-2 semanas) - Advanced Feature**
 - **Daily Cron Job**: Automated follow-up for cold conversations
 - **Instagram API Limits**: Respect rate limits and cooldown periods
@@ -524,6 +530,121 @@ Complete agent management system is now implemented and working! The system now 
 - **Touch-Friendly Controls**: Easy-to-use toggles and buttons on mobile
 - **Optimized Navigation**: Streamlined mobile navigation experience
 - **Performance**: Fast loading and smooth interactions on mobile devices
+
+---
+
+## **🚨 Critical Instagram Integration Issues - Implementation Plan**
+
+### **📋 Overview:**
+These are high-impact issues discovered during production use that need immediate attention to improve lead conversion and user experience.
+
+### **1. 📝 Comment-to-DM Automation**
+
+#### **Problem:**
+Users comment on Instagram posts but don't receive automatic DM responses, missing potential leads.
+
+#### **Solution:**
+```typescript
+// Instagram Comments Webhook Handler
+router.post('/webhook/comments', async (req, res) => {
+  const { entry } = req.body;
+  
+  for (const item of entry) {
+    if (item.changes) {
+      for (const change of item.changes) {
+        if (change.field === 'comments') {
+          const comment = change.value;
+          await handleCommentToDM(comment);
+        }
+      }
+    }
+  }
+});
+
+async function handleCommentToDM(comment) {
+  // 1. Extract user info from comment
+  // 2. Send structured DM based on comment content
+  // 3. Create conversation record
+  // 4. Track lead source as 'comment'
+}
+```
+
+#### **Implementation:**
+- **Webhook Setup**: Configure Instagram to send comment webhooks
+- **Comment Parser**: Extract user info and comment content
+- **Auto-DM Logic**: Send contextual DM based on comment
+- **Rate Limiting**: Respect Instagram API limits
+- **Lead Tracking**: Mark lead source as 'comment'
+
+### **2. 🎯 Ad Click Handling**
+
+#### **Problem:**
+Users click "Get More Info" on ads but conversations start empty, missing context.
+
+#### **Solution:**
+```typescript
+// Ad Click Webhook Handler
+router.post('/webhook/ads', async (req, res) => {
+  const { entry } = req.body;
+  
+  for (const item of entry) {
+    if (item.changes) {
+      for (const change of item.changes) {
+        if (change.field === 'ad_insights') {
+          const adClick = change.value;
+          await handleAdClick(adClick);
+        }
+      }
+    }
+  }
+});
+
+async function handleAdClick(adClick) {
+  // 1. Extract ad context and user info
+  // 2. Send structured welcome message
+  // 3. Create conversation with ad context
+  // 4. Track lead source as 'ad'
+}
+```
+
+#### **Implementation:**
+- **Ad Webhook**: Configure Instagram Ad Insights webhooks
+- **Context Extraction**: Get ad details and user info
+- **Welcome Message**: Send structured message with ad context
+- **Conversation Setup**: Create conversation with proper metadata
+- **Lead Qualification**: Mark as high-intent lead from ad
+
+### **3. 📊 Lead Source Tracking**
+
+#### **Database Schema:**
+```typescript
+// Add to Conversation model
+leadSource: {
+  type: String, // 'ad', 'comment', 'organic', 'direct'
+  adId: String, // Instagram Ad ID
+  postId: String, // Instagram Post ID
+  commentId: String, // Instagram Comment ID
+  context: Object // Additional context data
+}
+```
+
+#### **Tracking Implementation:**
+- **Source Detection**: Identify lead source from webhook
+- **Context Storage**: Store relevant metadata
+- **Analytics**: Track conversion rates by source
+- **Reporting**: Generate source-based reports
+
+### **4. 🔧 Webhook Configuration**
+
+#### **Required Instagram Webhooks:**
+- **Comments**: `comments` field for post comments
+- **Ad Insights**: `ad_insights` field for ad clicks
+- **Messages**: `messages` field for DMs (already configured)
+
+#### **Webhook Endpoints:**
+- `POST /api/instagram/webhook/comments` - Handle comment events
+- `POST /api/instagram/webhook/ads` - Handle ad click events
+- `POST /api/instagram/webhook` - Handle DM events (existing)
 
 ---
 
