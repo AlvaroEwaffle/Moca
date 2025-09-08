@@ -140,7 +140,7 @@ const ConversationDetail: React.FC = () => {
           })),
           // Add structured AI response fields
           leadScoring: conversationData?.leadScoring ? {
-            currentScore: 10,
+            currentScore: conversationData.analytics?.leadProgression?.peakScore || 1,
             previousScore: conversationData.leadScoring.previousScore,
             progression: conversationData.leadScoring.progression || 'maintained',
             confidence: conversationData.leadScoring.confidence || 0.5
@@ -417,7 +417,7 @@ const ConversationDetail: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Lead Score</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    10/10
+                    {conversation.analytics?.leadProgression?.peakScore || 1}/10
                   </p>
                   <p className="text-xs text-gray-500">
                     {conversation.leadScoring?.confidence ? `${Math.round(conversation.leadScoring.confidence * 100)}% confidence` : ''}
@@ -766,7 +766,7 @@ const ConversationDetail: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Current Score</span>
-                      <span className="text-sm font-bold">10/10</span>
+                      <span className="text-sm font-bold">{conversation.analytics?.leadProgression?.peakScore || 1}/10</span>
                     </div>
                     
                     <div className="flex items-center justify-between">

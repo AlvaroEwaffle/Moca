@@ -426,46 +426,27 @@ const ConversationsList = () => {
                 key={conversation.id} 
                 className="hover:shadow-md transition-shadow"
               >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-4 flex-1">
-                      <div className="w-12 h-12 bg-violet-100 rounded-full flex items-center justify-center">
-                        <User className="w-6 h-6 text-violet-600" />
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-gray-500 text-sm">
-                            @{conversation.contact?.username || 'unknown'}
-                          </span>
-                          {getStatusBadge(conversation.status)}
-                          {conversation.milestone && getMilestoneBadge(conversation.milestone)}
+                <CardContent className="p-4 sm:p-6">
+                  <div className="space-y-4">
+                    {/* Header Section */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start space-x-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-violet-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <User className="w-5 h-5 sm:w-6 sm:h-6 text-violet-600" />
                         </div>
                         
-                        {/* Lead Score Indicator */}
-                        {conversation.leadScoring && (
-                          <div className="mb-2">
-                            <LeadScoreIndicator
-                              score={10}
-                              progression={conversation.leadScoring.progression}
-                              confidence={conversation.leadScoring.confidence}
-                            />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className="text-gray-500 text-sm font-medium">
+                              @{conversation.contact?.username || 'unknown'}
+                            </span>
+                            {getStatusBadge(conversation.status)}
+                            {conversation.milestone && getMilestoneBadge(conversation.milestone)}
                           </div>
-                        )}
-                        
-                        <div className="flex items-center space-x-1 text-xs text-gray-500">
-                          <MessageCircle className="w-3 h-3" />
-                          <span>{conversation.messageCount} messages</span>
-                          <span className="mx-1">•</span>
-                          <Clock className="w-3 h-3" />
-                          <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
-                        </div>
-                        
-                        {/* Lead Score and Meta Information */}
-                        <div className="mt-2 space-y-2">
-                          {/* Lead Score Row */}
+                          
+                          {/* Lead Score and Meta Information */}
                           {conversation.analytics?.leadProgression?.peakScore && (
-                            <div className="flex items-center space-x-2">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
                               <span className="text-xs text-gray-500">🎯</span>
                               <span className="text-sm font-medium text-gray-900">
                                 {conversation.analytics.leadProgression.peakScore}/10 Lead Score
@@ -477,44 +458,60 @@ const ConversationsList = () => {
                               )}
                             </div>
                           )}
+                          
+                          <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+                            <MessageCircle className="w-3 h-3 flex-shrink-0" />
+                            <span>{conversation.messageCount} messages</span>
+                            <span>•</span>
+                            <Clock className="w-3 h-3 flex-shrink-0" />
+                            <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="flex flex-col items-end space-y-3">
-                      {/* Quick Status Summary */}
-                      <div className="text-right space-y-1">
+
+                    {/* Mobile Actions Section */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      {/* AI Status and Trend - Left side on mobile, right on desktop */}
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                         {conversation.aiResponseMetadata && (
-                          <div className="text-xs text-gray-500">
-                            🤖 AI: {conversation.aiResponseMetadata.lastResponseType}
-                            {conversation.aiResponseMetadata.repetitionDetected && ' ⚠️'}
-                            {conversation.aiResponseMetadata.contextAwareness && ' 🧠'}
+                          <div className="flex items-center gap-1">
+                            <span>🤖</span>
+                            <span>AI: {conversation.aiResponseMetadata.lastResponseType}</span>
+                            {conversation.aiResponseMetadata.repetitionDetected && <span>⚠️</span>}
+                            {conversation.aiResponseMetadata.contextAwareness && <span>🧠</span>}
                           </div>
                         )}
                         {conversation.analytics?.leadProgression && (
-                          <div className="text-xs text-gray-500">
-                            📈 {conversation.analytics.leadProgression.trend === 'improving' ? 'Trending up' :
-                                conversation.analytics.leadProgression.trend === 'declining' ? 'Trending down' : 'Stable'}
+                          <div className="flex items-center gap-1">
+                            <span>📈</span>
+                            <span>
+                              {conversation.analytics.leadProgression.trend === 'improving' ? 'Trending up' :
+                               conversation.analytics.leadProgression.trend === 'declining' ? 'Trending down' : 'Stable'}
+                            </span>
                           </div>
                         )}
                       </div>
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate(`/app/conversations/${conversation.id}`)}
-                        className="flex items-center space-x-1"
-                      >
-                        <Eye className="w-4 h-4" />
-                        <span>Details</span>
-                      </Button>
-                      
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600">Agent</span>
-                        <Switch
-                          checked={conversation.agentEnabled}
-                          onCheckedChange={(checked) => handleAgentToggle(conversation.id, checked)}
-                        />
+                      {/* Agent Toggle and Details Button - Right side */}
+                      <div className="flex items-center justify-between sm:justify-end gap-3">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-gray-600">Agent</span>
+                          <Switch
+                            checked={conversation.agentEnabled}
+                            onCheckedChange={(checked) => handleAgentToggle(conversation.id, checked)}
+                          />
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/app/conversations/${conversation.id}`)}
+                          className="flex items-center space-x-1"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span className="hidden sm:inline">Details</span>
+                        </Button>
                       </div>
                     </div>
                   </div>
