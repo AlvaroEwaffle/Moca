@@ -354,38 +354,39 @@ const ConversationDetail: React.FC = () => {
         <meta name="description" content={`Conversation with ${conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}`} />
       </Helmet>
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Simplified Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div className="flex items-start sm:items-center space-x-3 sm:space-x-4">
             <Button 
               variant="outline" 
               size="sm" 
               onClick={() => navigate('/app/conversations')}
+              className="flex-shrink-0"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
             
-            <div className="flex-1">
-              <div className="flex items-center space-x-3 mb-2">
-              <h1 className="text-2xl font-bold text-gray-900">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 mb-2">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
                   {conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}
               </h1>
                 {getStatusBadge(conversation.status)}
               </div>
-              <p className="text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600 break-words">
                 @{conversation.contact?.username || 'unknown'} • Last contact: {formatTimeAgo(conversation.timestamps?.lastUserMessage || conversation.timestamps?.lastActivity || new Date())}
               </p>
             </div>
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
               <Archive className="w-4 h-4 mr-2" />
               Archive
             </Button>
-            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 flex-1 sm:flex-none">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </Button>
@@ -393,7 +394,7 @@ const ConversationDetail: React.FC = () => {
         </div>
 
         {/* Key Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {/* Status Card */}
           <Card>
             <CardContent className="p-4">
@@ -450,14 +451,14 @@ const ConversationDetail: React.FC = () => {
           {/* Next Action Card */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Next Action</p>
-                  <p className="text-sm font-medium text-gray-900 truncate">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0 pr-3">
+                  <p className="text-sm font-medium text-gray-600 mb-1">Next Action</p>
+                  <p className="text-sm font-medium text-gray-900 break-words">
                     {conversation.aiResponseMetadata?.lastNextAction || 'Continue conversation'}
                   </p>
                 </div>
-                <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center">
+                <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
                   <ArrowRight className="h-4 w-4 text-orange-600" />
                 </div>
               </div>
