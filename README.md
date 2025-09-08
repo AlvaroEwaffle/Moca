@@ -507,25 +507,25 @@ Complete agent management system is now implemented and working! The system now 
 - **Progress Tracking**: Visual milestone progress in conversation details
 - **Smart Closure**: Prevent infinite conversations with clear objectives
 
-### **🚨 Priority 1.5: Critical Instagram Integration Issues (1 semana) - High Impact**
+### **🚨 Priority 2: Critical Instagram Integration Issues (1 semana) - High Impact**
 - **Comment-to-DM Automation**: Auto-send DM when users comment on posts
 - **Ad Click Handling**: Detect ad clicks and send structured welcome messages
 - **Empty Conversation Prevention**: Ensure all conversations start with proper context
 - **Lead Source Tracking**: Track leads from ads vs organic vs comments
 
-### **🎯 Priority 2: Follow-up Automation (1-2 semanas) - Advanced Feature**
+### **🎯 Priority 3: Follow-up Automation (1-2 semanas) - Advanced Feature**
 - **Daily Cron Job**: Automated follow-up for cold conversations
 - **Instagram API Limits**: Respect rate limits and cooldown periods
 - **Personalized Messages**: Context-aware follow-up based on conversation history
 - **Configurable Timing**: Customizable follow-up schedules per account
 
-### **🎯 Priority 3: Enhanced Dashboard (1 semana) - UX Improvement**
+### **🎯 Priority 4: Enhanced Dashboard (1 semana) - UX Improvement**
 - **Last Conversations List**: Central view of all recent conversations
 - **Agent Toggle Visibility**: Quick agent on/off controls
 - **Details Quick Access**: One-click access to conversation details
 - **Status Overview**: At-a-glance conversation status and metrics
 
-### **🎯 Priority 4: Mobile-First UI (1-2 semanas) - Foundation**
+### **🎯 Priority 5: Mobile-First UI (1-2 semanas) - Foundation**
 - **Responsive Design**: Mobile-optimized interface for all components
 - **Touch-Friendly Controls**: Easy-to-use toggles and buttons on mobile
 - **Optimized Navigation**: Streamlined mobile navigation experience
