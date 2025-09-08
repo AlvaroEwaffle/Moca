@@ -796,4 +796,291 @@ router.put('/conversations/:id/agent', authenticateToken, async (req, res) => {
   }
 });
 
+// ===== ACCOUNT MILESTONE CONFIGURATION ENDPOINT =====
+
+// Set/Update default milestone configuration for an account
+router.put('/accounts/:accountId/milestone', authenticateToken, async (req, res) => {
+  try {
+    console.log('🎯 [Account Milestone] PUT request received');
+    console.log('🎯 [Account Milestone] URL:', req.url);
+    console.log('🎯 [Account Milestone] Params:', req.params);
+    console.log('🎯 [Account Milestone] Body:', req.body);
+
+    const { accountId } = req.params;
+    const { defaultMilestone } = req.body;
+
+    if (!defaultMilestone) {
+      console.log('🎯 [Account Milestone] Missing defaultMilestone in body');
+      return res.status(400).json({
+        success: false,
+        error: 'defaultMilestone field is required'
+      });
+    }
+
+    // Validate milestone target
+    const validTargets = ['link_shared', 'meeting_scheduled', 'demo_booked', 'custom'];
+    if (defaultMilestone.target && !validTargets.includes(defaultMilestone.target)) {
+      console.log('🎯 [Account Milestone] Invalid target:', defaultMilestone.target);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid target. Must be one of: link_shared, meeting_scheduled, demo_booked, custom'
+      });
+    }
+
+    // If target is custom, customTarget is required
+    if (defaultMilestone.target === 'custom' && !defaultMilestone.customTarget) {
+      console.log('🎯 [Account Milestone] Custom target requires customTarget');
+      return res.status(400).json({
+        success: false,
+        error: 'Custom target requires customTarget field'
+      });
+    }
+
+    console.log('🎯 [Account Milestone] Searching for account with ID:', accountId);
+    const account = await InstagramAccount.findOne({ accountId });
+    console.log('🎯 [Account Milestone] Account found:', !!account);
+
+    if (!account) {
+      console.log('🎯 [Account Milestone] Account not found for ID:', accountId);
+      return res.status(404).json({
+        success: false,
+        error: 'Account not found'
+      });
+    }
+
+    // Update account settings with default milestone
+    console.log('🎯 [Account Milestone] Updating default milestone for account:', accountId);
+    if (!account.settings) {
+      account.settings = {
+        autoRespond: true,
+        aiEnabled: true,
+        fallbackRules: [],
+        defaultResponse: "Thanks for your message! I'll get back to you soon.",
+        systemPrompt: "You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.",
+        toneOfVoice: 'professional',
+        keyInformation: '',
+        businessHours: {
+          enabled: false,
+          startTime: "09:00",
+          endTime: "18:00",
+          timezone: "America/Santiago"
+        },
+        defaultMilestone: defaultMilestone
+      };
+    } else {
+      account.settings.defaultMilestone = defaultMilestone;
+    }
+
+    await account.save();
+    console.log('🎯 [Account Milestone] Account saved successfully');
+
+    console.log(`✅ Updated default milestone for account: ${accountId}`);
+    res.json({
+      success: true,
+      data: {
+        message: 'Default milestone configuration updated successfully',
+        defaultMilestone: account.settings.defaultMilestone
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating default milestone:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update default milestone configuration'
+    });
+  }
+});
+
+// ===== MILESTONE MANAGEMENT ENDPOINTS =====
+
+// Set/Update milestone for a conversation
+router.put('/conversations/:id/milestone', authenticateToken, async (req, res) => {
+  try {
+    console.log('🎯 [Milestone] PUT request received');
+    console.log('🎯 [Milestone] URL:', req.url);
+    console.log('🎯 [Milestone] Params:', req.params);
+    console.log('🎯 [Milestone] Body:', req.body);
+
+    const { id } = req.params;
+    const { target, customTarget, autoDisableAgent = true, notes } = req.body;
+
+    // Validate target
+    const validTargets = ['link_shared', 'meeting_scheduled', 'demo_booked', 'custom'];
+    if (target && !validTargets.includes(target)) {
+      console.log('🎯 [Milestone] Invalid target:', target);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid target. Must be one of: link_shared, meeting_scheduled, demo_booked, custom'
+      });
+    }
+
+    // If target is custom, customTarget is required
+    if (target === 'custom' && !customTarget) {
+      console.log('🎯 [Milestone] Custom target requires customTarget');
+      return res.status(400).json({
+        success: false,
+        error: 'Custom target requires customTarget field'
+      });
+    }
+
+    console.log('🎯 [Milestone] Searching for conversation with ID:', id);
+    const conversation = await Conversation.findById(id);
+    console.log('🎯 [Milestone] Conversation found:', !!conversation);
+
+    if (!conversation) {
+      console.log('🎯 [Milestone] Conversation not found for ID:', id);
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+
+    // Update milestone
+    console.log('🎯 [Milestone] Updating milestone for conversation:', id);
+    conversation.milestone = {
+      target: target || undefined,
+      customTarget: customTarget || undefined,
+      status: 'pending',
+      autoDisableAgent: autoDisableAgent,
+      notes: notes || undefined
+    };
+
+    await conversation.save();
+    console.log('🎯 [Milestone] Conversation saved successfully');
+
+    console.log(`✅ Updated milestone for conversation: ${id}`);
+    res.json({
+      success: true,
+      data: {
+        message: 'Milestone updated successfully',
+        milestone: conversation.milestone
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating milestone:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update milestone'
+    });
+  }
+});
+
+// Get milestone for a conversation
+router.get('/conversations/:id/milestone', authenticateToken, async (req, res) => {
+  try {
+    console.log('🎯 [Milestone] GET request received');
+    console.log('🎯 [Milestone] URL:', req.url);
+    console.log('🎯 [Milestone] Params:', req.params);
+
+    const { id } = req.params;
+
+    console.log('🎯 [Milestone] Searching for conversation with ID:', id);
+    const conversation = await Conversation.findById(id);
+    console.log('🎯 [Milestone] Conversation found:', !!conversation);
+
+    if (!conversation) {
+      console.log('🎯 [Milestone] Conversation not found for ID:', id);
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+
+    console.log(`✅ Retrieved milestone for conversation: ${id}`);
+    res.json({
+      success: true,
+      data: {
+        milestone: conversation.milestone
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting milestone:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get milestone'
+    });
+  }
+});
+
+// Mark milestone as achieved
+router.post('/conversations/:id/milestone/achieve', authenticateToken, async (req, res) => {
+  try {
+    console.log('🎯 [Milestone] POST achieve request received');
+    console.log('🎯 [Milestone] URL:', req.url);
+    console.log('🎯 [Milestone] Params:', req.params);
+    console.log('🎯 [Milestone] Body:', req.body);
+
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    console.log('🎯 [Milestone] Searching for conversation with ID:', id);
+    const conversation = await Conversation.findById(id);
+    console.log('🎯 [Milestone] Conversation found:', !!conversation);
+
+    if (!conversation) {
+      console.log('🎯 [Milestone] Conversation not found for ID:', id);
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+
+    if (!conversation.milestone || !conversation.milestone.target) {
+      console.log('🎯 [Milestone] No milestone set for conversation:', id);
+      return res.status(400).json({
+        success: false,
+        error: 'No milestone set for this conversation'
+      });
+    }
+
+    // Mark milestone as achieved
+    console.log('🎯 [Milestone] Marking milestone as achieved for conversation:', id);
+    conversation.milestone.status = 'achieved';
+    conversation.milestone.achievedAt = new Date();
+    if (notes) {
+      conversation.milestone.notes = notes;
+    }
+
+    // Auto-disable agent if configured
+    if (conversation.milestone.autoDisableAgent) {
+      console.log('🎯 [Milestone] Auto-disabling agent for conversation:', id);
+      if (!conversation.settings) {
+        conversation.settings = {
+          autoRespond: true,
+          aiEnabled: true,
+          priority: 'normal',
+          tags: [],
+          notes: [],
+          followUpRequired: false,
+          businessHoursOnly: false
+        };
+      }
+      conversation.settings.aiEnabled = false;
+    }
+
+    await conversation.save();
+    console.log('🎯 [Milestone] Conversation saved successfully');
+
+    console.log(`✅ Milestone achieved for conversation: ${id}`);
+    res.json({
+      success: true,
+      data: {
+        message: 'Milestone marked as achieved',
+        milestone: conversation.milestone,
+        agentDisabled: conversation.milestone.autoDisableAgent
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error achieving milestone:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to achieve milestone'
+    });
+  }
+});
+
 export default router;

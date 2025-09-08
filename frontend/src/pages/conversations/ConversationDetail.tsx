@@ -12,7 +12,14 @@ import {
   User, 
   Bot, 
   TrendingUp,
-  ArrowRight
+  ArrowRight,
+  Target,
+  Calendar,
+  Link,
+  Presentation,
+  CheckCircle,
+  XCircle,
+  Clock
 } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
@@ -52,6 +59,14 @@ interface Conversation {
     botMessages: number;
   };
   analytics?: any;
+  milestone?: {
+    target?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
+    customTarget?: string;
+    status: 'pending' | 'achieved' | 'failed';
+    achievedAt?: Date;
+    notes?: string;
+    autoDisableAgent: boolean;
+  };
 }
 
 interface Message {
@@ -70,6 +85,13 @@ const ConversationDetail: React.FC = () => {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Milestone management state
+  const [editingMilestone, setEditingMilestone] = useState(false);
+  const [milestoneTarget, setMilestoneTarget] = useState<'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom'>('link_shared');
+  const [customMilestoneTarget, setCustomMilestoneTarget] = useState<string>("");
+  const [autoDisableAgent, setAutoDisableAgent] = useState<boolean>(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -151,7 +173,16 @@ const ConversationDetail: React.FC = () => {
             createdAt: conversationData?.timestamps?.createdAt ? new Date(conversationData.timestamps.createdAt) : new Date(),
             lastUserMessage: conversationData?.timestamps?.lastUserMessage ? new Date(conversationData.timestamps.lastUserMessage) : new Date(),
             lastActivity: conversationData?.timestamps?.lastActivity ? new Date(conversationData.timestamps.lastActivity) : new Date()
-          }
+          },
+          // Add milestone data
+          milestone: conversationData?.milestone ? {
+            target: conversationData.milestone.target,
+            customTarget: conversationData.milestone.customTarget,
+            status: conversationData.milestone.status || 'pending',
+            achievedAt: conversationData.milestone.achievedAt ? new Date(conversationData.milestone.achievedAt) : undefined,
+            notes: conversationData.milestone.notes,
+            autoDisableAgent: conversationData.milestone.autoDisableAgent ?? true
+          } : undefined
         };
 
         setConversation(transformedConversation);
@@ -164,6 +195,94 @@ const ConversationDetail: React.FC = () => {
       setError(error instanceof Error ? error.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Milestone management functions
+  const startEditingMilestone = () => {
+    if (conversation?.milestone) {
+      setMilestoneTarget(conversation.milestone.target || 'link_shared');
+      setCustomMilestoneTarget(conversation.milestone.customTarget || "");
+      setAutoDisableAgent(conversation.milestone.autoDisableAgent);
+    }
+    setEditingMilestone(true);
+  };
+
+  const cancelEditingMilestone = () => {
+    setEditingMilestone(false);
+    setMilestoneTarget('link_shared');
+    setCustomMilestoneTarget("");
+    setAutoDisableAgent(true);
+  };
+
+  const saveMilestone = async () => {
+    if (!conversation) return;
+    
+    setSaving(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/conversations/${conversation._id}/milestone`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          target: milestoneTarget,
+          customTarget: milestoneTarget === 'custom' ? customMilestoneTarget : undefined,
+          autoDisableAgent: autoDisableAgent
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConversation({
+          ...conversation,
+          milestone: data.data.milestone
+        });
+        setEditingMilestone(false);
+      } else {
+        const errorData = await response.json();
+        console.error('Error saving milestone:', errorData.error);
+      }
+    } catch (error) {
+      console.error('Error saving milestone:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const markMilestoneAchieved = async () => {
+    if (!conversation) return;
+    
+    setSaving(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/conversations/${conversation._id}/milestone/achieve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          notes: 'Manually marked as achieved'
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConversation({
+          ...conversation,
+          milestone: data.data.milestone
+        });
+      } else {
+        const errorData = await response.json();
+        console.error('Error achieving milestone:', errorData.error);
+      }
+    } catch (error) {
+      console.error('Error achieving milestone:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -250,9 +369,9 @@ const ConversationDetail: React.FC = () => {
             
             <div className="flex-1">
               <div className="flex items-center space-x-3 mb-2">
-                <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-gray-900">
                   {conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}
-                </h1>
+              </h1>
                 {getStatusBadge(conversation.status)}
               </div>
               <p className="text-gray-600">
@@ -346,6 +465,163 @@ const ConversationDetail: React.FC = () => {
           </Card>
         </div>
 
+        {/* Milestone Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Target className="w-5 h-5" />
+              <span>Conversation Milestone</span>
+              {conversation.milestone?.status === 'achieved' && (
+                <Badge variant="default" className="bg-green-100 text-green-800">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Achieved
+                </Badge>
+              )}
+              {conversation.milestone?.status === 'pending' && (
+                <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                  <Clock className="w-3 h-3 mr-1" />
+                  Pending
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {editingMilestone ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Milestone Target</label>
+                  <select
+                    value={milestoneTarget}
+                    onChange={(e) => setMilestoneTarget(e.target.value as any)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  >
+                    <option value="link_shared">Link Shared</option>
+                    <option value="meeting_scheduled">Meeting Scheduled</option>
+                    <option value="demo_booked">Demo Booked</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+
+                {milestoneTarget === 'custom' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Custom Milestone Description</label>
+                    <input
+                      type="text"
+                      value={customMilestoneTarget}
+                      onChange={(e) => setCustomMilestoneTarget(e.target.value)}
+                      placeholder="e.g., 'Price quote requested'"
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="autoDisableAgent"
+                    checked={autoDisableAgent}
+                    onChange={(e) => setAutoDisableAgent(e.target.checked)}
+                    className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="autoDisableAgent" className="text-sm text-gray-700">
+                    Auto-disable agent when milestone is achieved
+                  </label>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <Button 
+                    onClick={saveMilestone}
+                    disabled={saving}
+                    size="sm"
+                  >
+                    {saving ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    ) : (
+                      <Target className="w-4 h-4 mr-2" />
+                    )}
+                    Save Milestone
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={cancelEditingMilestone}
+                    size="sm"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {conversation.milestone ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3">
+                      {conversation.milestone.target === 'link_shared' && <Link className="w-5 h-5 text-violet-600" />}
+                      {conversation.milestone.target === 'meeting_scheduled' && <Calendar className="w-5 h-5 text-violet-600" />}
+                      {conversation.milestone.target === 'demo_booked' && <Presentation className="w-5 h-5 text-violet-600" />}
+                      {conversation.milestone.target === 'custom' && <Target className="w-5 h-5 text-violet-600" />}
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {conversation.milestone.target === 'custom' 
+                            ? conversation.milestone.customTarget 
+                            : conversation.milestone.target?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                          }
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Status: {conversation.milestone.status}
+                          {conversation.milestone.achievedAt && (
+                            <span> • Achieved: {formatTime(conversation.milestone.achievedAt)}</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {conversation.milestone.notes && (
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-700">{conversation.milestone.notes}</p>
+                      </div>
+                    )}
+
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={startEditingMilestone}
+                        size="sm"
+                      >
+                        <Target className="w-4 h-4 mr-2" />
+                        Edit Milestone
+                      </Button>
+                      {conversation.milestone.status === 'pending' && (
+                        <Button 
+                          onClick={markMilestoneAchieved}
+                          disabled={saving}
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {saving ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          ) : (
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                          )}
+                          Mark Achieved
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-4">No milestone set for this conversation</p>
+                    <Button onClick={startEditingMilestone} size="sm">
+                      <Target className="w-4 h-4 mr-2" />
+                      Set Milestone
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Messages List - Bigger Chat */}
           <Card className="lg:col-span-2">
@@ -359,11 +635,11 @@ const ConversationDetail: React.FC = () => {
             <CardContent className="h-[600px] overflow-hidden">
               <div className="h-full overflow-y-auto p-6 space-y-4">
                 {(!conversation.messages || conversation.messages.length === 0) ? (
-                  <div className="text-center py-8">
-                    <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No messages yet</p>
-                  </div>
-                ) : (
+                <div className="text-center py-8">
+                  <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No messages yet</p>
+                </div>
+              ) : (
                   conversation.messages
                     .sort((a, b) => {
                       // Use createdAt for sorting as it's more reliable than timestamp
@@ -373,45 +649,45 @@ const ConversationDetail: React.FC = () => {
                       return timeB - timeA; // Most recent first
                     })
                     .map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
                     <div
-                      key={message.id}
-                      className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
                         className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
-                          message.sender === 'user'
+                        message.sender === 'user'
                             ? 'bg-violet-600 text-white ml-auto'
                             : 'bg-gray-100 text-gray-900 mr-auto'
-                        }`}
-                      >
-                        <div className="flex items-start space-x-2">
-                          {message.sender === 'bot' && (
+                      }`}
+                    >
+                      <div className="flex items-start space-x-2">
+                        {message.sender === 'bot' && (
                             <Bot className="w-4 h-4 mt-0.5 text-violet-600 flex-shrink-0" />
-                          )}
-                          {message.sender === 'user' && (
+                        )}
+                        {message.sender === 'user' && (
                             <User className="w-4 h-4 mt-0.5 text-white flex-shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm leading-relaxed break-words">{message.text}</p>
                             <div className="flex items-center justify-between mt-2">
                               <span className={`text-xs ${message.sender === 'user' ? 'text-violet-100' : 'text-gray-500'}`}>
-                                {formatTimeAgo(message.timestamp)}
-                              </span>
-                              {message.sender === 'user' && (
+                              {formatTimeAgo(message.timestamp)}
+                            </span>
+                            {message.sender === 'user' && (
                                 <span className="text-xs text-violet-100">
-                                  {message.status}
-                                </span>
-                              )}
-                            </div>
+                                {message.status}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
           {/* Enhanced Contact Info with AI Details */}
           <Card>
@@ -564,8 +840,8 @@ const ConversationDetail: React.FC = () => {
                         </span>
                       </div>
                     )}
-                  </div>
                 </div>
+              </div>
               )}
             </CardContent>
           </Card>

@@ -23,6 +23,15 @@ const InstagramSettingsSchema = new Schema({
     startTime: { type: String, default: "09:00" },
     endTime: { type: String, default: "18:00" },
     timezone: { type: String, default: "America/Santiago" }
+  },
+  defaultMilestone: {
+    target: { 
+      type: String, 
+      enum: ['link_shared', 'meeting_scheduled', 'demo_booked', 'custom'], 
+      required: false 
+    },
+    customTarget: { type: String, required: false },
+    autoDisableAgent: { type: Boolean, default: true }
   }
 });
 
@@ -66,6 +75,11 @@ export interface IInstagramAccount extends Document {
       startTime: string;
       endTime: string;
       timezone: string;
+    };
+    defaultMilestone?: {
+      target?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
+      customTarget?: string;
+      autoDisableAgent: boolean;
     };
   };
   webhook: {

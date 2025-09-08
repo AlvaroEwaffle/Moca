@@ -14,7 +14,11 @@ import {
   CheckCircle, 
   XCircle,
   MessageSquare,
-  Bot
+  Bot,
+  Target,
+  Calendar,
+  Link,
+  Presentation
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 
@@ -25,6 +29,11 @@ interface InstagramAccount {
   isActive: boolean;
   settings?: {
     systemPrompt?: string;
+    defaultMilestone?: {
+      target: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
+      customTarget?: string;
+      autoDisableAgent: boolean;
+    };
   };
   createdAt: Date;
   updatedAt: Date;
@@ -38,6 +47,12 @@ const InstagramAccounts = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  
+  // Milestone configuration state
+  const [editingMilestone, setEditingMilestone] = useState<string | null>(null);
+  const [milestoneTarget, setMilestoneTarget] = useState<'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom'>('link_shared');
+  const [customMilestoneTarget, setCustomMilestoneTarget] = useState<string>("");
+  const [autoDisableAgent, setAutoDisableAgent] = useState<boolean>(true);
 
   useEffect(() => {
     fetchAccounts();
@@ -77,6 +92,80 @@ const InstagramAccounts = () => {
   const cancelEditing = () => {
     setEditingAccount(null);
     setCustomInstructions("");
+  };
+
+  const startEditingMilestone = (account: InstagramAccount) => {
+    console.log('🎯 [Frontend] Starting milestone edit for account:', {
+      id: account.id,
+      accountId: account.accountId,
+      accountName: account.accountName
+    });
+    setEditingMilestone(account.accountId);
+    setMilestoneTarget(account.settings?.defaultMilestone?.target || 'link_shared');
+    setCustomMilestoneTarget(account.settings?.defaultMilestone?.customTarget || "");
+    setAutoDisableAgent(account.settings?.defaultMilestone?.autoDisableAgent ?? true);
+  };
+
+  const cancelEditingMilestone = () => {
+    setEditingMilestone(null);
+    setMilestoneTarget('link_shared');
+    setCustomMilestoneTarget("");
+    setAutoDisableAgent(true);
+  };
+
+  const saveMilestoneConfig = async (accountId: string) => {
+    console.log('🎯 [Frontend] Saving milestone config for accountId:', accountId);
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/accounts/${accountId}/milestone`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          defaultMilestone: {
+            target: milestoneTarget,
+            customTarget: milestoneTarget === 'custom' ? customMilestoneTarget : undefined,
+            autoDisableAgent: autoDisableAgent
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update local state
+        setAccounts(accounts.map(account => 
+          account.accountId === accountId 
+            ? { 
+                ...account, 
+                settings: { 
+                  ...account.settings, 
+                  defaultMilestone: {
+                    target: milestoneTarget,
+                    customTarget: milestoneTarget === 'custom' ? customMilestoneTarget : undefined,
+                    autoDisableAgent: autoDisableAgent
+                  }
+                } 
+              }
+            : account
+        ));
+        setEditingMilestone(null);
+        setSuccess('Milestone configuration updated successfully');
+      } else {
+        setError(data.error || 'Failed to update milestone configuration');
+      }
+    } catch (error) {
+      console.error('Error saving milestone config:', error);
+      setError('Failed to save milestone configuration');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveInstructions = async (accountId: string) => {
@@ -229,6 +318,15 @@ const InstagramAccounts = () => {
                         <Settings className="w-4 h-4 mr-2" />
                         Edit Prompt
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startEditingMilestone(account)}
+                        disabled={editingMilestone === account.accountId}
+                      >
+                        <Target className="w-4 h-4 mr-2" />
+                        Milestone
+                      </Button>
                     </div>
                   </div>
 
@@ -300,6 +398,111 @@ const InstagramAccounts = () => {
                             : 'Default prompt in use'
                           }
                         </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Milestone Configuration Section */}
+                  <div className="border-t pt-4 mt-4">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <Target className="w-4 h-4 text-violet-600" />
+                      <h4 className="text-sm font-medium text-gray-700">Default Milestone Configuration</h4>
+                    </div>
+                    
+                    {editingMilestone === account.accountId ? (
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="milestoneTarget">Milestone Target</Label>
+                          <select
+                            id="milestoneTarget"
+                            value={milestoneTarget}
+                            onChange={(e) => setMilestoneTarget(e.target.value as any)}
+                            className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                          >
+                            <option value="link_shared">Link Shared</option>
+                            <option value="meeting_scheduled">Meeting Scheduled</option>
+                            <option value="demo_booked">Demo Booked</option>
+                            <option value="custom">Custom</option>
+                          </select>
+                        </div>
+
+                        {milestoneTarget === 'custom' && (
+                          <div>
+                            <Label htmlFor="customMilestoneTarget">Custom Milestone Description</Label>
+                            <input
+                              id="customMilestoneTarget"
+                              type="text"
+                              value={customMilestoneTarget}
+                              onChange={(e) => setCustomMilestoneTarget(e.target.value)}
+                              placeholder="e.g., 'Price quote requested'"
+                              className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="autoDisableAgent"
+                            checked={autoDisableAgent}
+                            onChange={(e) => setAutoDisableAgent(e.target.checked)}
+                            className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                          />
+                          <Label htmlFor="autoDisableAgent" className="text-sm text-gray-700">
+                            Auto-disable agent when milestone is achieved
+                          </Label>
+                        </div>
+                        
+                        <div className="flex space-x-2">
+                          <Button 
+                            onClick={() => saveMilestoneConfig(account.accountId)}
+                            disabled={saving}
+                            size="sm"
+                          >
+                            {saving ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            ) : (
+                              <Save className="w-4 h-4 mr-2" />
+                            )}
+                            Save Milestone
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            onClick={cancelEditingMilestone}
+                            size="sm"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {account.settings?.defaultMilestone ? (
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <div className="flex items-center space-x-2 mb-2">
+                              {account.settings.defaultMilestone.target === 'link_shared' && <Link className="w-4 h-4 text-violet-600" />}
+                              {account.settings.defaultMilestone.target === 'meeting_scheduled' && <Calendar className="w-4 h-4 text-violet-600" />}
+                              {account.settings.defaultMilestone.target === 'demo_booked' && <Presentation className="w-4 h-4 text-violet-600" />}
+                              {account.settings.defaultMilestone.target === 'custom' && <Target className="w-4 h-4 text-violet-600" />}
+                              <span className="text-sm font-medium text-gray-700">
+                                {account.settings.defaultMilestone.target === 'custom' 
+                                  ? account.settings.defaultMilestone.customTarget 
+                                  : account.settings.defaultMilestone.target.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                }
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Auto-disable agent: {account.settings.defaultMilestone.autoDisableAgent ? 'Yes' : 'No'}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 p-4 rounded-lg text-center">
+                            <Target className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                            <p className="text-sm text-gray-500">
+                              No milestone configuration set. Using default behavior.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

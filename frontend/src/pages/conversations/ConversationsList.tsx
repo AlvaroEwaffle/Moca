@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye } from "lucide-react";
+import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link, Presentation, CheckCircle, XCircle } from "lucide-react";
 import { Helmet } from "react-helmet";
 import LeadScoreIndicator from "@/components/LeadScoreIndicator";
 
@@ -51,6 +51,14 @@ interface Conversation {
       peakScore: number;
     };
     repetitionPatterns: string[];
+  };
+  milestone?: {
+    target?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
+    customTarget?: string;
+    status: 'pending' | 'achieved' | 'failed';
+    achievedAt?: Date;
+    notes?: string;
+    autoDisableAgent: boolean;
   };
 }
 
@@ -178,6 +186,15 @@ const ConversationsList = () => {
               peakScore: conv.analytics.leadProgression.peakScore || 1
             } : undefined,
             repetitionPatterns: conv.analytics.repetitionPatterns || []
+          } : undefined,
+          // Add milestone data
+          milestone: conv.milestone ? {
+            target: conv.milestone.target,
+            customTarget: conv.milestone.customTarget,
+            status: conv.milestone.status || 'pending',
+            achievedAt: conv.milestone.achievedAt ? new Date(conv.milestone.achievedAt) : undefined,
+            notes: conv.milestone.notes,
+            autoDisableAgent: conv.milestone.autoDisableAgent ?? true
           } : undefined
         }));
         
@@ -239,6 +256,64 @@ const ConversationsList = () => {
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
+  };
+
+  const getMilestoneBadge = (milestone: any) => {
+    const getMilestoneIcon = () => {
+      switch (milestone.target) {
+        case 'link_shared':
+          return <Link className="w-3 h-3 mr-1" />;
+        case 'meeting_scheduled':
+          return <Calendar className="w-3 h-3 mr-1" />;
+        case 'demo_booked':
+          return <Presentation className="w-3 h-3 mr-1" />;
+        case 'custom':
+          return <Target className="w-3 h-3 mr-1" />;
+        default:
+          return <Target className="w-3 h-3 mr-1" />;
+      }
+    };
+
+    const getMilestoneText = () => {
+      if (milestone.target === 'custom' && milestone.customTarget) {
+        return milestone.customTarget;
+      }
+      return milestone.target?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Milestone';
+    };
+
+    const getBadgeVariant = () => {
+      switch (milestone.status) {
+        case 'achieved':
+          return 'default';
+        case 'pending':
+          return 'outline';
+        case 'failed':
+          return 'destructive';
+        default:
+          return 'outline';
+      }
+    };
+
+    const getBadgeColor = () => {
+      switch (milestone.status) {
+        case 'achieved':
+          return 'bg-green-100 text-green-800';
+        case 'pending':
+          return 'bg-yellow-100 text-yellow-800';
+        case 'failed':
+          return 'bg-red-100 text-red-800';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
+    };
+
+    return (
+      <Badge variant={getBadgeVariant()} className={getBadgeColor()}>
+        {getMilestoneIcon()}
+        {getMilestoneText()}
+        {milestone.status === 'achieved' && <CheckCircle className="w-3 h-3 ml-1" />}
+      </Badge>
+    );
   };
 
   const formatTimeAgo = (date: Date) => {
@@ -361,6 +436,7 @@ const ConversationsList = () => {
                             @{conversation.contact?.username || 'unknown'}
                           </span>
                           {getStatusBadge(conversation.status)}
+                          {conversation.milestone && getMilestoneBadge(conversation.milestone)}
                         </div>
                         
                         {/* Lead Score Indicator */}

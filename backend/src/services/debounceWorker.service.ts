@@ -157,6 +157,12 @@ class DebounceWorkerService {
         return false;
       }
 
+      // Check milestone status - if achieved, skip processing
+      if (conversation.milestone?.status === 'achieved') {
+        console.log(`🎯 DebounceWorkerService: Milestone already achieved for conversation ${conversation.id}, skipping automatic response`);
+        return false;
+      }
+
       // Check if there's already a pending response for this conversation
       const existingQueueItem = await OutboundQueue.findOne({
         conversationId: conversation.id,
@@ -197,6 +203,9 @@ class DebounceWorkerService {
       }
 
       const response = responseData.responseText;
+
+      // Check for milestone achievement in new messages
+      await this.checkMilestoneAchievement(conversation, unprocessedMessages);
 
       // Queue response
       await this.queueResponse(conversation, response, unprocessedMessages.map(msg => msg.mid));
@@ -746,6 +755,148 @@ class DebounceWorkerService {
       console.error(`❌ DebounceWorkerService: Error marking messages as processed:`, error);
       throw error; // Re-throw to prevent further processing
     }
+  }
+
+  /**
+   * Check for milestone achievement in new messages
+   */
+  private async checkMilestoneAchievement(conversation: IConversation, newMessages: IMessage[]): Promise<void> {
+    try {
+      // Only check if there's a milestone set and it's not already achieved
+      if (!conversation.milestone?.target || conversation.milestone.status === 'achieved') {
+        return;
+      }
+
+      console.log(`🎯 DebounceWorkerService: Checking milestone achievement for conversation ${conversation.id}`);
+      console.log(`🎯 DebounceWorkerService: Target milestone: ${conversation.milestone.target}`);
+
+      const messageTexts = newMessages.map(msg => msg.content.text).join(' ').toLowerCase();
+      let isAchieved = false;
+      let achievementReason = '';
+
+      // Check for different milestone types
+      switch (conversation.milestone.target) {
+        case 'link_shared':
+          if (this.detectLinkShared(messageTexts)) {
+            isAchieved = true;
+            achievementReason = 'Link detected in user message';
+          }
+          break;
+        
+        case 'meeting_scheduled':
+          if (this.detectMeetingScheduled(messageTexts)) {
+            isAchieved = true;
+            achievementReason = 'Meeting scheduling detected in user message';
+          }
+          break;
+        
+        case 'demo_booked':
+          if (this.detectDemoBooked(messageTexts)) {
+            isAchieved = true;
+            achievementReason = 'Demo booking detected in user message';
+          }
+          break;
+        
+        case 'custom':
+          if (conversation.milestone.customTarget) {
+            if (this.detectCustomMilestone(messageTexts, conversation.milestone.customTarget)) {
+              isAchieved = true;
+              achievementReason = `Custom milestone achieved: ${conversation.milestone.customTarget}`;
+            }
+          }
+          break;
+      }
+
+      if (isAchieved) {
+        console.log(`🎯 DebounceWorkerService: Milestone achieved for conversation ${conversation.id}: ${achievementReason}`);
+        
+        // Update milestone status
+        conversation.milestone.status = 'achieved';
+        conversation.milestone.achievedAt = new Date();
+        conversation.milestone.notes = achievementReason;
+
+        // Auto-disable agent if configured
+        if (conversation.milestone.autoDisableAgent) {
+          console.log(`🎯 DebounceWorkerService: Auto-disabling agent for conversation ${conversation.id}`);
+          if (!conversation.settings) {
+            conversation.settings = {
+              autoRespond: true,
+              aiEnabled: true,
+              priority: 'normal',
+              tags: [],
+              notes: [],
+              followUpRequired: false,
+              businessHoursOnly: false
+            };
+          }
+          conversation.settings.aiEnabled = false;
+        }
+
+        await conversation.save();
+        console.log(`✅ DebounceWorkerService: Milestone marked as achieved for conversation ${conversation.id}`);
+      }
+
+    } catch (error) {
+      console.error(`❌ DebounceWorkerService: Error checking milestone achievement:`, error);
+    }
+  }
+
+  /**
+   * Detect if a link was shared
+   */
+  private detectLinkShared(messageText: string): boolean {
+    // Common link patterns
+    const linkPatterns = [
+      /https?:\/\/[^\s]+/g,
+      /www\.[^\s]+/g,
+      /[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\/[^\s]*/g,
+      /instagram\.com\/[^\s]+/g,
+      /facebook\.com\/[^\s]+/g,
+      /linkedin\.com\/[^\s]+/g,
+      /youtube\.com\/[^\s]+/g,
+      /tiktok\.com\/[^\s]+/g
+    ];
+
+    return linkPatterns.some(pattern => pattern.test(messageText));
+  }
+
+  /**
+   * Detect if a meeting was scheduled
+   */
+  private detectMeetingScheduled(messageText: string): boolean {
+    const meetingKeywords = [
+      'meeting', 'reunión', 'cita', 'agendar', 'schedule', 'calendar',
+      'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo',
+      'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+      'mañana', 'tarde', 'noche', 'morning', 'afternoon', 'evening',
+      'zoom', 'teams', 'google meet', 'skype', 'videollamada', 'call',
+      'confirmo', 'confirm', 'acepto', 'accept', 'perfecto', 'perfect'
+    ];
+
+    return meetingKeywords.some(keyword => messageText.includes(keyword));
+  }
+
+  /**
+   * Detect if a demo was booked
+   */
+  private detectDemoBooked(messageText: string): boolean {
+    const demoKeywords = [
+      'demo', 'demostración', 'presentación', 'presentation',
+      'muestra', 'show', 'ver', 'see', 'conocer', 'know',
+      'producto', 'product', 'servicio', 'service',
+      'agendar demo', 'schedule demo', 'book demo'
+    ];
+
+    return demoKeywords.some(keyword => messageText.includes(keyword));
+  }
+
+  /**
+   * Detect custom milestone achievement
+   */
+  private detectCustomMilestone(messageText: string, customTarget: string): boolean {
+    // Simple keyword matching for custom milestones
+    const keywords = customTarget.toLowerCase().split(' ').filter(word => word.length > 2);
+    return keywords.some(keyword => messageText.includes(keyword));
   }
 }
 

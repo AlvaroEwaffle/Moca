@@ -89,6 +89,24 @@ const ConversationAnalyticsSchema = new Schema({
   }
 });
 
+// Conversation milestone sub-schema
+const ConversationMilestoneSchema = new Schema({
+  target: { 
+    type: String, 
+    enum: ['link_shared', 'meeting_scheduled', 'demo_booked', 'custom'], 
+    required: false 
+  },
+  customTarget: { type: String, required: false }, // Custom milestone description
+  status: { 
+    type: String, 
+    enum: ['pending', 'achieved', 'failed'], 
+    default: 'pending' 
+  },
+  achievedAt: { type: Date, required: false },
+  notes: { type: String, required: false },
+  autoDisableAgent: { type: Boolean, default: true } // Whether to disable agent when achieved
+});
+
 export interface IConversation extends Document {
   id: string;
   contactId: string | any; // Reference to Contact (ObjectId or populated object)
@@ -169,6 +187,14 @@ export interface IConversation extends Document {
       responseCount: number;
     };
   };
+  milestone: {
+    target?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
+    customTarget?: string;
+    status: 'pending' | 'achieved' | 'failed';
+    achievedAt?: Date;
+    notes?: string;
+    autoDisableAgent: boolean;
+  };
   isActive: boolean; // Whether conversation is currently active
   lastMessageId?: string; // ID of the last message in the conversation
   messageCount: number; // Total number of messages
@@ -186,6 +212,7 @@ const ConversationSchema = new Schema<IConversation>({
   leadScoring: { type: LeadScoringSchema, default: () => ({}) },
   aiResponseMetadata: { type: AIResponseMetadataSchema, default: () => ({}) },
   analytics: { type: ConversationAnalyticsSchema, default: () => ({}) },
+  milestone: { type: ConversationMilestoneSchema, default: () => ({}) },
   isActive: { type: Boolean, default: true },
   lastMessageId: { type: String, required: false },
   messageCount: { type: Number, default: 0 },
@@ -218,6 +245,10 @@ ConversationSchema.index({ 'aiResponseMetadata.repetitionDetected': 1 });
 // Analytics indexes
 ConversationSchema.index({ 'analytics.leadProgression.trend': 1 });
 ConversationSchema.index({ 'analytics.leadProgression.averageScore': -1 });
+// Milestone indexes
+ConversationSchema.index({ 'milestone.status': 1 });
+ConversationSchema.index({ 'milestone.target': 1 });
+ConversationSchema.index({ 'milestone.achievedAt': -1 });
 
 // Pre-save middleware to update timestamps and metrics
 ConversationSchema.pre('save', function(next) {
