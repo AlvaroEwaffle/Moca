@@ -12,13 +12,15 @@ import {
   Save,
   RefreshCw, 
   CheckCircle, 
-  XCircle,
+  XCircle, 
   MessageSquare,
   Bot,
   Target,
   Calendar,
   Link,
-  Presentation
+  Presentation,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 
@@ -53,6 +55,9 @@ const InstagramAccounts = () => {
   const [milestoneTarget, setMilestoneTarget] = useState<'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom'>('link_shared');
   const [customMilestoneTarget, setCustomMilestoneTarget] = useState<string>("");
   const [autoDisableAgent, setAutoDisableAgent] = useState<boolean>(true);
+  
+  // Accordion state
+  const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     fetchAccounts();
@@ -220,6 +225,19 @@ const InstagramAccounts = () => {
     return new Date(date).toLocaleString();
   };
 
+  const toggleAccordion = (accountId: string, section: string) => {
+    const key = `${accountId}-${section}`;
+    setExpandedSections(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const isAccordionExpanded = (accountId: string, section: string) => {
+    const key = `${accountId}-${section}`;
+    return expandedSections[key] || false;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -235,16 +253,16 @@ const InstagramAccounts = () => {
         <meta name="description" content="Manage your Instagram accounts and AI system prompts" />
       </Helmet>
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Instagram Accounts</h1>
-            <p className="text-gray-600 mt-1">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Instagram Accounts</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">
               Manage your Instagram accounts and customize AI system prompts
             </p>
           </div>
-          <Button onClick={fetchAccounts} variant="outline" size="sm">
+          <Button onClick={fetchAccounts} variant="outline" size="sm" className="w-full sm:w-auto">
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
           </Button>
@@ -280,25 +298,25 @@ const InstagramAccounts = () => {
           ) : (
             accounts.map((account) => (
               <Card key={account.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start space-x-4 flex-1">
-                      <div className="w-12 h-12 bg-violet-100 rounded-full flex items-center justify-center">
-                        <Instagram className="w-6 h-6 text-violet-600" />
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 space-y-4 sm:space-y-0">
+                    <div className="flex items-start space-x-3 sm:space-x-4 flex-1 min-w-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-violet-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Instagram className="w-5 h-5 sm:w-6 sm:h-6 text-violet-600" />
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <h3 className="font-medium text-gray-900">
+                        <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 mb-2">
+                          <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">
                             {account.accountName}
                           </h3>
-                          <Badge variant={account.isActive ? "default" : "secondary"}>
+                          <Badge variant={account.isActive ? "default" : "secondary"} className="w-fit">
                             {account.isActive ? "Active" : "Inactive"}
                           </Badge>
                         </div>
                         
-                        <div className="text-sm text-gray-600">
-                          <div>
+                        <div className="text-xs sm:text-sm text-gray-600 space-y-1">
+                          <div className="break-all">
                             <span className="font-medium">Account ID:</span> {account.accountId}
                           </div>
                           <div>
@@ -308,202 +326,256 @@ const InstagramAccounts = () => {
                       </div>
                     </div>
                     
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startEditing(account)}
-                        disabled={editingAccount === account.accountId}
-                      >
-                        <Settings className="w-4 h-4 mr-2" />
-                        Edit Prompt
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startEditingMilestone(account)}
-                        disabled={editingMilestone === account.accountId}
-                      >
-                        <Target className="w-4 h-4 mr-2" />
-                        Milestone
-                      </Button>
+                    <div className="text-xs text-gray-500">
+                      Click sections below to configure
                     </div>
                   </div>
 
-                  {/* System Prompt Section */}
+                  {/* System Prompt Accordion */}
                   <div className="border-t pt-4">
-                    <div className="flex items-center space-x-2 mb-3">
-                      <Bot className="w-4 h-4 text-violet-600" />
-                      <h4 className="text-sm font-medium text-gray-700">AI System Prompt</h4>
-                    </div>
-                    
-                    {editingAccount === account.accountId ? (
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="instructions">Custom Instructions</Label>
-                          <Textarea
-                            id="instructions"
-                            placeholder="Enter your custom AI instructions here..."
-                            value={customInstructions}
-                            onChange={(e) => setCustomInstructions(e.target.value)}
-                            className="min-h-[200px] mt-2"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">
-                            These instructions will be used by the AI to respond to messages for this account.
-                          </p>
-                        </div>
-                        
-                        <div className="flex space-x-2">
-                          <Button 
-                            onClick={() => saveInstructions(account.accountId)}
-                            disabled={saving}
-                            size="sm"
-                          >
-                            {saving ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            ) : (
-                              <Save className="w-4 h-4 mr-2" />
-                            )}
-                            Save Changes
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            onClick={cancelEditing}
-                            size="sm"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
+                    <button
+                      onClick={() => toggleAccordion(account.accountId, 'systemPrompt')}
+                      className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Bot className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                        <h4 className="text-sm font-medium text-gray-700">AI System Prompt</h4>
+                        {account.settings?.systemPrompt && (
+                          <Badge variant="outline" className="text-xs">
+                            {account.settings.systemPrompt.length} chars
+                          </Badge>
+                        )}
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {account.settings?.systemPrompt ? (
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                              {account.settings.systemPrompt}
-                            </p>
-                          </div>
+                      {isAccordionExpanded(account.accountId, 'systemPrompt') ? (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
+                    
+                    {isAccordionExpanded(account.accountId, 'systemPrompt') && (
+                      <div className="mt-3 space-y-4">
+                        {editingAccount === account.accountId ? (
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="instructions">Custom Instructions</Label>
+                              <Textarea
+                                id="instructions"
+                                placeholder="Enter your custom AI instructions here..."
+                                value={customInstructions}
+                                onChange={(e) => setCustomInstructions(e.target.value)}
+                                className="min-h-[200px] mt-2"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                These instructions will be used by the AI to respond to messages for this account.
+                              </p>
+                            </div>
+                            
+                            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                        <Button
+                                onClick={() => saveInstructions(account.accountId)}
+                                disabled={saving}
+                          size="sm"
+                                className="w-full sm:w-auto"
+                        >
+                                {saving ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          ) : (
+                                  <Save className="w-4 h-4 mr-2" />
+                          )}
+                                Save Changes
+                        </Button>
+                        <Button
+                                variant="outline" 
+                                onClick={cancelEditing}
+                          size="sm"
+                                className="w-full sm:w-auto"
+                        >
+                                Cancel
+                        </Button>
+                      </div>
+                    </div>
                         ) : (
-                          <div className="bg-gray-50 p-4 rounded-lg text-center">
-                            <MessageSquare className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                            <p className="text-sm text-gray-500">
-                              No custom instructions set. Using default AI behavior.
-                            </p>
+                          <div className="space-y-3">
+                            {account.settings?.systemPrompt ? (
+                              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                <p className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap break-words">
+                                  {account.settings.systemPrompt}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="bg-gray-50 p-4 rounded-lg text-center">
+                                <MessageSquare className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                <p className="text-sm text-gray-500">
+                                  No custom instructions set. Using default AI behavior.
+                                </p>
+                              </div>
+                            )}
+                            
+                            <div className="flex justify-between items-center">
+                              <div className="text-xs text-gray-500">
+                                {account.settings?.systemPrompt 
+                                  ? `${account.settings.systemPrompt.length} characters`
+                                  : 'Default prompt in use'
+                      }
+                    </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => startEditing(account)}
+                                className="text-xs"
+                              >
+                                <Settings className="w-3 h-3 mr-1" />
+                                Edit
+                              </Button>
+                            </div>
                           </div>
                         )}
-                        
-                        <div className="text-xs text-gray-500">
-                          {account.settings?.systemPrompt 
-                            ? `${account.settings.systemPrompt.length} characters`
-                            : 'Default prompt in use'
-                          }
-                        </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Milestone Configuration Section */}
+                  {/* Milestone Configuration Accordion */}
                   <div className="border-t pt-4 mt-4">
-                    <div className="flex items-center space-x-2 mb-3">
-                      <Target className="w-4 h-4 text-violet-600" />
-                      <h4 className="text-sm font-medium text-gray-700">Default Milestone Configuration</h4>
-                    </div>
-                    
-                    {editingMilestone === account.accountId ? (
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="milestoneTarget">Milestone Target</Label>
-                          <select
-                            id="milestoneTarget"
-                            value={milestoneTarget}
-                            onChange={(e) => setMilestoneTarget(e.target.value as any)}
-                            className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                          >
-                            <option value="link_shared">Link Shared</option>
-                            <option value="meeting_scheduled">Meeting Scheduled</option>
-                            <option value="demo_booked">Demo Booked</option>
-                            <option value="custom">Custom</option>
-                          </select>
-                        </div>
-
-                        {milestoneTarget === 'custom' && (
-                          <div>
-                            <Label htmlFor="customMilestoneTarget">Custom Milestone Description</Label>
-                            <input
-                              id="customMilestoneTarget"
-                              type="text"
-                              value={customMilestoneTarget}
-                              onChange={(e) => setCustomMilestoneTarget(e.target.value)}
-                              placeholder="e.g., 'Price quote requested'"
-                              className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                            />
-                          </div>
+                    <button
+                      onClick={() => toggleAccordion(account.accountId, 'milestone')}
+                      className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Target className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                        <h4 className="text-sm font-medium text-gray-700">Default Milestone Configuration</h4>
+                        {account.settings?.defaultMilestone && (
+                          <Badge variant="outline" className="text-xs">
+                            {account.settings.defaultMilestone.target === 'custom' 
+                              ? 'Custom'
+                              : account.settings.defaultMilestone.target?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Set'
+                            }
+                          </Badge>
                         )}
-
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="autoDisableAgent"
-                            checked={autoDisableAgent}
-                            onChange={(e) => setAutoDisableAgent(e.target.checked)}
-                            className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
-                          />
-                          <Label htmlFor="autoDisableAgent" className="text-sm text-gray-700">
-                            Auto-disable agent when milestone is achieved
-                          </Label>
-                        </div>
-                        
-                        <div className="flex space-x-2">
-                          <Button 
-                            onClick={() => saveMilestoneConfig(account.accountId)}
-                            disabled={saving}
-                            size="sm"
-                          >
-                            {saving ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            ) : (
-                              <Save className="w-4 h-4 mr-2" />
-                            )}
-                            Save Milestone
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            onClick={cancelEditingMilestone}
-                            size="sm"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {account.settings?.defaultMilestone ? (
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <div className="flex items-center space-x-2 mb-2">
-                              {account.settings.defaultMilestone.target === 'link_shared' && <Link className="w-4 h-4 text-violet-600" />}
-                              {account.settings.defaultMilestone.target === 'meeting_scheduled' && <Calendar className="w-4 h-4 text-violet-600" />}
-                              {account.settings.defaultMilestone.target === 'demo_booked' && <Presentation className="w-4 h-4 text-violet-600" />}
-                              {account.settings.defaultMilestone.target === 'custom' && <Target className="w-4 h-4 text-violet-600" />}
-                              <span className="text-sm font-medium text-gray-700">
-                                {account.settings.defaultMilestone.target === 'custom' 
-                                  ? account.settings.defaultMilestone.customTarget 
-                                  : account.settings.defaultMilestone.target 
-                                    ? account.settings.defaultMilestone.target.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
-                                    : 'Milestone'
-                                }
-                              </span>
+                      {isAccordionExpanded(account.accountId, 'milestone') ? (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
+                    
+                    {isAccordionExpanded(account.accountId, 'milestone') && (
+                      <div className="mt-3 space-y-4">
+                        {editingMilestone === account.accountId ? (
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="milestoneTarget">Milestone Target</Label>
+                              <select
+                                id="milestoneTarget"
+                                value={milestoneTarget}
+                                onChange={(e) => setMilestoneTarget(e.target.value as any)}
+                                className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                              >
+                                <option value="link_shared">Link Shared</option>
+                                <option value="meeting_scheduled">Meeting Scheduled</option>
+                                <option value="demo_booked">Demo Booked</option>
+                                <option value="custom">Custom</option>
+                              </select>
                             </div>
-                            <div className="text-xs text-gray-500">
-                              Auto-disable agent: {account.settings.defaultMilestone.autoDisableAgent ? 'Yes' : 'No'}
+
+                            {milestoneTarget === 'custom' && (
+                              <div>
+                                <Label htmlFor="customMilestoneTarget">Custom Milestone Description</Label>
+                                <input
+                                  id="customMilestoneTarget"
+                                  type="text"
+                                  value={customMilestoneTarget}
+                                  onChange={(e) => setCustomMilestoneTarget(e.target.value)}
+                                  placeholder="e.g., 'Price quote requested'"
+                                  className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                                />
+                              </div>
+                            )}
+
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="autoDisableAgent"
+                                checked={autoDisableAgent}
+                                onChange={(e) => setAutoDisableAgent(e.target.checked)}
+                                className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                              />
+                              <Label htmlFor="autoDisableAgent" className="text-sm text-gray-700">
+                                Auto-disable agent when milestone is achieved
+                              </Label>
                             </div>
+                            
+                            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                              <Button 
+                                onClick={() => saveMilestoneConfig(account.accountId)}
+                                disabled={saving}
+                                size="sm"
+                                className="w-full sm:w-auto"
+                              >
+                                {saving ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                ) : (
+                                  <Save className="w-4 h-4 mr-2" />
+                                )}
+                                Save Milestone
+                              </Button>
+                      <Button
+                                variant="outline" 
+                                onClick={cancelEditingMilestone}
+                        size="sm"
+                                className="w-full sm:w-auto"
+                      >
+                                Cancel
+                      </Button>
+                    </div>
                           </div>
                         ) : (
-                          <div className="bg-gray-50 p-4 rounded-lg text-center">
-                            <Target className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                            <p className="text-sm text-gray-500">
-                              No milestone configuration set. Using default behavior.
-                            </p>
-                          </div>
+                          <div className="space-y-3">
+                            {account.settings?.defaultMilestone ? (
+                              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  {account.settings.defaultMilestone.target === 'link_shared' && <Link className="w-4 h-4 text-violet-600 flex-shrink-0" />}
+                                  {account.settings.defaultMilestone.target === 'meeting_scheduled' && <Calendar className="w-4 h-4 text-violet-600 flex-shrink-0" />}
+                                  {account.settings.defaultMilestone.target === 'demo_booked' && <Presentation className="w-4 h-4 text-violet-600 flex-shrink-0" />}
+                                  {account.settings.defaultMilestone.target === 'custom' && <Target className="w-4 h-4 text-violet-600 flex-shrink-0" />}
+                                  <span className="text-sm font-medium text-gray-700 break-words">
+                                    {account.settings.defaultMilestone.target === 'custom' 
+                                      ? account.settings.defaultMilestone.customTarget 
+                                      : account.settings.defaultMilestone.target 
+                                        ? account.settings.defaultMilestone.target.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                        : 'Milestone'
+                                    }
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  Auto-disable agent: {account.settings.defaultMilestone.autoDisableAgent ? 'Yes' : 'No'}
+                        </div>
+                      </div>
+                            ) : (
+                              <div className="bg-gray-50 p-4 rounded-lg text-center">
+                                <Target className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                <p className="text-sm text-gray-500">
+                                  No milestone configuration set. Using default behavior.
+                                </p>
+                              </div>
+                            )}
+                            
+                            <div className="flex justify-between items-center">
+                              <div className="text-xs text-gray-500">
+                                {account.settings?.defaultMilestone ? 'Configured' : 'Not configured'}
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => startEditingMilestone(account)}
+                                className="text-xs"
+                              >
+                                <Target className="w-3 h-3 mr-1" />
+                                Edit
+                              </Button>
+                            </div>
+                        </div>
                         )}
                       </div>
                     )}
