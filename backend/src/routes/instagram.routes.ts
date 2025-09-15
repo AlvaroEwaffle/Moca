@@ -782,7 +782,14 @@ router.put('/conversations/:id/agent', authenticateToken, async (req, res) => {
         tags: [],
         notes: [],
         followUpRequired: false,
-        businessHoursOnly: false
+        businessHoursOnly: false,
+        responseCounter: {
+          totalResponses: 0,
+          lastResetAt: new Date(),
+          disabledByResponseLimit: false,
+          disabledByLeadScore: false,
+          disabledByMilestone: false
+        }
       };
     }
     conversation.settings.aiEnabled = enabled;
@@ -1070,7 +1077,14 @@ router.post('/conversations/:id/milestone/achieve', authenticateToken, async (re
           tags: [],
           notes: [],
           followUpRequired: false,
-          businessHoursOnly: false
+          businessHoursOnly: false,
+          responseCounter: {
+            totalResponses: 0,
+            lastResetAt: new Date(),
+            disabledByResponseLimit: false,
+            disabledByLeadScore: false,
+            disabledByMilestone: false
+          }
         };
       }
       conversation.settings.aiEnabled = false;

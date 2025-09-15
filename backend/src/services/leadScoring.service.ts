@@ -10,12 +10,26 @@ import {
   LeadScoringData, 
   ConversationContext,
   LEAD_SCORES,
+  LEAD_SCORING_STEPS,
   INTENT_TYPES,
   NEXT_ACTIONS
 } from '../types/aiResponse';
 import { GENERIC_AI_INSTRUCTIONS } from '../templates/aiInstructions';
 
 export class LeadScoringService {
+  
+  /**
+   * Map old 1-10 scale to new 1-7 scale
+   */
+  private static mapToSevenStepScale(oldScore: number): number {
+    if (oldScore <= 1) return 1; // Contact Received
+    if (oldScore <= 2) return 2; // Answers 1 Question
+    if (oldScore <= 3) return 3; // Confirms Interest
+    if (oldScore <= 4) return 4; // Milestone Met
+    if (oldScore <= 6) return 5; // Reminder Sent
+    if (oldScore <= 8) return 6; // Reminder Answered
+    return 7; // Sales Done
+  }
   
   /**
    * Calculate lead score based on message content and context
@@ -28,14 +42,16 @@ export class LeadScoringService {
     let maxScore = 1;
     const reasons: string[] = [];
     
-    // Check against lead scoring rules
+    // Check against lead scoring rules (updated for 7-step scale)
     for (const rule of GENERIC_AI_INSTRUCTIONS.leadScoringRules) {
       const hasKeyword = rule.keywords.some(keyword => lowerMessage.includes(keyword));
       const hasPattern = this.checkPatterns(message, rule.patterns);
       
       if (hasKeyword || hasPattern) {
-        if (rule.score > maxScore) {
-          maxScore = rule.score;
+        // Map old 1-10 scale to new 1-7 scale
+        const mappedScore = this.mapToSevenStepScale(rule.score);
+        if (mappedScore > maxScore) {
+          maxScore = mappedScore;
           reasons.push(rule.description);
         }
       }
@@ -43,8 +59,9 @@ export class LeadScoringService {
     
     // Check for additional indicators
     const additionalScore = this.checkAdditionalIndicators(message, conversationContext);
-    if (additionalScore > maxScore) {
-      maxScore = additionalScore;
+    const mappedAdditionalScore = this.mapToSevenStepScale(additionalScore);
+    if (mappedAdditionalScore > maxScore) {
+      maxScore = mappedAdditionalScore;
       reasons.push('Additional context indicators detected');
     }
     
@@ -55,12 +72,17 @@ export class LeadScoringService {
     // Calculate confidence based on clarity of indicators
     const confidence = this.calculateConfidence(message, reasons.length, conversationContext);
     
+    // Get step information
+    const stepInfo = LEAD_SCORING_STEPS[maxScore as keyof typeof LEAD_SCORING_STEPS];
+    
     return {
       currentScore: maxScore,
       previousScore,
       progression,
       reasons,
-      confidence
+      confidence,
+      stepName: stepInfo?.name || 'Contact Received',
+      stepDescription: stepInfo?.description || 'Initial contact from customer'
     };
   }
   

@@ -44,21 +44,38 @@ const ConversationSettingsSchema = new Schema({
   notes: [{ type: String }], // Internal notes about the conversation
   followUpRequired: { type: Boolean, default: false }, // Whether follow-up is needed
   followUpDate: { type: Date, required: false }, // When to follow up
-  businessHoursOnly: { type: Boolean, default: false } // Only respond during business hours
+  businessHoursOnly: { type: Boolean, default: false }, // Only respond during business hours
+  
+  // Response counter for global agent limits
+  responseCounter: {
+    totalResponses: { type: Number, default: 0 }, // Total AI responses sent
+    lastResetAt: { type: Date, default: Date.now }, // When counter was last reset
+    disabledByResponseLimit: { type: Boolean, default: false }, // Disabled due to response limit
+    disabledByLeadScore: { type: Boolean, default: false }, // Disabled due to lead score milestone
+    disabledByMilestone: { type: Boolean, default: false } // Disabled due to conversation milestone
+  }
 });
 
-// Lead scoring sub-schema
+// Lead scoring sub-schema - Updated to use 7-step scale
 const LeadScoringSchema = new Schema({
-  currentScore: { type: Number, min: 1, max: 10, default: 1 }, // Current lead score (1-10)
-  previousScore: { type: Number, min: 1, max: 10, required: false }, // Previous lead score
+  currentScore: { type: Number, min: 1, max: 7, default: 1 }, // Current lead score (1-7)
+  previousScore: { type: Number, min: 1, max: 7, required: false }, // Previous lead score
   progression: { type: String, enum: ['increased', 'decreased', 'maintained'], default: 'maintained' },
   scoreHistory: [{ 
-    score: { type: Number, min: 1, max: 10 },
+    score: { type: Number, min: 1, max: 7 },
     timestamp: { type: Date, default: Date.now },
-    reason: { type: String }
+    reason: { type: String },
+    stepName: { type: String } // Name of the step (e.g., "Contact Received")
   }], // History of lead score changes
   lastScoredAt: { type: Date, default: Date.now }, // When lead was last scored
-  confidence: { type: Number, min: 0, max: 1, default: 0.5 } // Confidence in lead assessment
+  confidence: { type: Number, min: 0, max: 1, default: 0.5 }, // Confidence in lead assessment
+  
+  // Current step information
+  currentStep: {
+    stepNumber: { type: Number, min: 1, max: 7, default: 1 },
+    stepName: { type: String, default: 'Contact Received' },
+    stepDescription: { type: String, default: 'Initial contact from customer' }
+  }
 });
 
 // AI response metadata sub-schema
@@ -76,8 +93,8 @@ const AIResponseMetadataSchema = new Schema({
 const ConversationAnalyticsSchema = new Schema({
   leadProgression: {
     trend: { type: String, enum: ['improving', 'declining', 'stable'], default: 'stable' },
-    averageScore: { type: Number, min: 1, max: 10, default: 1 },
-    peakScore: { type: Number, min: 1, max: 10, default: 1 },
+    averageScore: { type: Number, min: 1, max: 7, default: 1 },
+    peakScore: { type: Number, min: 1, max: 7, default: 1 },
     progressionRate: { type: Number, min: 0, max: 1, default: 0 }
   },
   repetitionPatterns: [{ type: String }], // Detected repetition patterns
@@ -150,6 +167,13 @@ export interface IConversation extends Document {
     followUpRequired: boolean;
     followUpDate?: Date;
     businessHoursOnly: boolean;
+    responseCounter: {
+      totalResponses: number;
+      lastResetAt: Date;
+      disabledByResponseLimit: boolean;
+      disabledByLeadScore: boolean;
+      disabledByMilestone: boolean;
+    };
   };
   leadScoring: {
     currentScore: number;
@@ -159,9 +183,15 @@ export interface IConversation extends Document {
       score: number;
       timestamp: Date;
       reason: string;
+      stepName: string;
     }>;
     lastScoredAt: Date;
     confidence: number;
+    currentStep: {
+      stepNumber: number;
+      stepName: string;
+      stepDescription: string;
+    };
   };
   aiResponseMetadata: {
     lastResponseType: 'structured' | 'fallback';

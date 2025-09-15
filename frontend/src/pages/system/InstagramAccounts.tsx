@@ -20,7 +20,11 @@ import {
   Link,
   Presentation,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Shield,
+  BarChart3,
+  Clock,
+  AlertTriangle
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 
@@ -41,6 +45,33 @@ interface InstagramAccount {
   updatedAt: Date;
 }
 
+interface GlobalAgentConfig {
+  id: string;
+  responseLimits: {
+    maxResponsesPerConversation: number;
+    resetCounterOnMilestone: boolean;
+  };
+  leadScoring: {
+    scale: {
+      step1: { name: string; description: string; score: number };
+      step2: { name: string; description: string; score: number };
+      step3: { name: string; description: string; score: number };
+      step4: { name: string; description: string; score: number };
+      step5: { name: string; description: string; score: number };
+      step6: { name: string; description: string; score: number };
+      step7: { name: string; description: string; score: number };
+    };
+    autoDisableOnScore?: number;
+    autoDisableOnMilestone: boolean;
+  };
+  systemSettings: {
+    enableResponseLimits: boolean;
+    enableLeadScoreAutoDisable: boolean;
+    enableMilestoneAutoDisable: boolean;
+    logAllDecisions: boolean;
+  };
+}
+
 const InstagramAccounts = () => {
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,11 +87,26 @@ const InstagramAccounts = () => {
   const [customMilestoneTarget, setCustomMilestoneTarget] = useState<string>("");
   const [autoDisableAgent, setAutoDisableAgent] = useState<boolean>(true);
   
+  // Global agent configuration state
+  const [globalConfig, setGlobalConfig] = useState<GlobalAgentConfig | null>(null);
+  const [editingGlobalConfig, setEditingGlobalConfig] = useState<boolean>(false);
+  const [globalConfigForm, setGlobalConfigForm] = useState({
+    maxResponsesPerConversation: 3,
+    resetCounterOnMilestone: false,
+    autoDisableOnScore: undefined as number | undefined,
+    autoDisableOnMilestone: true,
+    enableResponseLimits: true,
+    enableLeadScoreAutoDisable: true,
+    enableMilestoneAutoDisable: true,
+    logAllDecisions: true
+  });
+  
   // Accordion state
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     fetchAccounts();
+    fetchGlobalConfig();
   }, []);
 
   const fetchAccounts = async () => {
@@ -81,6 +127,106 @@ const InstagramAccounts = () => {
       setError('Failed to load Instagram accounts');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGlobalConfig = async () => {
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/global-agent-config`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGlobalConfig(data.data);
+        // Update form with current config
+        if (data.data) {
+          setGlobalConfigForm({
+            maxResponsesPerConversation: data.data.responseLimits.maxResponsesPerConversation,
+            resetCounterOnMilestone: data.data.responseLimits.resetCounterOnMilestone,
+            autoDisableOnScore: data.data.leadScoring.autoDisableOnScore,
+            autoDisableOnMilestone: data.data.leadScoring.autoDisableOnMilestone,
+            enableResponseLimits: data.data.systemSettings.enableResponseLimits,
+            enableLeadScoreAutoDisable: data.data.systemSettings.enableLeadScoreAutoDisable,
+            enableMilestoneAutoDisable: data.data.systemSettings.enableMilestoneAutoDisable,
+            logAllDecisions: data.data.systemSettings.logAllDecisions
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching global config:', error);
+    }
+  };
+
+  const startEditingGlobalConfig = () => {
+    setEditingGlobalConfig(true);
+  };
+
+  const cancelEditingGlobalConfig = () => {
+    setEditingGlobalConfig(false);
+    // Reset form to current config
+    if (globalConfig) {
+      setGlobalConfigForm({
+        maxResponsesPerConversation: globalConfig.responseLimits.maxResponsesPerConversation,
+        resetCounterOnMilestone: globalConfig.responseLimits.resetCounterOnMilestone,
+        autoDisableOnScore: globalConfig.leadScoring.autoDisableOnScore,
+        autoDisableOnMilestone: globalConfig.leadScoring.autoDisableOnMilestone,
+        enableResponseLimits: globalConfig.systemSettings.enableResponseLimits,
+        enableLeadScoreAutoDisable: globalConfig.systemSettings.enableLeadScoreAutoDisable,
+        enableMilestoneAutoDisable: globalConfig.systemSettings.enableMilestoneAutoDisable,
+        logAllDecisions: globalConfig.systemSettings.logAllDecisions
+      });
+    }
+  };
+
+  const saveGlobalConfig = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/global-agent-config`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          responseLimits: {
+            maxResponsesPerConversation: globalConfigForm.maxResponsesPerConversation,
+            resetCounterOnMilestone: globalConfigForm.resetCounterOnMilestone
+          },
+          leadScoring: {
+            autoDisableOnScore: globalConfigForm.autoDisableOnScore,
+            autoDisableOnMilestone: globalConfigForm.autoDisableOnMilestone
+          },
+          systemSettings: {
+            enableResponseLimits: globalConfigForm.enableResponseLimits,
+            enableLeadScoreAutoDisable: globalConfigForm.enableLeadScoreAutoDisable,
+            enableMilestoneAutoDisable: globalConfigForm.enableMilestoneAutoDisable,
+            logAllDecisions: globalConfigForm.logAllDecisions
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setGlobalConfig(data.data);
+        setEditingGlobalConfig(false);
+        setSuccess('Global agent configuration updated successfully');
+      } else {
+        setError(data.error || 'Failed to update global agent configuration');
+      }
+    } catch (error) {
+      console.error('Error saving global config:', error);
+      setError('Failed to save global agent configuration');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -282,6 +428,296 @@ const InstagramAccounts = () => {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+
+        {/* Global Agent Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Shield className="w-5 h-5 text-violet-600" />
+              <span>Global Agent Settings</span>
+            </CardTitle>
+            <CardDescription>
+              Configure system-wide agent behavior and response limits
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {/* Response Limits Section */}
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Clock className="w-4 h-4 text-violet-600" />
+                  <h4 className="font-medium text-gray-900">Response Limits</h4>
+                </div>
+                
+                {editingGlobalConfig ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="maxResponses">Max Responses per Conversation</Label>
+                        <input
+                          id="maxResponses"
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={globalConfigForm.maxResponsesPerConversation}
+                          onChange={(e) => setGlobalConfigForm(prev => ({
+                            ...prev,
+                            maxResponsesPerConversation: parseInt(e.target.value) || 3
+                          }))}
+                          className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Agent will be disabled after this many responses
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="resetCounterOnMilestone"
+                          checked={globalConfigForm.resetCounterOnMilestone}
+                          onChange={(e) => setGlobalConfigForm(prev => ({
+                            ...prev,
+                            resetCounterOnMilestone: e.target.checked
+                          }))}
+                          className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                        />
+                        <Label htmlFor="resetCounterOnMilestone" className="text-sm text-gray-700">
+                          Reset counter when milestone is achieved
+                        </Label>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Max responses per conversation:</span>
+                      <Badge variant="outline">
+                        {globalConfig?.responseLimits.maxResponsesPerConversation || 3}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Reset counter on milestone:</span>
+                      <Badge variant={globalConfig?.responseLimits.resetCounterOnMilestone ? "default" : "secondary"}>
+                        {globalConfig?.responseLimits.resetCounterOnMilestone ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Lead Scoring Section */}
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <BarChart3 className="w-4 h-4 text-violet-600" />
+                  <h4 className="font-medium text-gray-900">Lead Scoring Rules</h4>
+                </div>
+                
+                {editingGlobalConfig ? (
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="autoDisableOnScore">Auto-disable Agent at Lead Score</Label>
+                      <select
+                        id="autoDisableOnScore"
+                        value={globalConfigForm.autoDisableOnScore || ''}
+                        onChange={(e) => setGlobalConfigForm(prev => ({
+                          ...prev,
+                          autoDisableOnScore: e.target.value ? parseInt(e.target.value) : undefined
+                        }))}
+                        className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                      >
+                        <option value="">Disabled</option>
+                        <option value="1">1 - Contact Received</option>
+                        <option value="2">2 - Answers 1 Question</option>
+                        <option value="3">3 - Confirms Interest</option>
+                        <option value="4">4 - Milestone Met</option>
+                        <option value="5">5 - Reminder Sent</option>
+                        <option value="6">6 - Reminder Answered</option>
+                        <option value="7">7 - Sales Done</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Agent will be disabled when lead reaches this score
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="autoDisableOnMilestone"
+                        checked={globalConfigForm.autoDisableOnMilestone}
+                        onChange={(e) => setGlobalConfigForm(prev => ({
+                          ...prev,
+                          autoDisableOnMilestone: e.target.checked
+                        }))}
+                        className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                      />
+                      <Label htmlFor="autoDisableOnMilestone" className="text-sm text-gray-700">
+                        Auto-disable when conversation milestone is achieved
+                      </Label>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Auto-disable at lead score:</span>
+                      <Badge variant="outline">
+                        {globalConfig?.leadScoring.autoDisableOnScore 
+                          ? `${globalConfig.leadScoring.autoDisableOnScore} - ${globalConfig.leadScoring.scale[`step${globalConfig.leadScoring.autoDisableOnScore}` as keyof typeof globalConfig.leadScoring.scale]?.name}`
+                          : "Disabled"
+                        }
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Auto-disable on milestone:</span>
+                      <Badge variant={globalConfig?.leadScoring.autoDisableOnMilestone ? "default" : "secondary"}>
+                        {globalConfig?.leadScoring.autoDisableOnMilestone ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* System Settings Section */}
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Settings className="w-4 h-4 text-violet-600" />
+                  <h4 className="font-medium text-gray-900">System Settings</h4>
+                </div>
+                
+                {editingGlobalConfig ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="enableResponseLimits"
+                        checked={globalConfigForm.enableResponseLimits}
+                        onChange={(e) => setGlobalConfigForm(prev => ({
+                          ...prev,
+                          enableResponseLimits: e.target.checked
+                        }))}
+                        className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                      />
+                      <Label htmlFor="enableResponseLimits" className="text-sm text-gray-700">
+                        Enable response limits
+                      </Label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="enableLeadScoreAutoDisable"
+                        checked={globalConfigForm.enableLeadScoreAutoDisable}
+                        onChange={(e) => setGlobalConfigForm(prev => ({
+                          ...prev,
+                          enableLeadScoreAutoDisable: e.target.checked
+                        }))}
+                        className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                      />
+                      <Label htmlFor="enableLeadScoreAutoDisable" className="text-sm text-gray-700">
+                        Enable lead score auto-disable
+                      </Label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="enableMilestoneAutoDisable"
+                        checked={globalConfigForm.enableMilestoneAutoDisable}
+                        onChange={(e) => setGlobalConfigForm(prev => ({
+                          ...prev,
+                          enableMilestoneAutoDisable: e.target.checked
+                        }))}
+                        className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                      />
+                      <Label htmlFor="enableMilestoneAutoDisable" className="text-sm text-gray-700">
+                        Enable milestone auto-disable
+                      </Label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="logAllDecisions"
+                        checked={globalConfigForm.logAllDecisions}
+                        onChange={(e) => setGlobalConfigForm(prev => ({
+                          ...prev,
+                          logAllDecisions: e.target.checked
+                        }))}
+                        className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                      />
+                      <Label htmlFor="logAllDecisions" className="text-sm text-gray-700">
+                        Log all agent decisions (for debugging)
+                      </Label>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Response limits enabled:</span>
+                      <Badge variant={globalConfig?.systemSettings.enableResponseLimits ? "default" : "secondary"}>
+                        {globalConfig?.systemSettings.enableResponseLimits ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Lead score auto-disable:</span>
+                      <Badge variant={globalConfig?.systemSettings.enableLeadScoreAutoDisable ? "default" : "secondary"}>
+                        {globalConfig?.systemSettings.enableLeadScoreAutoDisable ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Milestone auto-disable:</span>
+                      <Badge variant={globalConfig?.systemSettings.enableMilestoneAutoDisable ? "default" : "secondary"}>
+                        {globalConfig?.systemSettings.enableMilestoneAutoDisable ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Decision logging:</span>
+                      <Badge variant={globalConfig?.systemSettings.logAllDecisions ? "default" : "secondary"}>
+                        {globalConfig?.systemSettings.logAllDecisions ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-2 mt-4 pt-4 border-t">
+                  {editingGlobalConfig ? (
+                    <>
+                      <Button
+                        onClick={saveGlobalConfig}
+                        disabled={saving}
+                        size="sm"
+                      >
+                        {saving ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        ) : (
+                          <Save className="w-4 h-4 mr-2" />
+                        )}
+                        Save Changes
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={cancelEditingGlobalConfig}
+                        size="sm"
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={startEditingGlobalConfig}
+                      size="sm"
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      Edit Settings
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Accounts List */}
         <div className="space-y-4">

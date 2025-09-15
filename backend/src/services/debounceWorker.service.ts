@@ -15,6 +15,7 @@ import {
   StructuredResponse 
 } from '../types/aiResponse';
 import { LeadScoringService } from './leadScoring.service';
+import { GlobalAgentRulesService } from './globalAgentRules.service';
 
 class DebounceWorkerService {
   private isRunning: boolean = false;
@@ -157,7 +158,22 @@ class DebounceWorkerService {
         return false;
       }
 
-      // Check milestone status - if achieved, skip processing
+      // Check global agent rules (response limits, lead score, milestones)
+      const globalConfig = await GlobalAgentRulesService.getGlobalConfig();
+      if (globalConfig) {
+        const shouldDisable = await GlobalAgentRulesService.shouldDisableAgent(conversation, globalConfig);
+        if (shouldDisable.shouldDisable) {
+          console.log(`🚫 DebounceWorkerService: Agent disabled by global rule for conversation ${conversation.id}: ${shouldDisable.reason}`);
+          
+          // Mark conversation as disabled by the specific rule
+          await GlobalAgentRulesService.markDisabledByRule(conversation, shouldDisable.ruleType!);
+          await conversation.save();
+          
+          return false;
+        }
+      }
+
+      // Check milestone status - if achieved, skip processing (legacy check)
       if (conversation.milestone?.status === 'achieved') {
         console.log(`🎯 DebounceWorkerService: Milestone already achieved for conversation ${conversation.id}, skipping automatic response`);
         return false;
@@ -206,6 +222,10 @@ class DebounceWorkerService {
 
       // Check for milestone achievement in new messages
       await this.checkMilestoneAchievement(conversation, unprocessedMessages);
+
+      // Increment response counter
+      await GlobalAgentRulesService.incrementResponseCounter(conversation);
+      await conversation.save();
 
       // Queue response
       await this.queueResponse(conversation, response, unprocessedMessages.map(msg => msg.mid));
@@ -554,11 +574,17 @@ class DebounceWorkerService {
           {
             score: structuredResponse.leadScore,
             timestamp: new Date(),
-            reason: `Intent: ${structuredResponse.intent}, Action: ${structuredResponse.nextAction}`
+            reason: `Intent: ${structuredResponse.intent}, Action: ${structuredResponse.nextAction}`,
+            stepName: structuredResponse.stepName || 'Contact Received'
           }
         ],
         lastScoredAt: new Date(),
-        confidence: structuredResponse.confidence
+        confidence: structuredResponse.confidence,
+        currentStep: {
+          stepNumber: structuredResponse.leadScore,
+          stepName: structuredResponse.stepName || 'Contact Received',
+          stepDescription: structuredResponse.stepDescription || 'Initial contact from customer'
+        }
       };
 
       // Update AI response metadata
@@ -826,7 +852,14 @@ class DebounceWorkerService {
               tags: [],
               notes: [],
               followUpRequired: false,
-              businessHoursOnly: false
+              businessHoursOnly: false,
+              responseCounter: {
+                totalResponses: 0,
+                lastResetAt: new Date(),
+                disabledByResponseLimit: false,
+                disabledByLeadScore: false,
+                disabledByMilestone: false
+              }
             };
           }
           conversation.settings.aiEnabled = false;

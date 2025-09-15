@@ -3,12 +3,14 @@
  */
 
 export interface StructuredResponse {
-  status: number; // Lead progression level (1-10)
+  status: number; // Lead progression level (1-7)
   responseText: string; // Actual response to customer
-  leadScore: number; // Customer interest level (1-10)
+  leadScore: number; // Customer interest level (1-7)
   intent: string; // Customer's apparent intent
   nextAction: string; // Recommended next step
   confidence: number; // Confidence in assessment (0-1)
+  stepName?: string; // Name of the current step
+  stepDescription?: string; // Description of the current step
   metadata: ResponseMetadata;
 }
 
@@ -27,6 +29,8 @@ export interface LeadScoringData {
   progression: 'increased' | 'decreased' | 'maintained';
   reasons: string[];
   confidence: number;
+  stepName?: string;
+  stepDescription?: string;
 }
 
 export interface ConversationContext {
@@ -55,18 +59,26 @@ export interface AIResponseConfig {
   };
 }
 
-// Lead scoring constants
+// Lead scoring constants - Updated to 7-step scale
 export const LEAD_SCORES = {
-  CONTACTED: 1,
-  ANSWERED: 2,
-  SHOWS_INTEREST: 3,
-  PRODUCT_INTEREST: 4,
-  INFORMATION_REQUEST: 5,
-  DEMO_REQUEST: 6,
-  SCHEDULING: 7,
-  PROPOSAL_REQUEST: 8,
-  NEGOTIATING: 9,
-  READY_TO_CLOSE: 10
+  CONTACT_RECEIVED: 1,
+  ANSWERS_1_QUESTION: 2,
+  CONFIRMS_INTEREST: 3,
+  MILESTONE_MET: 4,
+  REMINDER_SENT: 5,
+  REMINDER_ANSWERED: 6,
+  SALES_DONE: 7
+} as const;
+
+// Lead scoring step definitions
+export const LEAD_SCORING_STEPS = {
+  1: { name: 'Contact Received', description: 'Initial contact from customer' },
+  2: { name: 'Answers 1 Question', description: 'Customer responds to first question' },
+  3: { name: 'Confirms Interest', description: 'Customer shows clear interest' },
+  4: { name: 'Milestone Met', description: 'Specific milestone achieved' },
+  5: { name: 'Reminder Sent', description: 'Follow-up reminder sent' },
+  6: { name: 'Reminder Answered', description: 'Customer responds to reminder' },
+  7: { name: 'Sales Done', description: 'Sale completed successfully' }
 } as const;
 
 // Intent types
