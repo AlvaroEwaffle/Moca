@@ -27,7 +27,8 @@ import {
   ChevronDown,
   Home,
   MessageSquare,
-  Instagram
+  Instagram,
+  BarChart3
 } from "lucide-react";
 
 const MainLayout = () => {
@@ -63,6 +64,12 @@ const MainLayout = () => {
       href: '/app/conversations',
       icon: MessageSquare,
       current: location.pathname.startsWith('/app/conversations')
+    },
+    {
+      name: 'Analytics',
+      href: '/app/analytics',
+      icon: BarChart3,
+      current: location.pathname.startsWith('/app/analytics')
     },
     {
       name: 'Instagram',

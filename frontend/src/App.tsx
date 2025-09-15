@@ -24,6 +24,9 @@ import QueueStatus from "./pages/system/QueueStatus";
 import SystemLogs from "./pages/system/SystemLogs";
 import InstagramAccounts from "./pages/system/InstagramAccounts";
 
+// Analytics
+import AnalyticsDashboard from "./pages/analytics/AnalyticsDashboard";
+
 // Instagram OAuth
 import InstagramAuth from "./pages/auth/InstagramAuth";
 import InstagramCallback from "./pages/auth/InstagramCallback";
@@ -77,6 +80,9 @@ function App() {
               <Route path="queue" element={<QueueStatus />} />
               <Route path="logs" element={<SystemLogs />} />
               <Route path="accounts" element={<InstagramAccounts />} />
+              
+              {/* Analytics */}
+              <Route path="analytics" element={<AnalyticsDashboard />} />
               
               {/* Instagram Setup */}
               <Route path="instagram" element={<InstagramSetup />} />
