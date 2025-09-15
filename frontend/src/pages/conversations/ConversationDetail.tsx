@@ -92,6 +92,10 @@ const ConversationDetail: React.FC = () => {
   const [customMilestoneTarget, setCustomMilestoneTarget] = useState<string>("");
   const [autoDisableAgent, setAutoDisableAgent] = useState<boolean>(true);
   const [saving, setSaving] = useState(false);
+  
+  // Delete conversation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -195,6 +199,46 @@ const ConversationDetail: React.FC = () => {
       setError(error instanceof Error ? error.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteConversation = async () => {
+    try {
+      setDeleting(true);
+      setError(null);
+      
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        throw new Error('No access token found');
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/instagram/conversations/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to delete conversation: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Navigate back to conversations list
+        navigate('/app/conversations');
+      } else {
+        throw new Error(data.error || 'Failed to delete conversation');
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete conversation');
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -386,9 +430,15 @@ const ConversationDetail: React.FC = () => {
               <Archive className="w-4 h-4 mr-2" />
               Archive
             </Button>
-            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 flex-1 sm:flex-none">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="text-red-600 hover:text-red-700 flex-1 sm:flex-none"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={deleting}
+            >
               <Trash2 className="w-4 h-4 mr-2" />
-              Delete
+              {deleting ? 'Deleting...' : 'Delete'}
             </Button>
           </div>
         </div>
@@ -868,6 +918,43 @@ const ConversationDetail: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 w-10 h-10 mx-auto bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Delete Conversation
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Are you sure you want to delete this conversation? This action cannot be undone and will permanently remove all messages and data associated with this conversation.
+              </p>
+              <div className="flex space-x-3 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={deleteConversation}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Delete Conversation'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
