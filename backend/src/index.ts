@@ -12,6 +12,7 @@ import instagramRoutes from './routes/instagram.routes';
 import authRoutes from './routes/auth.routes';
 import instagramOAuthRoutes from './routes/instagramOAuth.routes';
 import globalAgentConfigRoutes from './routes/globalAgentConfig.routes';
+import analyticsRoutes from './routes/analytics.routes';
 
 // Import services
 import debounceWorker from './services/debounceWorker.service';
@@ -82,6 +83,7 @@ app.use('/api/instagram', instagramRoutes);
 app.use('/api/instagram/oauth', instagramOAuthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/global-agent-config', globalAgentConfigRoutes);
+app.use('/api/analytics', analyticsRoutes);
 console.log('✅ API routes setup completed');
 
 // Error handling middleware

@@ -1027,6 +1027,61 @@ router.get('/conversations/:id/milestone', authenticateToken, async (req, res) =
   }
 });
 
+// Delete conversation
+router.delete('/conversations/:id', authenticateToken, async (req, res) => {
+  try {
+    console.log('🗑️ [Delete] DELETE conversation request received');
+    console.log('🗑️ [Delete] URL:', req.url);
+    console.log('🗑️ [Delete] Params:', req.params);
+
+    const { id } = req.params;
+
+    console.log('🗑️ [Delete] Searching for conversation with ID:', id);
+    const conversation = await Conversation.findById(id);
+    console.log('🗑️ [Delete] Conversation found:', !!conversation);
+
+    if (!conversation) {
+      console.log('🗑️ [Delete] Conversation not found for ID:', id);
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+
+    // Check if user owns this conversation
+    const userAccounts = await InstagramAccount.find({ userId: req.user!.userId }).select('accountId');
+    const userAccountIds = userAccounts.map(acc => acc.accountId);
+    
+    if (!userAccountIds.includes(conversation.accountId)) {
+      console.log('🗑️ [Delete] User does not own this conversation');
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+
+    // Delete all messages associated with this conversation
+    const messageDeleteResult = await Message.deleteMany({ conversationId: id });
+    console.log('🗑️ [Delete] Deleted messages:', messageDeleteResult.deletedCount);
+
+    // Delete the conversation
+    await Conversation.findByIdAndDelete(id);
+    console.log('🗑️ [Delete] Deleted conversation:', id);
+
+    res.json({
+      success: true,
+      message: 'Conversation deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting conversation:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete conversation'
+    });
+  }
+});
+
 // Mark milestone as achieved
 router.post('/conversations/:id/milestone/achieve', authenticateToken, async (req, res) => {
   try {
