@@ -221,6 +221,9 @@ const ConversationDetail: React.FC = () => {
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Delete feature is not available yet. Please try again in a few minutes.');
+        }
         const errorData = await response.json();
         throw new Error(errorData.error || `Failed to delete conversation: ${response.statusText}`);
       }
