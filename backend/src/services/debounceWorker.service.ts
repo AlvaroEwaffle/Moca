@@ -12,7 +12,8 @@ import { generateStructuredResponse } from './openai.service';
 import { 
   ConversationContext, 
   AIResponseConfig, 
-  StructuredResponse 
+  StructuredResponse,
+  LEAD_SCORING_STEPS
 } from '../types/aiResponse';
 import { LeadScoringService } from './leadScoring.service';
 import { GlobalAgentRulesService } from './globalAgentRules.service';
@@ -522,7 +523,6 @@ class DebounceWorkerService {
       const structuredResponse = await generateStructuredResponse(conversationContext, aiConfig);
       
       console.log('✅ DebounceWorkerService: Structured response generated:', {
-        status: structuredResponse.status,
         leadScore: structuredResponse.leadScore,
         intent: structuredResponse.intent,
         nextAction: structuredResponse.nextAction
@@ -565,6 +565,8 @@ class DebounceWorkerService {
 
       // Update lead scoring
       const previousScore = conversation.leadScoring?.currentScore || 1;
+      const stepInfo = LEAD_SCORING_STEPS[structuredResponse.leadScore as keyof typeof LEAD_SCORING_STEPS];
+      
       conversation.leadScoring = {
         currentScore: structuredResponse.leadScore,
         previousScore: previousScore,
@@ -575,15 +577,15 @@ class DebounceWorkerService {
             score: structuredResponse.leadScore,
             timestamp: new Date(),
             reason: `Intent: ${structuredResponse.intent}, Action: ${structuredResponse.nextAction}`,
-            stepName: structuredResponse.stepName || 'Contact Received'
+            stepName: stepInfo?.name || 'Contact Received'
           }
         ],
         lastScoredAt: new Date(),
         confidence: structuredResponse.confidence,
         currentStep: {
           stepNumber: structuredResponse.leadScore,
-          stepName: structuredResponse.stepName || 'Contact Received',
-          stepDescription: structuredResponse.stepDescription || 'Initial contact from customer'
+          stepName: stepInfo?.name || 'Contact Received',
+          stepDescription: stepInfo?.description || 'Initial contact from customer'
         }
       };
 
@@ -592,7 +594,7 @@ class DebounceWorkerService {
         lastResponseType: 'structured',
         lastIntent: structuredResponse.intent,
         lastNextAction: structuredResponse.nextAction,
-        repetitionDetected: structuredResponse.metadata.repetitionDetected || false,
+        repetitionDetected: false, // Not available in simplified structure
         contextAwareness: structuredResponse.metadata.previousContextReferenced,
         businessNameUsed: structuredResponse.metadata.businessNameUsed,
         responseQuality: structuredResponse.confidence
@@ -615,7 +617,7 @@ class DebounceWorkerService {
           peakScore: leadProgression.peakScore,
           progressionRate: leadProgression.progressionRate
         },
-        repetitionPatterns: structuredResponse.metadata.repetitionDetected ? ['detected'] : [],
+        repetitionPatterns: [], // Not available in simplified structure
         conversationFlow: {
           totalTurns: conversation.metrics.totalMessages,
           averageTurnLength: 0, // Will be calculated elsewhere

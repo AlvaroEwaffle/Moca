@@ -188,8 +188,8 @@ ${conversationContext.lastMessage}
 CONTEXTO:
 - Tiempo desde último mensaje: ${conversationContext.timeSinceLastMessage} minutos
 - Patrones de repetición detectados: ${repetitionPatterns.join(', ') || 'ninguno'}
-- Puntuación de lead actual: ${leadScoringData.currentScore}/10
-- Puntuación anterior: ${leadScoringData.previousScore || 'N/A'}/10
+- Puntuación de lead actual: ${leadScoringData.currentScore}/7
+- Puntuación anterior: ${leadScoringData.previousScore || 'N/A'}/7
 - Progresión: ${leadScoringData.progression}
 
 INSTRUCCIONES:
@@ -197,9 +197,8 @@ ${contextualInstructions}
 
 RESPONDE SOLO CON JSON VÁLIDO:
 {
-  "status": number (1-10),
   "responseText": "string",
-  "leadScore": number (1-10),
+  "leadScore": number (1-7),
   "intent": "string",
   "nextAction": "string",
   "confidence": number (0-1),
@@ -249,7 +248,6 @@ RESPONDE SOLO CON JSON VÁLIDO:
     structuredResponse.metadata.repetitionDetected = repetitionPatterns.length > 0;
 
     console.log('✅ Structured response generated successfully:', {
-      status: structuredResponse.status,
       leadScore: structuredResponse.leadScore,
       intent: structuredResponse.intent,
       nextAction: structuredResponse.nextAction
@@ -284,7 +282,6 @@ function createFallbackStructuredResponse(
   }
 
   return {
-    status: leadScoringData.currentScore,
     responseText,
     leadScore: leadScoringData.currentScore,
     intent: 'inquiry',
@@ -293,9 +290,7 @@ function createFallbackStructuredResponse(
     metadata: {
       greetingUsed: isFirstMessage || timeSinceLastMessage > 30,
       previousContextReferenced: false,
-      businessNameUsed: conversationContext.businessName,
-      repetitionDetected: false,
-      leadProgression: leadScoringData.progression
+      businessNameUsed: conversationContext.businessName
     }
   };
 }

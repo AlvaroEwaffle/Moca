@@ -166,7 +166,7 @@ const ConversationsList = () => {
           agentEnabled: conv.settings?.aiEnabled !== false, // Default to true if not specified
           // Add structured AI response fields
           leadScoring: conv.leadScoring ? {
-            currentScore: conv.analytics?.leadProgression?.peakScore || 1,
+            currentScore: conv.leadScoring.currentScore || 1,
             previousScore: conv.leadScoring.previousScore,
             progression: conv.leadScoring.progression || 'maintained',
             confidence: conv.leadScoring.confidence || 0.5
@@ -445,11 +445,11 @@ const ConversationsList = () => {
                           </div>
                           
                           {/* Lead Score and Meta Information */}
-                          {conversation.analytics?.leadProgression?.peakScore && (
+                          {conversation.leadScoring?.currentScore && (
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                               <span className="text-xs text-gray-500">🎯</span>
                               <span className="text-sm font-medium text-gray-900">
-                                {conversation.analytics.leadProgression.peakScore}/10 Lead Score
+                                {conversation.leadScoring.currentScore}/7 Lead Score
                               </span>
                               {conversation.leadScoring?.confidence && (
                                 <span className="text-xs text-gray-500">

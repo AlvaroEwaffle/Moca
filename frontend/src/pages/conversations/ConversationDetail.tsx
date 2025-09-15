@@ -417,7 +417,7 @@ const ConversationDetail: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Lead Score</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {conversation.analytics?.leadProgression?.peakScore || 1}/10
+                    {conversation.leadScoring?.currentScore || 1}/7
                   </p>
                   <p className="text-xs text-gray-500">
                     {conversation.leadScoring?.confidence ? `${Math.round(conversation.leadScoring.confidence * 100)}% confidence` : ''}
@@ -766,12 +766,12 @@ const ConversationDetail: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Current Score</span>
-                      <span className="text-sm font-bold">{conversation.analytics?.leadProgression?.peakScore || 1}/10</span>
+                      <span className="text-sm font-bold">{conversation.leadScoring.currentScore || 1}/7</span>
                     </div>
                     
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Previous Score</span>
-                      <span className="text-sm font-medium">{conversation.leadScoring.previousScore}/10</span>
+                      <span className="text-sm font-medium">{conversation.leadScoring.previousScore || 'N/A'}/7</span>
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -783,7 +783,7 @@ const ConversationDetail: React.FC = () => {
                         }
                         className="text-xs"
                       >
-                        {conversation.leadScoring.progression}
+                        {conversation.leadScoring.progression || 'maintained'}
                       </Badge>
                     </div>
 
@@ -793,6 +793,24 @@ const ConversationDetail: React.FC = () => {
                         {Math.round((conversation.leadScoring.confidence || 0) * 100)}%
                       </span>
                     </div>
+
+                    {/* Step Information */}
+                    {conversation.leadScoring.currentStep && (
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700">Current Step</span>
+                          <span className="text-sm font-bold text-violet-600">
+                            {conversation.leadScoring.currentStep.stepNumber || conversation.leadScoring.currentScore || 1}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 font-medium">
+                          {conversation.leadScoring.currentStep.stepName || 'Contact Received'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {conversation.leadScoring.currentStep.stepDescription || 'Initial contact from customer'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -821,7 +839,7 @@ const ConversationDetail: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">Average Score</span>
                         <span className="text-sm font-medium">
-                          {conversation.analytics.leadProgression.averageScore?.toFixed(1) || 'N/A'}/10
+                          {conversation.analytics.leadProgression.averageScore?.toFixed(1) || 'N/A'}/7
                         </span>
                       </div>
                     )}
@@ -830,7 +848,7 @@ const ConversationDetail: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">Peak Score</span>
                         <span className="text-sm font-medium">
-                          {conversation.analytics.leadProgression.peakScore || 'N/A'}/10
+                          {conversation.analytics.leadProgression.peakScore || 'N/A'}/7
                         </span>
                       </div>
                     )}

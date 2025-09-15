@@ -3,15 +3,12 @@
  */
 
 export interface StructuredResponse {
-  status: number; // Lead progression level (1-7)
   responseText: string; // Actual response to customer
   leadScore: number; // Customer interest level (1-7)
   intent: string; // Customer's apparent intent
   nextAction: string; // Recommended next step
   confidence: number; // Confidence in assessment (0-1)
-  stepName?: string; // Name of the current step
-  stepDescription?: string; // Description of the current step
-  metadata: ResponseMetadata;
+  metadata: ResponseMetadata; // Essential response metadata
 }
 
 export interface ResponseMetadata {
@@ -110,12 +107,10 @@ export const NEXT_ACTIONS = {
 export function validateStructuredResponse(response: any): response is StructuredResponse {
   return (
     typeof response === 'object' &&
-    typeof response.status === 'number' &&
-    response.status >= 1 && response.status <= 10 &&
     typeof response.responseText === 'string' &&
     response.responseText.length > 0 &&
     typeof response.leadScore === 'number' &&
-    response.leadScore >= 1 && response.leadScore <= 10 &&
+    response.leadScore >= 1 && response.leadScore <= 7 &&
     typeof response.intent === 'string' &&
     typeof response.nextAction === 'string' &&
     typeof response.confidence === 'number' &&
@@ -129,7 +124,6 @@ export function validateStructuredResponse(response: any): response is Structure
 
 export function createDefaultResponse(): StructuredResponse {
   return {
-    status: 1,
     responseText: "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto.",
     leadScore: 1,
     intent: 'greeting',
