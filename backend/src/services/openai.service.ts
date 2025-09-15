@@ -188,12 +188,18 @@ ${conversationContext.lastMessage}
 CONTEXTO:
 - Tiempo desde último mensaje: ${conversationContext.timeSinceLastMessage} minutos
 - Patrones de repetición detectados: ${repetitionPatterns.join(', ') || 'ninguno'}
-- Puntuación de lead actual: ${leadScoringData.currentScore}/7
-- Puntuación anterior: ${leadScoringData.previousScore || 'N/A'}/7
-- Progresión: ${leadScoringData.progression}
 
 INSTRUCCIONES:
 ${contextualInstructions}
+
+ESCALA DE PUNTUACIÓN DE LEADS (1-7):
+1. Contact Received - Contacto inicial del cliente
+2. Answers 1 Question - Cliente responde a la primera pregunta
+3. Confirms Interest - Cliente muestra interés en el servicio/producto
+4. Milestone Met - Hito específico del negocio alcanzado
+5. Reminder Sent - Recordatorio de seguimiento enviado al cliente
+6. Reminder Answered - Cliente responde al seguimiento
+7. Sales Done - Venta completada o trato cerrado
 
 RESPONDE SOLO CON JSON VÁLIDO:
 {
@@ -242,8 +248,7 @@ RESPONDE SOLO CON JSON VÁLIDO:
       structuredResponse = createFallbackStructuredResponse(conversationContext, leadScoringData);
     }
 
-    // Enhance with lead scoring data
-    structuredResponse.leadScore = leadScoringData.currentScore;
+    // Enhance with metadata (but let AI determine its own lead score)
     structuredResponse.metadata.leadProgression = leadScoringData.progression;
     structuredResponse.metadata.repetitionDetected = repetitionPatterns.length > 0;
 
