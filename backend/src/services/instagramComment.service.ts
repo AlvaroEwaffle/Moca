@@ -52,10 +52,10 @@ export class InstagramCommentService {
       // Send DM if enabled
       if (account.commentSettings.autoReplyDM) {
         try {
-          await this.sendDMReply(comment.from.id, account.commentSettings.dmMessage, account.accessToken, account.accountId);
+          await this.sendDMReply(comment.id, account.commentSettings.dmMessage, account.accessToken, account.accountId);
           commentDoc.dmSent = true;
           commentDoc.dmTimestamp = new Date();
-          console.log(`✅ [Comment Service] DM sent to user: ${comment.from.id}`);
+          console.log(`✅ [Comment Service] DM sent for comment: ${comment.id}`);
         } catch (error) {
           console.error(`❌ [Comment Service] Failed to send DM:`, error);
         }
@@ -106,10 +106,11 @@ export class InstagramCommentService {
 
   /**
    * Send DM to user using v23.0 API
+   * Note: According to Instagram API docs, recipient should be comment_id for comment-based DMs
    */
-  async sendDMReply(userId: string, message: string, accessToken: string, accountId: string): Promise<any> {
+  async sendDMReply(commentId: string, message: string, accessToken: string, accountId: string): Promise<any> {
     try {
-      console.log(`💬 [DM Reply] Sending DM to user ${userId} with: "${message}"`);
+      console.log(`💬 [DM Reply] Sending DM for comment ${commentId} with: "${message}"`);
 
       const response = await fetch(`https://graph.instagram.com/v23.0/${accountId}/messages`, {
         method: 'POST',
@@ -119,7 +120,7 @@ export class InstagramCommentService {
         },
         body: JSON.stringify({
           recipient: {
-            id: userId
+            comment_id: commentId
           },
           message: {
             text: message

@@ -1018,16 +1018,39 @@ export class InstagramWebhookService {
       const allAccounts = await InstagramAccount.find({ isActive: true });
       console.log(`🔍 [Media ID] Found ${allAccounts.length} active accounts`);
       
-      // For now, we'll use the first active account that has comment processing enabled
-      // In a more sophisticated implementation, we could fetch the media owner from Instagram API
-      const accountWithComments = allAccounts.find(acc => acc.commentSettings?.enabled);
+      // Try to fetch media owner from Instagram API for each account
+      for (const account of allAccounts) {
+        try {
+          console.log(`🔍 [Media ID] Checking account ${account.accountName} (${account.accountId})`);
+          
+          // Fetch media details to get the owner
+          const mediaResponse = await fetch(`https://graph.instagram.com/v23.0/${mediaId}?fields=owner&access_token=${account.accessToken}`);
+          
+          if (mediaResponse.ok) {
+            const mediaData = await mediaResponse.json();
+            console.log(`🔍 [Media ID] Media owner data:`, mediaData);
+            
+            // Check if this account owns the media
+            if (mediaData.owner && mediaData.owner.id === account.accountId) {
+              console.log(`✅ [Media ID] Found owner account: ${account.accountName} (${account.accountId})`);
+              return account;
+            }
+          } else {
+            console.log(`⚠️ [Media ID] Account ${account.accountName} cannot access media ${mediaId}`);
+          }
+        } catch (error) {
+          console.log(`⚠️ [Media ID] Error checking account ${account.accountName}:`, error instanceof Error ? error.message : String(error));
+        }
+      }
       
+      // Fallback: use first account with comment processing enabled
+      const accountWithComments = allAccounts.find(acc => acc.commentSettings?.enabled);
       if (accountWithComments) {
-        console.log(`✅ [Media ID] Using account with comment processing enabled: ${accountWithComments.accountName}`);
+        console.log(`⚠️ [Media ID] Could not determine owner, using account with comment processing enabled: ${accountWithComments.accountName}`);
         return accountWithComments;
       }
       
-      // Fallback to first active account
+      // Final fallback: use first active account
       const fallbackAccount = allAccounts[0];
       if (fallbackAccount) {
         console.log(`⚠️ [Media ID] No account with comment processing enabled, using fallback: ${fallbackAccount.accountName}`);
