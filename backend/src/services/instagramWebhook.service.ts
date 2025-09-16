@@ -244,6 +244,12 @@ export class InstagramWebhookService {
       }
 
       // Create comment record
+      // Validate and convert timestamp
+      const timestampValue = comment.timestamp ? parseInt(comment.timestamp) : Math.floor(Date.now() / 1000);
+      const timestamp = isNaN(timestampValue) ? new Date() : new Date(timestampValue * 1000);
+      
+      console.log(`💬 Comment timestamp: ${comment.timestamp} -> ${timestampValue} -> ${timestamp.toISOString()}`);
+
       const commentDoc = new InstagramComment({
         commentId: comment.id,
         accountId: account.accountId,
@@ -251,7 +257,7 @@ export class InstagramWebhookService {
         userId: comment.from?.id,
         username: comment.from?.username,
         text: comment.text,
-        timestamp: new Date(comment.timestamp * 1000), // Convert to milliseconds
+        timestamp: timestamp,
         status: 'pending'
       });
 
