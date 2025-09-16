@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link, Presentation, CheckCircle, XCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link, Presentation, CheckCircle, XCircle, Info } from "lucide-react";
 import { Helmet } from "react-helmet";
 import LeadScoreIndicator from "@/components/LeadScoreIndicator";
 
@@ -342,7 +343,7 @@ const ConversationsList = () => {
   }
 
   return (
-    <>
+    <TooltipProvider>
       <Helmet>
         <title>Conversations | Moca - Instagram DM Agent</title>
         <meta name="description" content="Manage your Instagram conversations and messages" />
@@ -352,7 +353,30 @@ const ConversationsList = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Conversations</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold text-gray-900">Conversations</h1>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                    <Info className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <div className="space-y-2">
+                    <p className="font-semibold text-sm">📊 7-Step Lead Scoring Scale:</p>
+                    <div className="text-xs space-y-1">
+                      <div>1. <strong>Contact Received</strong> - Initial contact from customer</div>
+                      <div>2. <strong>Answers 1 Question</strong> - Customer responds to first question</div>
+                      <div>3. <strong>Confirms Interest</strong> - Customer shows interest in service/product</div>
+                      <div>4. <strong>Milestone Met</strong> - Specific business milestone achieved</div>
+                      <div>5. <strong>Reminder Sent</strong> - Follow-up reminder sent to customer</div>
+                      <div>6. <strong>Reminder Answered</strong> - Customer responds to follow-up</div>
+                      <div>7. <strong>Sales Done</strong> - Sale completed or deal closed</div>
+                    </div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </div>
             <p className="text-gray-600 mt-1">
               Manage your Instagram conversations ({filteredConversations.length} total)
             </p>
@@ -521,7 +545,7 @@ const ConversationsList = () => {
           )}
         </div>
       </div>
-    </>
+    </TooltipProvider>
   );
 };
 
