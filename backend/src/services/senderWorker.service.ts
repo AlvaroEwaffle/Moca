@@ -34,9 +34,9 @@ class SenderWorkerService {
     this.intervalId = setInterval(async () => {
       console.log('⏰ SenderWorkerService: Periodic processing triggered');
       await this.process();
-    }, 15000); // Process every 15 seconds
+    }, 30000); // Process every 30 seconds
 
-    console.log('⏰ SenderWorkerService: Periodic processing scheduled every 15 seconds');
+    console.log('⏰ SenderWorkerService: Periodic processing scheduled every 30 seconds');
   }
 
   /**

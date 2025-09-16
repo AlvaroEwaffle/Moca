@@ -143,8 +143,8 @@ mongoose.connect(MONGODB_URI)
       console.log('📱 Moca Instagram DM Agent API running on port', PORT);
       console.log('📊 Health check: http://localhost:' + PORT + '/api/health');
       console.log('📱 Instagram routes: http://localhost:' + PORT + '/api/instagram');
-      console.log('🔄 Debounce worker: Running every 5 seconds');
-      console.log('📤 Sender worker: Running every 2 seconds');
+      console.log('🔄 Debounce worker: Running every 30 seconds');
+      console.log('📤 Sender worker: Running every 30 seconds');
       console.log('✅ Application ready to receive requests');
     });
   })
