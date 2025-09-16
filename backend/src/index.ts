@@ -13,10 +13,12 @@ import authRoutes from './routes/auth.routes';
 import instagramOAuthRoutes from './routes/instagramOAuth.routes';
 import globalAgentConfigRoutes from './routes/globalAgentConfig.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import instagramCommentsRoutes from './routes/instagramComments.routes';
 
 // Import services
 import debounceWorker from './services/debounceWorker.service';
 import senderWorker from './services/senderWorker.service';
+import commentWorker from './services/commentWorker.service';
 
 console.log('🚀 Moca Instagram DM Agent: Starting application...');
 
@@ -81,6 +83,7 @@ app.get('/api/health', (req, res) => {
 console.log('🔧 Setting up API routes...');
 app.use('/api/instagram', instagramRoutes);
 app.use('/api/instagram/oauth', instagramOAuthRoutes);
+app.use('/api/instagram/comments', instagramCommentsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/global-agent-config', globalAgentConfigRoutes);
 app.use('/api/analytics', analyticsRoutes);
@@ -131,6 +134,10 @@ mongoose.connect(MONGODB_URI)
       await senderWorker.start();
       console.log('✅ Sender worker service started successfully');
       
+      console.log('🔄 Starting comment worker service...');
+      commentWorker.start();
+      console.log('✅ Comment worker service started successfully');
+      
       console.log('✅ All background services started successfully');
     } catch (error) {
       console.error('❌ Error starting background services:', error);
@@ -145,6 +152,7 @@ mongoose.connect(MONGODB_URI)
       console.log('📱 Instagram routes: http://localhost:' + PORT + '/api/instagram');
       console.log('🔄 Debounce worker: Running every 30 seconds');
       console.log('📤 Sender worker: Running every 30 seconds');
+      console.log('💬 Comment worker: Running every 30 seconds');
       console.log('✅ Application ready to receive requests');
     });
   })
@@ -161,6 +169,7 @@ process.on('SIGTERM', async () => {
     console.log('🛑 Stopping background services...');
     await debounceWorker.stop();
     await senderWorker.stop();
+    commentWorker.stop();
     console.log('✅ Background services stopped');
     
     console.log('🛑 Closing MongoDB connection...');
@@ -182,6 +191,7 @@ process.on('SIGINT', async () => {
     console.log('🛑 Stopping background services...');
     await debounceWorker.stop();
     await senderWorker.stop();
+    commentWorker.stop();
     console.log('✅ Background services stopped');
     
     console.log('🛑 Closing MongoDB connection...');

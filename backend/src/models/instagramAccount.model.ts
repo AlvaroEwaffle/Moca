@@ -43,6 +43,16 @@ const WebhookConfigSchema = new Schema({
   lastVerified: { type: Date, default: Date.now }
 });
 
+// Comment settings sub-schema
+const CommentSettingsSchema = new Schema({
+  enabled: { type: Boolean, default: false },
+  autoReplyComment: { type: Boolean, default: false },
+  autoReplyDM: { type: Boolean, default: false },
+  commentMessage: { type: String, default: "Thanks for your comment! 🙏" },
+  dmMessage: { type: String, default: "Thanks for commenting! Feel free to DM me if you have any questions! 💬" },
+  replyDelay: { type: Number, default: 0, min: 0, max: 300 } // Delay in seconds
+});
+
 export interface IInstagramAccount extends Document {
   id: string;
   userId: string; // Moca user ID (links to User model)
@@ -88,6 +98,14 @@ export interface IInstagramAccount extends Document {
     isActive: boolean;
     lastVerified: Date;
   };
+  commentSettings: {
+    enabled: boolean;
+    autoReplyComment: boolean;
+    autoReplyDM: boolean;
+    commentMessage: string;
+    dmMessage: string;
+    replyDelay: number;
+  };
   metadata: {
     createdAt: Date;
     updatedAt: Date;
@@ -113,6 +131,7 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
   rateLimits: { type: RateLimitsSchema, default: () => ({}) },
   settings: { type: InstagramSettingsSchema, default: () => ({}) },
   webhook: { type: WebhookConfigSchema, required: true },
+  commentSettings: { type: CommentSettingsSchema, default: () => ({}) },
   metadata: {
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },

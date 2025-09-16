@@ -41,6 +41,14 @@ interface InstagramAccount {
       autoDisableAgent: boolean;
     };
   };
+  commentSettings?: {
+    enabled: boolean;
+    autoReplyComment: boolean;
+    autoReplyDM: boolean;
+    commentMessage: string;
+    dmMessage: string;
+    replyDelay: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -86,6 +94,17 @@ const InstagramAccounts = () => {
   const [milestoneTarget, setMilestoneTarget] = useState<'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom'>('link_shared');
   const [customMilestoneTarget, setCustomMilestoneTarget] = useState<string>("");
   const [autoDisableAgent, setAutoDisableAgent] = useState<boolean>(true);
+  
+  // Comment settings state
+  const [editingComments, setEditingComments] = useState<string | null>(null);
+  const [commentSettings, setCommentSettings] = useState({
+    enabled: false,
+    autoReplyComment: false,
+    autoReplyDM: false,
+    commentMessage: "Thanks for your comment! 🙏",
+    dmMessage: "Thanks for commenting! Feel free to DM me if you have any questions! 💬",
+    replyDelay: 0
+  });
   
   // Global agent configuration state
   const [globalConfig, setGlobalConfig] = useState<GlobalAgentConfig | null>(null);
@@ -264,6 +283,35 @@ const InstagramAccounts = () => {
     setAutoDisableAgent(true);
   };
 
+  const startEditingComments = (account: InstagramAccount) => {
+    console.log('💬 [Frontend] Starting comment edit for account:', {
+      id: account.id,
+      accountId: account.accountId,
+      accountName: account.accountName
+    });
+    setEditingComments(account.accountId);
+    setCommentSettings(account.commentSettings || {
+      enabled: false,
+      autoReplyComment: false,
+      autoReplyDM: false,
+      commentMessage: "Thanks for your comment! 🙏",
+      dmMessage: "Thanks for commenting! Feel free to DM me if you have any questions! 💬",
+      replyDelay: 0
+    });
+  };
+
+  const cancelEditingComments = () => {
+    setEditingComments(null);
+    setCommentSettings({
+      enabled: false,
+      autoReplyComment: false,
+      autoReplyDM: false,
+      commentMessage: "Thanks for your comment! 🙏",
+      dmMessage: "Thanks for commenting! Feel free to DM me if you have any questions! 💬",
+      replyDelay: 0
+    });
+  };
+
   const saveMilestoneConfig = async (accountId: string) => {
     console.log('🎯 [Frontend] Saving milestone config for accountId:', accountId);
     setSaving(true);
@@ -362,6 +410,50 @@ const InstagramAccounts = () => {
     } catch (error) {
       console.error('Error saving instructions:', error);
       setError('Failed to save system prompt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveCommentSettings = async (accountId: string) => {
+    console.log('💬 [Frontend] Saving comment settings for accountId:', accountId);
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/comments/settings/${accountId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          commentSettings: commentSettings
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update local state
+        setAccounts(accounts.map(account => 
+          account.accountId === accountId 
+            ? { 
+                ...account, 
+                commentSettings: commentSettings
+              }
+            : account
+        ));
+        setEditingComments(null);
+        setSuccess('Comment settings updated successfully');
+      } else {
+        setError(data.error || 'Failed to update comment settings');
+      }
+    } catch (error) {
+      console.error('Error saving comment settings:', error);
+      setError('Failed to save comment settings');
     } finally {
       setSaving(false);
     }
@@ -862,6 +954,206 @@ const InstagramAccounts = () => {
                                 className="text-xs"
                               >
                                 <Settings className="w-3 h-3 mr-1" />
+                                Edit
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Comment Settings Accordion */}
+                  <div className="border-t pt-4 mt-4">
+                    <button
+                      onClick={() => toggleAccordion(account.accountId, 'comments')}
+                      className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <MessageSquare className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                        <h4 className="text-sm font-medium text-gray-700">Comment Processing</h4>
+                        {account.commentSettings?.enabled && (
+                          <Badge variant="outline" className="text-xs">
+                            Enabled
+                          </Badge>
+                        )}
+                      </div>
+                      {isAccordionExpanded(account.accountId, 'comments') ? (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
+                    
+                    {isAccordionExpanded(account.accountId, 'comments') && (
+                      <div className="mt-3 space-y-4">
+                        {editingComments === account.accountId ? (
+                          <div className="space-y-4">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="commentEnabled"
+                                checked={commentSettings.enabled}
+                                onChange={(e) => setCommentSettings(prev => ({
+                                  ...prev,
+                                  enabled: e.target.checked
+                                }))}
+                                className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                              />
+                              <Label htmlFor="commentEnabled" className="text-sm text-gray-700">
+                                Enable comment processing
+                              </Label>
+                            </div>
+
+                            {commentSettings.enabled && (
+                              <>
+                                <div className="space-y-3 pl-6 border-l-2 border-gray-200">
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      id="autoReplyComment"
+                                      checked={commentSettings.autoReplyComment}
+                                      onChange={(e) => setCommentSettings(prev => ({
+                                        ...prev,
+                                        autoReplyComment: e.target.checked
+                                      }))}
+                                      className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                                    />
+                                    <Label htmlFor="autoReplyComment" className="text-sm text-gray-700">
+                                      Auto-reply to comments
+                                    </Label>
+                                  </div>
+
+                                  {commentSettings.autoReplyComment && (
+                                    <div>
+                                      <Label htmlFor="commentMessage">Comment Reply Message</Label>
+                                      <Textarea
+                                        id="commentMessage"
+                                        value={commentSettings.commentMessage}
+                                        onChange={(e) => setCommentSettings(prev => ({
+                                          ...prev,
+                                          commentMessage: e.target.value
+                                        }))}
+                                        className="mt-2"
+                                        rows={2}
+                                      />
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      id="autoReplyDM"
+                                      checked={commentSettings.autoReplyDM}
+                                      onChange={(e) => setCommentSettings(prev => ({
+                                        ...prev,
+                                        autoReplyDM: e.target.checked
+                                      }))}
+                                      className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                                    />
+                                    <Label htmlFor="autoReplyDM" className="text-sm text-gray-700">
+                                      Send DM after comment reply
+                                    </Label>
+                                  </div>
+
+                                  {commentSettings.autoReplyDM && (
+                                    <div>
+                                      <Label htmlFor="dmMessage">DM Message</Label>
+                                      <Textarea
+                                        id="dmMessage"
+                                        value={commentSettings.dmMessage}
+                                        onChange={(e) => setCommentSettings(prev => ({
+                                          ...prev,
+                                          dmMessage: e.target.value
+                                        }))}
+                                        className="mt-2"
+                                        rows={2}
+                                      />
+                                    </div>
+                                  )}
+
+                                  <div>
+                                    <Label htmlFor="replyDelay">Reply Delay (seconds)</Label>
+                                    <input
+                                      id="replyDelay"
+                                      type="number"
+                                      min="0"
+                                      max="300"
+                                      value={commentSettings.replyDelay}
+                                      onChange={(e) => setCommentSettings(prev => ({
+                                        ...prev,
+                                        replyDelay: parseInt(e.target.value) || 0
+                                      }))}
+                                      className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Delay before processing comments (0-300 seconds)
+                                    </p>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            
+                            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                              <Button 
+                                onClick={() => saveCommentSettings(account.accountId)}
+                                disabled={saving}
+                                size="sm"
+                                className="w-full sm:w-auto"
+                              >
+                                {saving ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                ) : (
+                                  <Save className="w-4 h-4 mr-2" />
+                                )}
+                                Save Settings
+                              </Button>
+                              <Button
+                                variant="outline" 
+                                onClick={cancelEditingComments}
+                                size="sm"
+                                className="w-full sm:w-auto"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {account.commentSettings?.enabled ? (
+                              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                <div className="space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <MessageSquare className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                                    <span className="text-sm font-medium text-gray-700">Comment Processing Enabled</span>
+                                  </div>
+                                  <div className="text-xs text-gray-500 space-y-1">
+                                    <div>Auto-reply to comments: {account.commentSettings.autoReplyComment ? 'Yes' : 'No'}</div>
+                                    <div>Send DM after reply: {account.commentSettings.autoReplyDM ? 'Yes' : 'No'}</div>
+                                    <div>Reply delay: {account.commentSettings.replyDelay} seconds</div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-gray-50 p-4 rounded-lg text-center">
+                                <MessageSquare className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                <p className="text-sm text-gray-500">
+                                  Comment processing disabled. Enable to automatically reply to Instagram comments.
+                                </p>
+                              </div>
+                            )}
+                            
+                            <div className="flex justify-between items-center">
+                              <div className="text-xs text-gray-500">
+                                {account.commentSettings?.enabled ? 'Configured' : 'Not configured'}
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => startEditingComments(account)}
+                                className="text-xs"
+                              >
+                                <MessageSquare className="w-3 h-3 mr-1" />
                                 Edit
                               </Button>
                             </div>

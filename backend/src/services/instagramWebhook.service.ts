@@ -3,6 +3,7 @@ import Contact from '../models/contact.model';
 import Conversation from '../models/conversation.model';
 import Message from '../models/message.model';
 import InstagramAccount from '../models/instagramAccount.model';
+import InstagramComment from '../models/instagramComment.model';
 import { IContact } from '../models/contact.model';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
@@ -219,18 +220,61 @@ export class InstagramWebhookService {
   private async processComment(comment: any): Promise<void> {
     try {
       console.log(`💬 Processing comment from user: ${comment.from?.username || comment.from?.id}`);
+      console.log(`💬 Comment text: "${comment.text}"`);
+      console.log(`💬 Media ID: ${comment.media?.id}`);
 
-      // Create a message-like structure for comments
-      const messageData: InstagramMessage = {
-        mid: `comment_${comment.id}`,
-        psid: comment.from?.id || `comment_user_${comment.id}`,
+      // Find the Instagram account that owns this media
+      const account = await this.identifyAccountByMediaId(comment.media?.id);
+      if (!account) {
+        console.error('❌ No Instagram account found for media ID:', comment.media?.id);
+        return;
+      }
+
+      // Check if comment processing is enabled for this account
+      if (!account.commentSettings?.enabled) {
+        console.log(`⚠️ Comment processing disabled for account: ${account.accountName}`);
+        return;
+      }
+
+      // Check if comment already exists (deduplication)
+      const existingComment = await InstagramComment.findOne({ commentId: comment.id });
+      if (existingComment) {
+        console.log(`⚠️ Comment ${comment.id} already exists, skipping`);
+        return;
+      }
+
+      // Create comment record
+      const commentDoc = new InstagramComment({
+        commentId: comment.id,
+        accountId: account.accountId,
+        mediaId: comment.media?.id,
+        userId: comment.from?.id,
+        username: comment.from?.username,
         text: comment.text,
-        timestamp: Date.now(),
-        type: 'message'
-      };
+        timestamp: new Date(comment.timestamp * 1000), // Convert to milliseconds
+        status: 'pending'
+      });
 
-      // Process the comment as a message
-      await this.processMessage(messageData);
+      await commentDoc.save();
+      console.log(`✅ Created comment record: ${commentDoc.id}`);
+
+      // Process comment with fixed responses (if enabled)
+      if (account.commentSettings?.autoReplyComment || account.commentSettings?.autoReplyDM) {
+        // Import and use the comment service
+        const { InstagramCommentService } = await import('./instagramComment.service');
+        const commentService = new InstagramCommentService();
+        
+        try {
+          await commentService.processComment(comment, account.accountId);
+          console.log(`✅ Comment processed successfully: ${comment.id}`);
+        } catch (error) {
+          console.error('❌ Error processing comment with service:', error);
+          // Update comment status to failed
+          commentDoc.status = 'failed';
+          await commentDoc.save();
+        }
+      }
+
     } catch (error) {
       console.error('❌ Error processing comment:', error);
     }
@@ -952,6 +996,42 @@ export class InstagramWebhookService {
       }
     } catch (error) {
       console.error(`❌ [Username] Error fetching Instagram username:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Identify Instagram account by media ID
+   * This method finds which account owns the media that received the comment
+   */
+  private async identifyAccountByMediaId(mediaId: string): Promise<any> {
+    try {
+      console.log(`🔍 [Media ID] Looking for account that owns media: ${mediaId}`);
+      
+      // Get all active Instagram accounts
+      const allAccounts = await InstagramAccount.find({ isActive: true });
+      console.log(`🔍 [Media ID] Found ${allAccounts.length} active accounts`);
+      
+      // For now, we'll use the first active account that has comment processing enabled
+      // In a more sophisticated implementation, we could fetch the media owner from Instagram API
+      const accountWithComments = allAccounts.find(acc => acc.commentSettings?.enabled);
+      
+      if (accountWithComments) {
+        console.log(`✅ [Media ID] Using account with comment processing enabled: ${accountWithComments.accountName}`);
+        return accountWithComments;
+      }
+      
+      // Fallback to first active account
+      const fallbackAccount = allAccounts[0];
+      if (fallbackAccount) {
+        console.log(`⚠️ [Media ID] No account with comment processing enabled, using fallback: ${fallbackAccount.accountName}`);
+        return fallbackAccount;
+      }
+      
+      console.error('❌ [Media ID] No active Instagram account found!');
+      return null;
+    } catch (error) {
+      console.error('❌ Error identifying account by media ID:', error);
       return null;
     }
   }
