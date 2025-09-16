@@ -136,7 +136,7 @@ class DebounceWorkerService {
       'metadata.processed': { $ne: true } 
     });
     
-    console.log(`🔍 DebounceWorkerService: Found ${conversationIds.length} conversations with unprocessed user messages:`, conversationIds);
+    console.log(`🔍 DebounceWorkerService: Found ${conversationIds.length} conversations with unprocessed user messages`);
     
     const conversations = await Conversation.find({
       _id: { $in: conversationIds },
@@ -155,7 +155,6 @@ class DebounceWorkerService {
     try {
       // Check if AI is enabled for this conversation
       if (conversation.settings?.aiEnabled === false) {
-        console.log(`🤖 DebounceWorkerService: AI disabled for conversation ${conversation.id}, skipping automatic response`);
         return false;
       }
 
@@ -176,7 +175,6 @@ class DebounceWorkerService {
 
       // Check milestone status - if achieved, skip processing (legacy check)
       if (conversation.milestone?.status === 'achieved') {
-        console.log(`🎯 DebounceWorkerService: Milestone already achieved for conversation ${conversation.id}, skipping automatic response`);
         return false;
       }
 
@@ -187,7 +185,6 @@ class DebounceWorkerService {
       });
 
       if (existingQueueItem) {
-        console.log(`⚠️ DebounceWorkerService: Response already pending for conversation ${conversation.id}, skipping`);
         return false;
       }
 
