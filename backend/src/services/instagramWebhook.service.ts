@@ -403,9 +403,19 @@ export class InstagramWebhookService {
 
       // NEW STRATEGY: Use is_echo flag for bot detection, then PSID-based account identification
       const isBotMessage = messageData.is_echo === true;
-      console.log(`🤖 [Bot Detection] is_echo flag: ${messageData.is_echo}, isBotMessage: ${isBotMessage}`);
       
-      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, isBotMessage);
+      // Additional bot detection: Check if this is a comment-related DM response
+      // These messages often have specific patterns or come from our own account
+      const isCommentRelatedDM = Boolean(messageData.text && (
+        messageData.text.includes('Thanks for commenting') ||
+        messageData.text.includes('DM us for more info') ||
+        messageData.text.includes('How can we help you today')
+      ));
+      
+      const finalIsBotMessage = isBotMessage || isCommentRelatedDM;
+      console.log(`🤖 [Bot Detection] is_echo flag: ${messageData.is_echo}, isCommentRelatedDM: ${isCommentRelatedDM}, isBotMessage: ${finalIsBotMessage}`);
+      
+      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, finalIsBotMessage);
       if (!accountResult) {
         console.error('❌ No Instagram account found for PSID:', messageData.psid);
         return;
@@ -922,7 +932,10 @@ export class InstagramWebhookService {
       }
       
       // Fallback to first active account if recipientId not found or not provided
-      const account = allAccounts[0];
+      // For comment-related DMs, prefer accounts with comment processing enabled
+      const accountWithComments = allAccounts.find(acc => acc.commentSettings?.enabled);
+      const account = accountWithComments || allAccounts[0];
+      
       if (account) {
         console.log(`👤 [PSID Matching] User message to fallback account: ${account.accountName} (${account.userEmail})`);
         return { account, isBotMessage: false };
