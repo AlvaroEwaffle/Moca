@@ -65,9 +65,11 @@ export class CommentWorkerService {
     try {
       console.log('🔄 [Comment Worker] Processing pending comments...');
 
-      // Find pending comments
+      // Find pending comments that haven't been processed recently
       const pendingComments = await InstagramComment.find({ 
-        status: 'pending' 
+        status: 'pending',
+        // Add a time filter to avoid processing comments that were just created
+        timestamp: { $lt: new Date(Date.now() - 5000) } // Process comments older than 5 seconds
       }).sort({ timestamp: 1 }); // Process oldest first
 
       if (pendingComments.length === 0) {
@@ -80,6 +82,11 @@ export class CommentWorkerService {
       // Process each comment
       for (const comment of pendingComments) {
         try {
+          // Mark comment as processing to prevent duplicate processing
+          comment.status = 'processing';
+          await comment.save();
+          
+          console.log(`💬 [Comment Worker] Processing comment: ${comment.commentId}`);
           await this.processComment(comment);
         } catch (error) {
           console.error(`❌ [Comment Worker] Error processing comment ${comment.commentId}:`, error);

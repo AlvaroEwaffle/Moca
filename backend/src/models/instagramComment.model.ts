@@ -8,7 +8,7 @@ export interface IInstagramComment extends Document {
   username: string;
   text: string;
   timestamp: Date;
-  status: 'pending' | 'replied' | 'failed';
+  status: 'pending' | 'processing' | 'replied' | 'failed';
   replyText?: string;
   replyTimestamp?: Date;
   dmSent?: boolean;
@@ -54,7 +54,7 @@ const InstagramCommentSchema = new Schema<IInstagramComment>({
   },
   status: {
     type: String,
-    enum: ['pending', 'replied', 'failed'],
+    enum: ['pending', 'processing', 'replied', 'failed'],
     default: 'pending',
     index: true
   },
