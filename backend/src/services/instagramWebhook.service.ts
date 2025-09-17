@@ -225,9 +225,16 @@ export class InstagramWebhookService {
       console.log(`💬 Account ID from webhook: ${accountId}`);
 
       // Find the Instagram account using the account ID from the webhook
-      const account = await InstagramAccount.findOne({ accountId: accountId, isActive: true });
+      // The webhook sends either the accountId or pageScopedId, so we need to check both
+      const account = await InstagramAccount.findOne({ 
+        $or: [
+          { accountId: accountId, isActive: true },
+          { pageScopedId: accountId, isActive: true }
+        ]
+      });
       if (!account) {
         console.error('❌ No Instagram account found for account ID:', accountId);
+        console.error('❌ Searched both accountId and pageScopedId fields');
         return;
       }
       
