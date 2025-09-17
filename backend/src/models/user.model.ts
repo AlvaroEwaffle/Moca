@@ -7,27 +7,15 @@ export interface IUser extends Document {
   password: string;
   businessName: string;
   phone: string;
-  avatar?: string;
-  specialization?: string;
   isActive: boolean;
-  emailVerified: boolean;
   lastLogin?: Date;
-  preferences: {
-    language: string;
-    timezone: string;
-    notifications: {
-      email: boolean;
-      push: boolean;
-    };
-  };
+  preferences: any; // Flexible object
   agentSettings: {
     systemPrompt: string;
     toneOfVoice: 'professional' | 'friendly' | 'casual';
     keyInformation: string;
   };
   metadata: {
-    createdAt: Date;
-    updatedAt: Date;
     loginCount: number;
   };
 }
@@ -38,27 +26,15 @@ const UserSchema = new Schema<IUser>({
   password: { type: String, required: true },
   businessName: { type: String, required: true, trim: true },
   phone: { type: String, required: true, trim: true },
-  avatar: { type: String, required: false },
-  specialization: { type: String, required: false, default: 'Business Owner' },
   isActive: { type: Boolean, default: true },
-  emailVerified: { type: Boolean, default: false },
   lastLogin: { type: Date, required: false },
-  preferences: {
-    language: { type: String, default: 'es' },
-    timezone: { type: String, default: 'America/Santiago' },
-    notifications: {
-      email: { type: Boolean, default: true },
-      push: { type: Boolean, default: true }
-    }
-  },
+  preferences: { type: Schema.Types.Mixed, default: {} },
   agentSettings: {
     systemPrompt: { type: String, default: 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.' },
     toneOfVoice: { type: String, enum: ['professional', 'friendly', 'casual'], default: 'professional' },
     keyInformation: { type: String, default: '' }
   },
   metadata: {
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now },
     loginCount: { type: Number, default: 0 }
   }
 }, {
@@ -71,11 +47,7 @@ const UserSchema = new Schema<IUser>({
 UserSchema.index({ isActive: 1 });
 UserSchema.index({ 'metadata.createdAt': 1 });
 
-// Pre-save middleware to update metadata
-UserSchema.pre('save', function(next) {
-  this.metadata.updatedAt = new Date();
-  next();
-});
+// No pre-save middleware needed
 
 // Virtual for user display name
 UserSchema.virtual('displayName').get(function() {

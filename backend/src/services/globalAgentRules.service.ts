@@ -131,13 +131,13 @@ export class GlobalAgentRulesService {
   static async incrementResponseCounter(conversation: IConversation): Promise<void> {
     if (!conversation.settings) {
       conversation.settings = {
-        autoRespond: true,
+        // autoRespond removed from simplified model
         aiEnabled: true,
-        priority: 'normal',
-        tags: [],
-        notes: [],
-        followUpRequired: false,
-        businessHoursOnly: false,
+        // priority removed from simplified model
+        // tags removed from simplified model
+        // notes removed from simplified model
+        // followUpRequired removed from simplified model
+        // businessHoursOnly removed from simplified model
         responseCounter: {
           totalResponses: 0,
           lastResetAt: new Date(),
@@ -168,13 +168,13 @@ export class GlobalAgentRulesService {
   static async resetResponseCounter(conversation: IConversation): Promise<void> {
     if (!conversation.settings) {
       conversation.settings = {
-        autoRespond: true,
+        // autoRespond removed from simplified model
         aiEnabled: true,
-        priority: 'normal',
-        tags: [],
-        notes: [],
-        followUpRequired: false,
-        businessHoursOnly: false,
+        // priority removed from simplified model
+        // tags removed from simplified model
+        // notes removed from simplified model
+        // followUpRequired removed from simplified model
+        // businessHoursOnly removed from simplified model
         responseCounter: {
           totalResponses: 0,
           lastResetAt: new Date(),
@@ -211,13 +211,13 @@ export class GlobalAgentRulesService {
   ): Promise<void> {
     if (!conversation.settings) {
       conversation.settings = {
-        autoRespond: true,
+        // autoRespond removed from simplified model
         aiEnabled: true,
-        priority: 'normal',
-        tags: [],
-        notes: [],
-        followUpRequired: false,
-        businessHoursOnly: false,
+        // priority removed from simplified model
+        // tags removed from simplified model
+        // notes removed from simplified model
+        // followUpRequired removed from simplified model
+        // businessHoursOnly removed from simplified model
         responseCounter: {
           totalResponses: 0,
           lastResetAt: new Date(),

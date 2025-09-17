@@ -63,40 +63,21 @@ export interface IInstagramAccount extends Document {
   accessToken: string; // Instagram Graph API token
   refreshToken?: string; // For token refresh
   tokenExpiry: Date; // Token expiration
-  tokenType: string; // Usually 'Bearer'
-  scope: string; // API permissions scope
-  rateLimits: {
-    messagesPerSecond: number;
-    userCooldown: number;
-    debounceWindow: number;
-    maxRetries: number;
-    retryBackoffMs: number;
-  };
   settings: {
-    autoRespond: boolean;
-    aiEnabled: boolean;
-    fallbackRules: string[];
-    defaultResponse: string;
     systemPrompt: string;
     toneOfVoice: 'professional' | 'friendly' | 'casual';
     keyInformation: string;
-    businessHours: {
-      enabled: boolean;
-      startTime: string;
-      endTime: string;
-      timezone: string;
-    };
+    fallbackRules: string[];
+    defaultResponse: string;
     defaultMilestone?: {
       target?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
       customTarget?: string;
       autoDisableAgent: boolean;
     };
   };
-  webhook: {
-    verifyToken: string;
-    webhookSecret?: string;
-    isActive: boolean;
-    lastVerified: Date;
+  rateLimits: {
+    messagesPerSecond: number;
+    userCooldown: number;
   };
   commentSettings: {
     enabled: boolean;
@@ -105,14 +86,6 @@ export interface IInstagramAccount extends Document {
     commentMessage: string;
     dmMessage: string;
     replyDelay: number;
-  };
-  metadata: {
-    createdAt: Date;
-    updatedAt: Date;
-    lastSync: Date;
-    messageCount: number;
-    responseCount: number;
-    errorCount: number;
   };
   isActive: boolean;
 }
@@ -126,20 +99,9 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
   accessToken: { type: String, required: true },
   refreshToken: { type: String, required: false },
   tokenExpiry: { type: Date, required: true },
-  tokenType: { type: String, default: 'Bearer' },
-  scope: { type: String, default: 'instagram_basic,instagram_content_publish,pages_show_list' },
-  rateLimits: { type: RateLimitsSchema, default: () => ({}) },
   settings: { type: InstagramSettingsSchema, default: () => ({}) },
-  webhook: { type: WebhookConfigSchema, required: true },
+  rateLimits: { type: RateLimitsSchema, default: () => ({}) },
   commentSettings: { type: CommentSettingsSchema, default: () => ({}) },
-  metadata: {
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now },
-    lastSync: { type: Date, default: Date.now },
-    messageCount: { type: Number, default: 0 },
-    responseCount: { type: Number, default: 0 },
-    errorCount: { type: Number, default: 0 }
-  },
   isActive: { type: Boolean, default: true }
 }, {
   timestamps: true,
@@ -152,22 +114,6 @@ InstagramAccountSchema.index({ userId: 1 });
 InstagramAccountSchema.index({ userEmail: 1 });
 InstagramAccountSchema.index({ accountName: 1 });
 InstagramAccountSchema.index({ isActive: 1 });
-InstagramAccountSchema.index({ 'metadata.lastSync': 1 });
-
-// Pre-save middleware to update metadata
-InstagramAccountSchema.pre('save', function(next) {
-  this.metadata.updatedAt = new Date();
-  next();
-});
-
-// Virtual for token status
-InstagramAccountSchema.virtual('isTokenValid').get(function() {
-  return this.tokenExpiry > new Date();
-});
-
-// Virtual for token expiry in seconds
-InstagramAccountSchema.virtual('tokenExpirySeconds').get(function() {
-  return Math.floor((this.tokenExpiry.getTime() - Date.now()) / 1000);
-});
+// No additional middleware or virtuals needed
 
 export default mongoose.model<IInstagramAccount>('InstagramAccount', InstagramAccountSchema);

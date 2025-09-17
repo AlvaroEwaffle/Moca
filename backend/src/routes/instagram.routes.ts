@@ -759,13 +759,13 @@ router.put('/conversations/:id/agent', authenticateToken, async (req, res) => {
     console.log('🔧 [Agent Toggle] Updating AI enabled status to:', enabled);
     if (!conversation.settings) {
       conversation.settings = {
-        autoRespond: true,
+        // autoRespond removed from simplified model
         aiEnabled: true,
-        priority: 'normal',
-        tags: [],
-        notes: [],
-        followUpRequired: false,
-        businessHoursOnly: false,
+        // priority removed from simplified model
+        // tags removed from simplified model
+        // notes removed from simplified model
+        // followUpRequired removed from simplified model
+        // businessHoursOnly removed from simplified model
         responseCounter: {
           totalResponses: 0,
           lastResetAt: new Date(),
@@ -857,19 +857,14 @@ router.put('/accounts/:accountId/milestone', authenticateToken, async (req, res)
     console.log('🎯 [Account Milestone] Updating default milestone for account:', accountId);
     if (!account.settings) {
       account.settings = {
-        autoRespond: true,
-        aiEnabled: true,
+        // autoRespond removed from simplified model
+        // aiEnabled not part of InstagramAccount settings
         fallbackRules: [],
         defaultResponse: "Thanks for your message! I'll get back to you soon.",
         systemPrompt: "You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.",
         toneOfVoice: 'professional',
         keyInformation: '',
-        businessHours: {
-          enabled: false,
-          startTime: "09:00",
-          endTime: "18:00",
-          timezone: "America/Santiago"
-        },
+        // businessHours removed from simplified model
         defaultMilestone: defaultMilestone
       };
     } else {
@@ -1109,13 +1104,13 @@ router.post('/conversations/:id/milestone/achieve', authenticateToken, async (re
       console.log('🎯 [Milestone] Auto-disabling agent for conversation:', id);
       if (!conversation.settings) {
         conversation.settings = {
-          autoRespond: true,
+          // autoRespond removed from simplified model
           aiEnabled: true,
-          priority: 'normal',
-          tags: [],
-          notes: [],
-          followUpRequired: false,
-          businessHoursOnly: false,
+          // priority removed from simplified model
+          // tags removed from simplified model
+          // notes removed from simplified model
+          // followUpRequired removed from simplified model
+          // businessHoursOnly removed from simplified model
           responseCounter: {
             totalResponses: 0,
             lastResetAt: new Date(),

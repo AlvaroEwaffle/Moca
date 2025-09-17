@@ -5,46 +5,26 @@ const ConversationTimestampsSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
   lastUserMessage: { type: Date, default: Date.now },
   lastBotMessage: { type: Date, default: Date.now },
-  cooldownUntil: { type: Date, required: false }, // When bot can respond again
-  lastActivity: { type: Date, default: Date.now },
-  closedAt: { type: Date, required: false }
+  lastActivity: { type: Date, default: Date.now }
 });
 
 // Conversation context sub-schema
 const ConversationContextSchema = new Schema({
   topic: { type: String, required: false }, // Main conversation topic
-  intent: { type: String, required: false }, // User's intent (inquiry, complaint, etc.)
-  sentiment: { type: String, enum: ['positive', 'neutral', 'negative'], default: 'neutral' },
   urgency: { type: String, enum: ['low', 'medium', 'high', 'critical'], default: 'medium' },
-  category: { type: String, required: false }, // Business category
-  keywords: [{ type: String }], // Important keywords from conversation
-  language: { type: String, default: 'es' }, // Conversation language
-  timezone: { type: String, default: 'America/Santiago' }
+  category: { type: String, required: false } // Business category
 });
 
 // Conversation metrics sub-schema
 const ConversationMetricsSchema = new Schema({
   totalMessages: { type: Number, default: 0 },
   userMessages: { type: Number, default: 0 },
-  botMessages: { type: Number, default: 0 },
-  averageResponseTime: { type: Number, default: 0 }, // Average bot response time in seconds
-  responseRate: { type: Number, default: 0 }, // Percentage of user messages that got responses
-  engagementScore: { type: Number, default: 0 }, // 0-100 engagement score
-  satisfactionScore: { type: Number, default: 0 }, // 0-100 satisfaction score (if available)
-  conversionProbability: { type: Number, default: 0 } // 0-100 conversion probability
+  botMessages: { type: Number, default: 0 }
 });
 
 // Conversation settings sub-schema
 const ConversationSettingsSchema = new Schema({
-  autoRespond: { type: Boolean, default: true }, // Whether auto-respond is enabled
   aiEnabled: { type: Boolean, default: true }, // Whether AI responses are enabled
-  priority: { type: String, enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
-  assignedAgent: { type: String, required: false }, // Human agent assigned to conversation
-  tags: [{ type: String }], // Custom tags for categorization
-  notes: [{ type: String }], // Internal notes about the conversation
-  followUpRequired: { type: Boolean, default: false }, // Whether follow-up is needed
-  followUpDate: { type: Date, required: false }, // When to follow up
-  businessHoursOnly: { type: Boolean, default: false }, // Only respond during business hours
   
   // Response counter for global agent limits
   responseCounter: {
@@ -59,7 +39,6 @@ const ConversationSettingsSchema = new Schema({
 // Lead scoring sub-schema - Updated to use 7-step scale
 const LeadScoringSchema = new Schema({
   currentScore: { type: Number, min: 1, max: 7, default: 1 }, // Current lead score (1-7)
-  previousScore: { type: Number, min: 1, max: 7, required: false }, // Previous lead score
   progression: { type: String, enum: ['increased', 'decreased', 'maintained'], default: 'maintained' },
   scoreHistory: [{ 
     score: { type: Number, min: 1, max: 7 },
@@ -67,7 +46,6 @@ const LeadScoringSchema = new Schema({
     reason: { type: String },
     stepName: { type: String } // Name of the step (e.g., "Contact Received")
   }], // History of lead score changes
-  lastScoredAt: { type: Date, default: Date.now }, // When lead was last scored
   confidence: { type: Number, min: 0, max: 1, default: 0.5 }, // Confidence in lead assessment
   
   // Current step information
@@ -97,12 +75,8 @@ const ConversationAnalyticsSchema = new Schema({
     peakScore: { type: Number, min: 1, max: 7, default: 1 },
     progressionRate: { type: Number, min: 0, max: 1, default: 0 }
   },
-  repetitionPatterns: [{ type: String }], // Detected repetition patterns
   conversationFlow: {
-    totalTurns: { type: Number, default: 0 },
-    averageTurnLength: { type: Number, default: 0 },
-    questionCount: { type: Number, default: 0 },
-    responseCount: { type: Number, default: 0 }
+    totalTurns: { type: Number, default: 0 }
   }
 });
 
@@ -133,40 +107,20 @@ export interface IConversation extends Document {
     createdAt: Date;
     lastUserMessage: Date;
     lastBotMessage: Date;
-    cooldownUntil?: Date;
     lastActivity: Date;
-    closedAt?: Date;
   };
   context: {
     topic?: string;
-    intent?: string;
-    sentiment: string;
     urgency: string;
     category?: string;
-    keywords: string[];
-    language: string;
-    timezone: string;
   };
   metrics: {
     totalMessages: number;
     userMessages: number;
     botMessages: number;
-    averageResponseTime: number;
-    responseRate: number;
-    engagementScore: number;
-    satisfactionScore: number;
-    conversionProbability: number;
   };
   settings: {
-    autoRespond: boolean;
     aiEnabled: boolean;
-    priority: string;
-    assignedAgent?: string;
-    tags: string[];
-    notes: string[];
-    followUpRequired: boolean;
-    followUpDate?: Date;
-    businessHoursOnly: boolean;
     responseCounter: {
       totalResponses: number;
       lastResetAt: Date;
@@ -177,7 +131,6 @@ export interface IConversation extends Document {
   };
   leadScoring: {
     currentScore: number;
-    previousScore?: number;
     progression: 'increased' | 'decreased' | 'maintained';
     scoreHistory: Array<{
       score: number;
@@ -185,7 +138,6 @@ export interface IConversation extends Document {
       reason: string;
       stepName: string;
     }>;
-    lastScoredAt: Date;
     confidence: number;
     currentStep: {
       stepNumber: number;
@@ -209,12 +161,8 @@ export interface IConversation extends Document {
       peakScore: number;
       progressionRate: number;
     };
-    repetitionPatterns: string[];
     conversationFlow: {
       totalTurns: number;
-      averageTurnLength: number;
-      questionCount: number;
-      responseCount: number;
     };
   };
   milestone: {
@@ -225,8 +173,6 @@ export interface IConversation extends Document {
     notes?: string;
     autoDisableAgent: boolean;
   };
-  isActive: boolean; // Whether conversation is currently active
-  lastMessageId?: string; // ID of the last message in the conversation
   messageCount: number; // Total number of messages
   unreadCount: number; // Number of unread messages
 }
@@ -243,8 +189,6 @@ const ConversationSchema = new Schema<IConversation>({
   aiResponseMetadata: { type: AIResponseMetadataSchema, default: () => ({}) },
   analytics: { type: ConversationAnalyticsSchema, default: () => ({}) },
   milestone: { type: ConversationMilestoneSchema, default: () => ({}) },
-  isActive: { type: Boolean, default: true },
-  lastMessageId: { type: String, required: false },
   messageCount: { type: Number, default: 0 },
   unreadCount: { type: Number, default: 0 }
 }, {
@@ -259,15 +203,10 @@ ConversationSchema.index({ accountId: 1 });
 ConversationSchema.index({ status: 1 });
 ConversationSchema.index({ 'timestamps.lastActivity': -1 });
 ConversationSchema.index({ 'timestamps.createdAt': -1 });
-ConversationSchema.index({ 'settings.priority': 1 });
-ConversationSchema.index({ 'settings.assignedAgent': 1 });
 ConversationSchema.index({ 'context.urgency': 1 });
-ConversationSchema.index({ 'context.sentiment': 1 });
-ConversationSchema.index({ isActive: 1 });
 // Lead scoring indexes
 ConversationSchema.index({ 'leadScoring.currentScore': -1 });
 ConversationSchema.index({ 'leadScoring.progression': 1 });
-ConversationSchema.index({ 'leadScoring.lastScoredAt': -1 });
 // AI response metadata indexes
 ConversationSchema.index({ 'aiResponseMetadata.lastResponseType': 1 });
 ConversationSchema.index({ 'aiResponseMetadata.lastIntent': 1 });
@@ -287,32 +226,9 @@ ConversationSchema.pre('save', function(next) {
   // Update metrics if message count changed
   if (this.isModified('messageCount')) {
     this.metrics.totalMessages = this.messageCount;
-    this.metrics.responseRate = this.metrics.userMessages > 0 
-      ? Math.round((this.metrics.botMessages / this.metrics.userMessages) * 100)
-      : 0;
-  }
-  
-  // Update status based on activity
-  if (this.isModified('timestamps.lastActivity')) {
-    const daysSinceLastActivity = Math.floor(
-      (Date.now() - this.timestamps.lastActivity.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    
-    if (daysSinceLastActivity > 30 && this.status === 'open') {
-      this.status = 'closed';
-      this.timestamps.closedAt = new Date();
-    }
   }
   
   next();
-});
-
-// Virtual for conversation duration
-ConversationSchema.virtual('duration').get(function() {
-  const now = this.status === 'closed' && this.timestamps.closedAt 
-    ? this.timestamps.closedAt 
-    : new Date();
-  return Math.floor((now.getTime() - this.timestamps.createdAt.getTime()) / (1000 * 60 * 60 * 24));
 });
 
 // Virtual for days since last activity
@@ -320,43 +236,5 @@ ConversationSchema.virtual('daysSinceLastActivity').get(function() {
   const now = new Date();
   return Math.floor((now.getTime() - this.timestamps.lastActivity.getTime()) / (1000 * 60 * 60 * 24));
 });
-
-// Virtual for is in cooldown
-ConversationSchema.virtual('isInCooldown').get(function() {
-  if (!this.timestamps.cooldownUntil) return false;
-  return new Date() < this.timestamps.cooldownUntil;
-});
-
-// Virtual for cooldown remaining seconds
-ConversationSchema.virtual('cooldownRemainingSeconds').get(function() {
-  if (!this.timestamps.cooldownUntil) return 0;
-  const remaining = this.timestamps.cooldownUntil.getTime() - Date.now();
-  return Math.max(0, Math.floor(remaining / 1000));
-});
-
-// Static method to find active conversations
-ConversationSchema.statics.findActive = function() {
-  return this.find({ status: 'open', isActive: true });
-};
-
-// Static method to find conversations by priority
-ConversationSchema.statics.findByPriority = function(priority: string) {
-  return this.find({ 'settings.priority': priority, status: 'open' });
-};
-
-// Static method to find conversations needing follow-up
-ConversationSchema.statics.findNeedingFollowUp = function() {
-  const now = new Date();
-  return this.find({
-    'settings.followUpRequired': true,
-    'settings.followUpDate': { $lte: now },
-    status: { $in: ['open', 'scheduled'] }
-  });
-};
-
-// Static method to find conversations by sentiment
-ConversationSchema.statics.findBySentiment = function(sentiment: string) {
-  return this.find({ 'context.sentiment': sentiment });
-};
 
 export default mongoose.model<IConversation>('Conversation', ConversationSchema);

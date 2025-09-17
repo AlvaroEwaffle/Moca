@@ -82,8 +82,6 @@ const GlobalAgentConfigSchema = new Schema({
   
   // Metadata
   metadata: {
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now },
     createdBy: { type: String, required: true }, // User ID who created this config
     version: { type: String, default: '1.0.0' }
   }
@@ -122,8 +120,6 @@ export interface IGlobalAgentConfig extends Document {
     logAllDecisions: boolean;
   };
   metadata: {
-    createdAt: Date;
-    updatedAt: Date;
     createdBy: string;
     version: string;
   };

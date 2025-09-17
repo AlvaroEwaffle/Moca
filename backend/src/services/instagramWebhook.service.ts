@@ -640,7 +640,7 @@ export class InstagramWebhookService {
             instagramData = {
               username,
               lastFetched: new Date(),
-              isVerified: false,
+              // isVerified removed from simplified model
               isPrivate: false
             };
           }
@@ -691,8 +691,8 @@ export class InstagramWebhookService {
             contact.metadata.instagramData = {
               username,
               lastFetched: new Date(),
-              isVerified: false,
-              isPrivate: false,
+              // isVerified removed from simplified model
+              // isPrivate removed from simplified model
               ...contact.metadata.instagramData
             };
             console.log(`🔍 [Contact Update] Updated instagramData:`, contact.metadata.instagramData);

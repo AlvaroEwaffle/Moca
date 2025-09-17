@@ -90,7 +90,7 @@ router.put('/', authenticateToken, async (req, res) => {
       config.responseLimits = responseLimits;
       config.leadScoring = leadScoring;
       config.systemSettings = systemSettings;
-      config.metadata.updatedAt = new Date();
+      // No updatedAt field in simplified model
     }
     
     await config.save();

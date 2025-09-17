@@ -566,7 +566,7 @@ class DebounceWorkerService {
       
       conversation.leadScoring = {
         currentScore: structuredResponse.leadScore,
-        previousScore: previousScore,
+        // previousScore removed from simplified model
         progression: structuredResponse.metadata.leadProgression || 'maintained',
         scoreHistory: [
           ...(conversation.leadScoring?.scoreHistory || []),
@@ -577,7 +577,7 @@ class DebounceWorkerService {
             stepName: stepInfo?.name || 'Contact Received'
           }
         ],
-        lastScoredAt: new Date(),
+        // lastScoredAt removed from simplified model
         confidence: structuredResponse.confidence,
         currentStep: {
           stepNumber: structuredResponse.leadScore,
@@ -614,12 +614,12 @@ class DebounceWorkerService {
           peakScore: leadProgression.peakScore,
           progressionRate: leadProgression.progressionRate
         },
-        repetitionPatterns: [], // Not available in simplified structure
+        // repetitionPatterns removed from simplified model
         conversationFlow: {
           totalTurns: conversation.metrics.totalMessages,
-          averageTurnLength: 0, // Will be calculated elsewhere
-          questionCount: 0, // Will be calculated elsewhere
-          responseCount: conversation.metrics.botMessages
+          // averageTurnLength removed from simplified model
+          // questionCount removed from simplified model
+          // responseCount removed from simplified model
         }
       };
 
@@ -845,13 +845,13 @@ class DebounceWorkerService {
           console.log(`🎯 DebounceWorkerService: Auto-disabling agent for conversation ${conversation.id}`);
           if (!conversation.settings) {
             conversation.settings = {
-              autoRespond: true,
+              // autoRespond removed from simplified model
               aiEnabled: true,
-              priority: 'normal',
-              tags: [],
-              notes: [],
-              followUpRequired: false,
-              businessHoursOnly: false,
+              // priority removed from simplified model
+              // tags removed from simplified model
+              // notes removed from simplified model
+              // followUpRequired removed from simplified model
+              // businessHoursOnly removed from simplified model
               responseCounter: {
                 totalResponses: 0,
                 lastResetAt: new Date(),

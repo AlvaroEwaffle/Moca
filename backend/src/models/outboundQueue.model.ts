@@ -8,9 +8,6 @@ const QueueItemMetadataSchema = new Schema({
   nextAttempt: { type: Date, required: false }, // Next attempt timestamp
   attempts: { type: Number, default: 0 }, // Number of attempts made
   maxAttempts: { type: Number, default: 3 }, // Maximum attempts allowed
-  backoffMultiplier: { type: Number, default: 2 }, // Exponential backoff multiplier
-  baseDelayMs: { type: Number, default: 1000 }, // Base delay in milliseconds
-  totalProcessingTime: { type: Number, default: 0 }, // Total time spent processing
   errorHistory: [{
     attempt: { type: Number, required: true },
     timestamp: { type: Date, default: Date.now },
@@ -20,15 +17,9 @@ const QueueItemMetadataSchema = new Schema({
   }]
 });
 
-// Rate limiting sub-schema
+// Rate limiting sub-schema - removed unused fields
 const RateLimitInfoSchema = new Schema({
-  globalRateLimit: { type: Number, default: 3 }, // Messages per second globally
-  userRateLimit: { type: Number, default: 1 }, // Messages per second per user
-  lastGlobalMessage: { type: Date, required: false }, // Last global message timestamp
-  lastUserMessage: { type: Date, required: false }, // Last user message timestamp
-  globalMessageCount: { type: Number, default: 0 }, // Messages sent in current second
-  userMessageCount: { type: Number, default: 0 }, // Messages sent to user in current second
-  rateLimitWindow: { type: Date, required: false } // Start of current rate limit window
+  // Keep empty for now - rate limiting handled elsewhere
 });
 
 export interface IOutboundQueue extends Document {
@@ -46,9 +37,6 @@ export interface IOutboundQueue extends Document {
     nextAttempt?: Date;
     attempts: number;
     maxAttempts: number;
-    backoffMultiplier: number;
-    baseDelayMs: number;
-    totalProcessingTime: number;
     errorHistory: Array<{
       attempt: number;
       timestamp: Date;
@@ -57,40 +45,10 @@ export interface IOutboundQueue extends Document {
       retryAfter?: Date;
     }>;
   };
-  rateLimitInfo: {
-    globalRateLimit: number;
-    userRateLimit: number;
-    lastGlobalMessage?: Date;
-    lastUserMessage?: Date;
-    globalMessageCount: number;
-    userMessageCount: number;
-    rateLimitWindow?: Date;
-  };
+  rateLimitInfo: any; // Flexible object
   content: {
     text: string;
-    attachments?: Array<{
-      type: string;
-      url: string;
-      caption?: string;
-    }>;
-    quickReplies?: Array<{
-      text: string;
-      payload?: string;
-    }>;
-    buttons?: Array<{
-      type: string;
-      title: string;
-      url?: string;
-      payload?: string;
-      phoneNumber?: string;
-    }>;
   };
-  tags: string[]; // Custom tags for categorization
-  notes: string[]; // Internal notes about the queue item
-  isUrgent: boolean; // Whether this item needs immediate attention
-  expiresAt?: Date; // When this item expires (for time-sensitive messages)
-  retryStrategy: 'immediate' | 'exponential' | 'fixed' | 'custom';
-  customRetryDelays?: number[]; // Custom retry delays in milliseconds
 }
 
 const OutboundQueueSchema = new Schema<IOutboundQueue>({
@@ -102,13 +60,9 @@ const OutboundQueueSchema = new Schema<IOutboundQueue>({
   status: { type: String, enum: ['pending', 'processing', 'sent', 'failed', 'cancelled'], default: 'pending' },
   metadata: { type: QueueItemMetadataSchema, default: () => ({}) },
   rateLimitInfo: { type: RateLimitInfoSchema, default: () => ({}) },
-  content: { type: Schema.Types.Mixed, required: true }, // Flexible content structure
-  tags: [{ type: String }],
-  notes: [{ type: String }],
-  isUrgent: { type: Boolean, default: false },
-  expiresAt: { type: Date, required: false },
-  retryStrategy: { type: String, enum: ['immediate', 'exponential', 'fixed', 'custom'], default: 'exponential' },
-  customRetryDelays: [{ type: Number }]
+  content: {
+    text: { type: String, required: true }
+  }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -123,8 +77,6 @@ OutboundQueueSchema.index({ priority: 1 });
 OutboundQueueSchema.index({ status: 1 });
 OutboundQueueSchema.index({ 'metadata.scheduledFor': 1 });
 OutboundQueueSchema.index({ 'metadata.nextAttempt': 1 });
-OutboundQueueSchema.index({ isUrgent: 1 });
-OutboundQueueSchema.index({ expiresAt: 1 });
 
 // Compound indexes for rate limiting
 OutboundQueueSchema.index({ accountId: 1, 'metadata.scheduledFor': 1 });
@@ -133,25 +85,10 @@ OutboundQueueSchema.index({ status: 1, priority: 1, 'metadata.scheduledFor': 1 }
 
 // Pre-save middleware to update metadata
 OutboundQueueSchema.pre('save', function(next) {
-  // Set urgent flag based on priority
-  if (this.priority === 'urgent') {
-    this.isUrgent = true;
-  }
-  
   // Set next attempt if not set and status is failed
   if (this.status === 'failed' && !this.metadata.nextAttempt) {
-    const delayMs = this.retryStrategy === 'immediate' ? 0 : 
-                   this.retryStrategy === 'fixed' ? this.metadata.baseDelayMs :
-                   this.retryStrategy === 'custom' && this.customRetryDelays ? 
-                     this.customRetryDelays[Math.min(this.metadata.attempts, this.customRetryDelays.length - 1)] || this.metadata.baseDelayMs :
-                   this.metadata.baseDelayMs * Math.pow(this.metadata.backoffMultiplier, this.metadata.attempts);
-    this.metadata.nextAttempt = new Date(Date.now() + delayMs);
-  }
-  
-  // Check if expired
-  if (this.expiresAt && new Date() > this.expiresAt && this.status === 'pending') {
-    this.status = 'cancelled';
-    this.notes.push(`Message expired at ${this.expiresAt}`);
+    const delay = 1000 * Math.pow(2, this.metadata.attempts); // Simple exponential backoff
+    this.metadata.nextAttempt = new Date(Date.now() + delay);
   }
   
   next();
@@ -162,7 +99,6 @@ OutboundQueueSchema.virtual('isReadyToProcess').get(function() {
   if (this.status !== 'pending') return false;
   if (this.metadata.scheduledFor > new Date()) return false;
   if (this.metadata.nextAttempt && this.metadata.nextAttempt > new Date()) return false;
-  if (this.expiresAt && new Date() > this.expiresAt) return false;
   return true;
 });
 
@@ -175,14 +111,8 @@ OutboundQueueSchema.virtual('canRetry').get(function() {
 
 // Virtual for retry delay in milliseconds
 OutboundQueueSchema.virtual('retryDelayMs').get(function() {
-  if (this.retryStrategy === 'immediate') return 0;
-  if (this.retryStrategy === 'fixed') return this.metadata.baseDelayMs;
-  if (this.retryStrategy === 'custom' && this.customRetryDelays) {
-    const attemptIndex = Math.min(this.metadata.attempts, this.customRetryDelays.length - 1);
-    return this.customRetryDelays[attemptIndex] || this.metadata.baseDelayMs;
-  }
-  // Exponential backoff
-  return this.metadata.baseDelayMs * Math.pow(this.metadata.backoffMultiplier, this.metadata.attempts);
+  // Simple exponential backoff
+  return 1000 * Math.pow(2, this.metadata.attempts);
 });
 
 // Virtual for age in seconds
