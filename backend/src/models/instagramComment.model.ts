@@ -13,6 +13,9 @@ export interface IInstagramComment extends Document {
   replyTimestamp?: Date;
   dmSent?: boolean;
   dmTimestamp?: Date;
+  dmFailed?: boolean;
+  dmFailureReason?: string;
+  dmFailureTimestamp?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -72,6 +75,19 @@ const InstagramCommentSchema = new Schema<IInstagramComment>({
     index: true
   },
   dmTimestamp: {
+    type: Date,
+    required: false
+  },
+  dmFailed: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  dmFailureReason: {
+    type: String,
+    required: false
+  },
+  dmFailureTimestamp: {
     type: Date,
     required: false
   }

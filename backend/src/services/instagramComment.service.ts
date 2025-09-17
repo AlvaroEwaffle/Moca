@@ -49,16 +49,35 @@ export class InstagramCommentService {
         }
       }
 
-      // Send DM if enabled
-      if (account.commentSettings.autoReplyDM) {
+      // Send DM if enabled and not already failed
+      if (account.commentSettings.autoReplyDM && !commentDoc.dmFailed) {
         try {
           await this.sendDMReply(comment.id, account.commentSettings.dmMessage, account.accessToken, account.accountId);
           commentDoc.dmSent = true;
           commentDoc.dmTimestamp = new Date();
+          commentDoc.dmFailed = false; // Reset failure status on success
+          commentDoc.dmFailureReason = undefined;
+          commentDoc.dmFailureTimestamp = undefined;
           console.log(`✅ [Comment Service] DM sent for comment: ${comment.id}`);
         } catch (error) {
           console.error(`❌ [Comment Service] Failed to send DM:`, error);
+          
+          // Check if it's a daily limit error
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
+                                  errorMessage.includes('The requested user cannot be found') ||
+                                  errorMessage.includes('error_subcode":2534014');
+          
+          if (isDailyLimitError) {
+            // Mark as failed to prevent retrying
+            commentDoc.dmFailed = true;
+            commentDoc.dmFailureReason = 'Daily DM limit reached';
+            commentDoc.dmFailureTimestamp = new Date();
+            console.log(`⚠️ [Comment Service] DM daily limit reached for account ${account.accountName}, marking as failed`);
+          }
         }
+      } else if (commentDoc.dmFailed) {
+        console.log(`⚠️ [Comment Service] DM already failed for comment ${comment.id}, skipping`);
       }
 
       // Save updated comment record

@@ -82,18 +82,32 @@ export class CommentWorkerService {
       // Process each comment
       for (const comment of pendingComments) {
         try {
+          // Double-check that comment is still pending (race condition protection)
+          const currentComment = await InstagramComment.findById(comment._id);
+          if (!currentComment || currentComment.status !== 'pending') {
+            console.log(`⚠️ [Comment Worker] Comment ${comment.commentId} already processed, skipping`);
+            continue;
+          }
+
           // Mark comment as processing to prevent duplicate processing
-          comment.status = 'processing';
-          await comment.save();
+          currentComment.status = 'processing';
+          await currentComment.save();
           
-          console.log(`💬 [Comment Worker] Processing comment: ${comment.commentId}`);
-          await this.processComment(comment);
+          console.log(`💬 [Comment Worker] Processing comment: ${currentComment.commentId}`);
+          await this.processComment(currentComment);
         } catch (error) {
           console.error(`❌ [Comment Worker] Error processing comment ${comment.commentId}:`, error);
           
           // Mark comment as failed
-          comment.status = 'failed';
-          await comment.save();
+          try {
+            const failedComment = await InstagramComment.findById(comment._id);
+            if (failedComment) {
+              failedComment.status = 'failed';
+              await failedComment.save();
+            }
+          } catch (saveError) {
+            console.error(`❌ [Comment Worker] Error saving failed status:`, saveError);
+          }
         }
       }
 
@@ -159,8 +173,8 @@ export class CommentWorkerService {
         }
       }
 
-      // Send DM if enabled
-      if (account.commentSettings.autoReplyDM) {
+      // Send DM if enabled and not already failed
+      if (account.commentSettings.autoReplyDM && !comment.dmFailed) {
         try {
           await commentService.sendDMReply(
             comment.userId, 
@@ -170,10 +184,29 @@ export class CommentWorkerService {
           );
           comment.dmSent = true;
           comment.dmTimestamp = new Date();
+          comment.dmFailed = false; // Reset failure status on success
+          comment.dmFailureReason = undefined;
+          comment.dmFailureTimestamp = undefined;
           console.log(`✅ [Comment Worker] DM sent to user: ${comment.userId}`);
         } catch (error) {
           console.error(`❌ [Comment Worker] Failed to send DM:`, error);
+          
+          // Check if it's a daily limit error
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
+                                  errorMessage.includes('The requested user cannot be found') ||
+                                  errorMessage.includes('error_subcode":2534014');
+          
+          if (isDailyLimitError) {
+            // Mark as failed to prevent retrying
+            comment.dmFailed = true;
+            comment.dmFailureReason = 'Daily DM limit reached';
+            comment.dmFailureTimestamp = new Date();
+            console.log(`⚠️ [Comment Worker] DM daily limit reached for account ${account.accountName}, marking as failed`);
+          }
         }
+      } else if (comment.dmFailed) {
+        console.log(`⚠️ [Comment Worker] DM already failed for comment ${comment.commentId}, skipping`);
       }
 
       // Save updated comment
