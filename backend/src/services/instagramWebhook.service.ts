@@ -246,10 +246,54 @@ export class InstagramWebhookService {
         return;
       }
 
-      // Check if comment already exists (deduplication)
-      const existingComment = await InstagramComment.findOne({ commentId: comment.id });
+      // BOT COMMENT DETECTION: Check if this is our own comment (infinite loop prevention)
+      const isOurComment = comment.from?.id === account.accountId || 
+                          comment.from?.username === account.accountName ||
+                          comment.text === account.commentSettings?.commentMessage ||
+                          comment.text?.includes('Gracias por tu comentario') ||
+                          comment.text?.includes('Te contactaremos por DM') ||
+                          comment.text?.includes('🙏') ||
+                          comment.text?.includes('📩');
+      
+      if (isOurComment) {
+        console.log(`🤖 [Bot Detection] Our own comment detected (${comment.from?.username || comment.from?.id}), skipping to prevent infinite loop`);
+        return;
+      }
+
+      // ADDITIONAL SAFETY: Check if we've recently replied to this media (within last 5 minutes)
+      const recentReply = await InstagramComment.findOne({
+        mediaId: comment.media?.id,
+        accountId: account.accountId,
+        status: 'replied',
+        replyTimestamp: { $gte: new Date(Date.now() - 300000) } // Within last 5 minutes
+      });
+      
+      if (recentReply) {
+        console.log(`⚠️ [Bot Detection] Recent reply found for media ${comment.media?.id} (${recentReply.replyTimestamp}), skipping to prevent spam`);
+        return;
+      }
+
+      // ROBUST DEDUPLICATION: Check if comment already exists or is being processed
+      const existingComment = await InstagramComment.findOne({ 
+        $or: [
+          { commentId: comment.id },
+          { commentId: comment.id, status: { $in: ['pending', 'processing', 'replied'] } }
+        ]
+      });
+      
       if (existingComment) {
-        console.log(`⚠️ Comment ${comment.id} already exists, skipping`);
+        console.log(`⚠️ Comment ${comment.id} already exists with status: ${existingComment.status}, skipping`);
+        return;
+      }
+
+      // ADDITIONAL SAFETY: Check for recent comments with same ID (within last 30 seconds)
+      const recentComment = await InstagramComment.findOne({
+        commentId: comment.id,
+        createdAt: { $gte: new Date(Date.now() - 30000) } // Within last 30 seconds
+      });
+      
+      if (recentComment) {
+        console.log(`⚠️ Comment ${comment.id} was processed recently (${recentComment.createdAt}), skipping duplicate`);
         return;
       }
 
