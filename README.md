@@ -5,6 +5,8 @@
 
 **Latest Working Version:** `fc44870` - "Instagram Comments Feature + Infinite Loop Prevention + Complete UI Integration"
 
+**Latest Testing Version:** `03450ca` - "Model Simplification + Field Cleanup + Performance Optimization + Kanban UI + Collapsible Sidebar"
+
 ### ✅ **What's Working:**
 - **Multi-Account Support**: Perfect account identification with Page-Scoped ID matching
 - **Username Display**: Instagram usernames fetched and displayed in conversations
