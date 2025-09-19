@@ -78,7 +78,7 @@ export class FollowUpWorkerService {
       'leadScoring.currentScore': { $gte: config.minLeadScore, $lt: 7 }, // Not converted yet
       'timestamps.lastActivity': { $lt: timeThreshold }, // No response in specified time
       'settings.aiEnabled': true, // Only active conversations
-      status: 'active'
+      status: 'open' // Use 'open' status instead of 'active'
     }).populate('contactId');
 
     console.log(`🔍 [FollowUp Worker] Found ${conversations.length} conversations meeting criteria`);
