@@ -141,26 +141,17 @@ mongoose.connect(MONGODB_URI)
       commentWorker.start();
       console.log('✅ Comment worker service started successfully');
       
-      console.log('🔄 Starting follow-up worker service...');
-      // Run follow-up processing every 8 hours (9 AM, 5 PM, 1 AM)
-      setInterval(async () => {
-        try {
-          await followUpWorkerService.processFollowUps();
-        } catch (error) {
-          console.error('❌ Error in follow-up processing:', error);
-        }
-      }, 8 * 60 * 60 * 1000); // 8 hours in milliseconds
-      
-      // Run initial follow-up processing after 30 seconds
-      setTimeout(async () => {
-        try {
-          await followUpWorkerService.processFollowUps();
-        } catch (error) {
-          console.error('❌ Error in initial follow-up processing:', error);
-        }
-      }, 30000);
-      
-      console.log('✅ Follow-up worker service started successfully');
+             console.log('🔄 Starting follow-up worker service...');
+             // Run follow-up processing every 8 hours (9 AM, 5 PM, 1 AM)
+             setInterval(async () => {
+               try {
+                 await followUpWorkerService.processFollowUps();
+               } catch (error) {
+                 console.error('❌ Error in follow-up processing:', error);
+               }
+             }, 8 * 60 * 60 * 1000); // 8 hours in milliseconds
+             
+             console.log('✅ Follow-up worker service started successfully');
       
       console.log('✅ All background services started successfully');
     } catch (error) {
