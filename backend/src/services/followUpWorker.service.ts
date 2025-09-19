@@ -219,30 +219,44 @@ export class FollowUpWorkerService {
    * Add follow-up message to outbound queue
    */
   private async addToOutboundQueue(lead: any, message: string, followUpId: string): Promise<void> {
-    // Generate a unique message ID for the follow-up
-    const messageId = `followup_${followUpId}_${Date.now()}`;
-    
-    const outboundMessage = new OutboundQueue({
-      messageId: messageId,
-      conversationId: lead._id,
-      contactId: lead.contactId._id,
-      accountId: lead.accountId,
-      priority: 'normal',
-      status: 'pending',
-      content: {
-        text: message
-      },
-      metadata: {
-        createdAt: new Date(),
-        scheduledFor: new Date(),
-        attempts: 0,
-        maxAttempts: 3,
-        followUpId: followUpId
-      }
-    });
+    try {
+      // Generate a unique message ID for the follow-up
+      const messageId = `followup_${followUpId}_${Date.now()}`;
+      
+      console.log(`📤 [FollowUp Worker] Creating outbound queue message for follow-up ${followUpId}...`);
+      
+      const outboundMessage = new OutboundQueue({
+        messageId: messageId,
+        conversationId: lead._id,
+        contactId: lead.contactId._id,
+        accountId: lead.accountId,
+        priority: 'normal',
+        status: 'pending',
+        content: {
+          text: message
+        },
+        metadata: {
+          createdAt: new Date(),
+          scheduledFor: new Date(),
+          attempts: 0,
+          maxAttempts: 3,
+          followUpId: followUpId
+        }
+      });
 
-    await outboundMessage.save();
-    console.log(`📤 [FollowUp Worker] Follow-up message added to outbound queue with ID: ${messageId}`);
+      await outboundMessage.save();
+      console.log(`📤 [FollowUp Worker] Follow-up message added to outbound queue with ID: ${messageId}`);
+      
+      // Update the LeadFollowUp record with the messageId
+      await LeadFollowUp.findByIdAndUpdate(followUpId, {
+        messageId: outboundMessage._id
+      });
+      console.log(`📤 [FollowUp Worker] Updated LeadFollowUp record with messageId: ${outboundMessage._id}`);
+      
+    } catch (error) {
+      console.error(`❌ [FollowUp Worker] Error adding follow-up to outbound queue:`, error);
+      throw error;
+    }
   }
 
   /**
