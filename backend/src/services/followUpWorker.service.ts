@@ -47,13 +47,24 @@ export class FollowUpWorkerService {
     const leads = await this.getLeadsForFollowUp(config);
     console.log(`📊 [FollowUp Worker] Found ${leads.length} leads for follow-up`);
 
+    if (leads.length === 0) {
+      console.log(`⏭️ [FollowUp Worker] No leads to process for account ${config.accountId}`);
+      return;
+    }
+
+    console.log(`🚀 [FollowUp Worker] Starting to process ${leads.length} leads...`);
+    
     for (const lead of leads) {
       try {
+        console.log(`🔄 [FollowUp Worker] Processing lead ${lead._id} (${lead.contactId?.name || 'Unknown'})...`);
         await this.processLeadFollowUp(lead, config);
+        console.log(`✅ [FollowUp Worker] Successfully processed lead ${lead._id}`);
       } catch (error) {
         console.error(`❌ [FollowUp Worker] Error processing lead ${lead._id}:`, error);
       }
     }
+    
+    console.log(`✅ [FollowUp Worker] Completed processing ${leads.length} leads for account ${config.accountId}`);
   }
 
   /**
@@ -123,7 +134,7 @@ export class FollowUpWorkerService {
    * Process follow-up for a specific lead
    */
   private async processLeadFollowUp(lead: any, config: any): Promise<void> {
-    console.log(`🔄 [FollowUp Worker] Processing lead ${lead._id}...`);
+    console.log(`🔄 [FollowUp Worker] Processing lead ${lead._id} (${lead.contactId?.name || 'Unknown'})...`);
 
     // Check if there's already a pending follow-up for this conversation
     const existingFollowUp = await LeadFollowUp.findOne({
@@ -136,9 +147,14 @@ export class FollowUpWorkerService {
       return;
     }
 
+    console.log(`📝 [FollowUp Worker] Generating follow-up message for lead ${lead._id}...`);
+    
     // Generate follow-up message
     const message = await this.generateFollowUpMessage(lead, config);
+    console.log(`📝 [FollowUp Worker] Generated message: "${message.substring(0, 50)}..."`);
 
+    console.log(`💾 [FollowUp Worker] Creating follow-up record for lead ${lead._id}...`);
+    
     // Create follow-up record
     const followUp = new LeadFollowUp({
       conversationId: lead._id,
@@ -152,7 +168,10 @@ export class FollowUpWorkerService {
     });
 
     await followUp.save();
+    console.log(`💾 [FollowUp Worker] Follow-up record created: ${followUp._id}`);
 
+    console.log(`📤 [FollowUp Worker] Adding to outbound queue for lead ${lead._id}...`);
+    
     // Add to outbound queue
     await this.addToOutboundQueue(lead, message, (followUp as any)._id.toString());
 
