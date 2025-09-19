@@ -11,11 +11,11 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import Onboarding from "./pages/auth/Onboarding";
 import Dashboard from "./pages/dashboard/Dashboard";
-import InstagramSetup from "./pages/instagram/InstagramSetup";
 import MainLayout from "./components/layout/MainLayout";
 
 // Phase 2: Conversation Management
 import ConversationsList from "./pages/conversations/ConversationsList";
+import ConversationsKanban from "./pages/conversations/ConversationsKanban";
 import ConversationDetail from "./pages/conversations/ConversationDetail";
 import SendMessage from "./pages/conversations/SendMessage";
 
@@ -73,6 +73,7 @@ function App() {
               
               {/* Phase 2: Conversation Management */}
               <Route path="conversations" element={<ConversationsList />} />
+              <Route path="conversations-kanban" element={<ConversationsKanban />} />
               <Route path="conversations/:id" element={<ConversationDetail />} />
               <Route path="send-message" element={<SendMessage />} />
               
@@ -84,8 +85,6 @@ function App() {
               {/* Analytics */}
               <Route path="analytics" element={<AnalyticsDashboard />} />
               
-              {/* Instagram Setup */}
-              <Route path="instagram" element={<InstagramSetup />} />
             </Route>
             
             {/* Catch all */}

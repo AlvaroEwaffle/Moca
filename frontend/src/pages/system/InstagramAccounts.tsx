@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { BACKEND_URL } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
@@ -17,16 +19,19 @@ import {
   Bot,
   Target,
   Calendar,
-  Link,
+  Link as LinkIcon,
   Presentation,
   ChevronDown,
   ChevronRight,
   Shield,
   BarChart3,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  ExternalLink,
+  Copy
 } from "lucide-react";
 import { Helmet } from "react-helmet";
+import { useToast } from "@/hooks/use-toast";
 
 interface InstagramAccount {
   id: string;
@@ -80,7 +85,22 @@ interface GlobalAgentConfig {
   };
 }
 
+interface FollowUpConfig {
+  id?: string;
+  userId: string;
+  accountId: string;
+  enabled: boolean;
+  minLeadScore: number;
+  maxFollowUps: number;
+  timeSinceLastAnswer: number;
+  messageTemplate: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 const InstagramAccounts = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingAccount, setEditingAccount] = useState<string | null>(null);
@@ -88,6 +108,11 @@ const InstagramAccounts = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connected' | 'error'>('disconnected');
+  const [testing, setTesting] = useState(false);
+  const [followUpConfig, setFollowUpConfig] = useState<FollowUpConfig | null>(null);
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+  const [followUpSaving, setFollowUpSaving] = useState(false);
   
   // Milestone configuration state
   const [editingMilestone, setEditingMilestone] = useState<string | null>(null);
@@ -126,7 +151,15 @@ const InstagramAccounts = () => {
   useEffect(() => {
     fetchAccounts();
     fetchGlobalConfig();
+    testConnection();
   }, []);
+
+  // Fetch follow-up configuration when accounts change
+  useEffect(() => {
+    if (accounts.length > 0) {
+      fetchFollowUpConfig(accounts[0].accountId);
+    }
+  }, [accounts]);
 
   const fetchAccounts = async () => {
     try {
@@ -177,6 +210,137 @@ const InstagramAccounts = () => {
       }
     } catch (error) {
       console.error('Error fetching global config:', error);
+    }
+  };
+
+  const testConnection = async () => {
+    setTesting(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const accessToken = localStorage.getItem('accessToken');
+      
+      if (!backendUrl) return;
+
+      const response = await fetch(`${backendUrl}/api/instagram/test-connection`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConnectionStatus(data.data.connected ? 'connected' : 'error');
+      } else {
+        setConnectionStatus('error');
+      }
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      setConnectionStatus('error');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleOAuthConnect = () => {
+    // Use the Instagram Business OAuth URL provided by Meta
+    const instagramAuthUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=2160534791106844&redirect_uri=https://moca.pages.dev/instagram-callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights`;
+    
+    // Redirect to Instagram Business OAuth
+    window.location.href = instagramAuthUrl;
+  };
+
+  const handleRefreshToken = async () => {
+    if (accounts.length === 0) return;
+    
+    setLoading(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const accessToken = localStorage.getItem('accessToken');
+      
+      if (!backendUrl) throw new Error('Backend URL not configured');
+
+      const response = await fetch(`${backendUrl}/api/instagram-oauth/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          accountId: accounts[0].accountId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh token');
+      }
+
+      toast({
+        title: "¡Token actualizado!",
+        description: "El token de acceso se ha renovado exitosamente",
+      });
+
+      // Refresh account data and test connection
+      await fetchAccounts();
+      await testConnection();
+
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      toast({
+        title: "Error al actualizar token",
+        description: "No se pudo renovar el token. Intenta reconectar con OAuth.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "¡Copiado!",
+        description: `${label} ha sido copiado al portapapeles`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error al copiar",
+        description: "No se pudo copiar al portapapeles",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getStatusIcon = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return <CheckCircle className="w-5 h-5 text-green-600" />;
+      case 'error':
+        return <XCircle className="w-5 h-5 text-red-600" />;
+      default:
+        return <XCircle className="w-5 h-5 text-gray-400" />;
+    }
+  };
+
+  const getStatusText = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'Conectado';
+      case 'error':
+        return 'Error de conexión';
+      default:
+        return 'Desconectado';
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'bg-green-100 text-green-800';
+      case 'error':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -459,6 +623,89 @@ const InstagramAccounts = () => {
     }
   };
 
+  // Follow-up configuration functions
+  const fetchFollowUpConfig = async (accountId: string) => {
+    setFollowUpLoading(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/follow-up/config/${accountId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const config = await response.json();
+        setFollowUpConfig(config);
+      } else {
+        console.error('Failed to fetch follow-up config');
+      }
+    } catch (error) {
+      console.error('Error fetching follow-up config:', error);
+    } finally {
+      setFollowUpLoading(false);
+    }
+  };
+
+  const saveFollowUpConfig = async (accountId: string) => {
+    if (!followUpConfig) return;
+    
+    setFollowUpSaving(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/follow-up/config/${accountId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(followUpConfig)
+      });
+
+      if (response.ok) {
+        const updatedConfig = await response.json();
+        setFollowUpConfig(updatedConfig);
+        setSuccess('Follow-up configuration saved successfully!');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to save follow-up configuration');
+      }
+    } catch (error) {
+      console.error('Error saving follow-up config:', error);
+      setError('Failed to save follow-up configuration');
+    } finally {
+      setFollowUpSaving(false);
+    }
+  };
+
+  const testFollowUpConfig = async (accountId: string) => {
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/follow-up/test/${accountId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setSuccess(`Test completed! Found ${result.leadsFound} leads ready for follow-up.`);
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to test follow-up configuration');
+      }
+    } catch (error) {
+      console.error('Error testing follow-up config:', error);
+      setError('Failed to test follow-up configuration');
+    }
+  };
+
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleString();
   };
@@ -487,7 +734,7 @@ const InstagramAccounts = () => {
   return (
     <>
       <Helmet>
-        <title>Instagram Accounts | Moca - Instagram DM Agent</title>
+        <title>Instagram | Moca - Instagram DM Agent</title>
         <meta name="description" content="Manage your Instagram accounts and AI system prompts" />
       </Helmet>
 
@@ -495,7 +742,10 @@ const InstagramAccounts = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Instagram Accounts</h1>
+            <div className="flex items-center gap-2">
+              <Instagram className="w-8 h-8 text-violet-600" />
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Instagram</h1>
+            </div>
             <p className="text-sm sm:text-base text-gray-600 mt-1">
               Manage your Instagram accounts and customize AI system prompts
             </p>
@@ -505,6 +755,136 @@ const InstagramAccounts = () => {
             Refresh
           </Button>
         </div>
+
+        {/* Connection Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              Estado de la Conexión
+              <Badge className={getStatusColor()}>
+                {getStatusIcon()}
+                <span className="ml-2">{getStatusText()}</span>
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {accounts.length > 0 ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-white rounded-lg border">
+                    <div className="text-lg font-semibold text-violet-600">{accounts[0].accountName}</div>
+                    <div className="text-sm text-gray-500">Cuenta de Instagram</div>
+                  </div>
+                  <div className="text-center p-4 bg-white rounded-lg border">
+                    <div className="text-lg font-semibold text-violet-600">{accounts[0].accountId}</div>
+                    <div className="text-sm text-gray-500">Account ID</div>
+                  </div>
+                  <div className="text-center p-4 bg-white rounded-lg border">
+                    <div className="text-lg font-semibold text-violet-600">
+                      {new Date(accounts[0].updatedAt).toLocaleDateString()}
+                    </div>
+                    <div className="text-sm text-gray-500">Última sincronización</div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-center space-x-4 flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => testConnection()}
+                    disabled={testing}
+                  >
+                    {testing ? 'Probando...' : 'Probar Conexión'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleRefreshToken}
+                    disabled={loading}
+                  >
+                    {loading ? 'Actualizando...' : 'Actualizar Token'}
+                  </Button>
+                  <Button
+                    onClick={handleOAuthConnect}
+                    className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700"
+                  >
+                    <Instagram className="w-4 h-4 mr-2" />
+                    Reconectar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">No hay cuenta de Instagram conectada</p>
+                <p className="text-sm text-gray-400 mb-4">Conecta tu cuenta usando OAuth</p>
+                <Button
+                  onClick={handleOAuthConnect}
+                  className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700"
+                >
+                  <Instagram className="w-4 h-4 mr-2" />
+                  Conectar con Instagram
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Webhook Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Información del Webhook</CardTitle>
+            <CardDescription>
+              Configura este webhook en Meta Developer Console
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>URL del Webhook</Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={`${window.location.origin}/api/instagram/webhook`}
+                  readOnly
+                  className="bg-gray-50"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyToClipboard(`${window.location.origin}/api/instagram/webhook`, 'URL del webhook')}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Verify Token</Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  value="cataleya"
+                  readOnly
+                  className="bg-gray-50"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyToClipboard('cataleya', 'Verify Token')}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <Alert>
+              <AlertDescription>
+                <strong>Configuración del Webhook:</strong>
+                <ol className="mt-2 space-y-1 text-sm">
+                  <li>1. Ve a tu app en Meta Developer Console</li>
+                  <li>2. Navega a Instagram Basic Display → Webhooks</li>
+                  <li>3. Agrega la URL del webhook y el verify token</li>
+                  <li>4. Suscríbete a los eventos: messages, comments</li>
+                </ol>
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
 
         {/* Success/Error Messages */}
         {success && (
@@ -1163,6 +1543,174 @@ const InstagramAccounts = () => {
                     )}
                   </div>
 
+                  {/* Follow-up Configuration Accordion */}
+                  <div className="border-t pt-4 mt-4">
+                    <button
+                      onClick={() => toggleAccordion(account.accountId, 'followUp')}
+                      className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Clock className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                        <h4 className="text-sm font-medium text-gray-700">Lead Follow-up</h4>
+                        {followUpConfig?.enabled && (
+                          <Badge variant="outline" className="text-xs">
+                            Enabled
+                          </Badge>
+                        )}
+                      </div>
+                      {isAccordionExpanded(account.accountId, 'followUp') ? (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
+                    
+                    {isAccordionExpanded(account.accountId, 'followUp') && (
+                      <div className="mt-3 space-y-4">
+                        {followUpLoading ? (
+                          <div className="flex items-center justify-center py-4">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-600"></div>
+                          </div>
+                        ) : followUpConfig ? (
+                          <div className="space-y-4">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="followUpEnabled"
+                                checked={followUpConfig.enabled}
+                                onChange={(e) => setFollowUpConfig(prev => prev ? {
+                                  ...prev,
+                                  enabled: e.target.checked
+                                } : null)}
+                                className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                              />
+                              <Label htmlFor="followUpEnabled" className="text-sm text-gray-700">
+                                Enable automatic follow-up messages
+                              </Label>
+                            </div>
+
+                            {followUpConfig.enabled && (
+                              <div className="space-y-4 pl-6 border-l-2 border-gray-200">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <Label htmlFor="minLeadScore">Minimum Lead Score</Label>
+                                    <select
+                                      id="minLeadScore"
+                                      value={followUpConfig.minLeadScore}
+                                      onChange={(e) => setFollowUpConfig(prev => prev ? {
+                                        ...prev,
+                                        minLeadScore: Number(e.target.value)
+                                      } : null)}
+                                      className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                                    >
+                                      <option value={1}>1 - Contact Received</option>
+                                      <option value={2}>2 - Answers 1 Question</option>
+                                      <option value={3}>3 - Confirms Interest</option>
+                                      <option value={4}>4 - Milestone Met</option>
+                                      <option value={5}>5 - Reminder Sent</option>
+                                      <option value={6}>6 - Reminder Answered</option>
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Follow up leads with this score and above
+                                    </p>
+                                  </div>
+
+                                  <div>
+                                    <Label htmlFor="maxFollowUps">Max Follow-ups</Label>
+                                    <input
+                                      id="maxFollowUps"
+                                      type="number"
+                                      min="1"
+                                      max="10"
+                                      value={followUpConfig.maxFollowUps}
+                                      onChange={(e) => setFollowUpConfig(prev => prev ? {
+                                        ...prev,
+                                        maxFollowUps: Number(e.target.value)
+                                      } : null)}
+                                      className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Maximum follow-ups per lead
+                                    </p>
+                                  </div>
+
+                                  <div>
+                                    <Label htmlFor="timeSinceLastAnswer">Hours Since Last Answer</Label>
+                                    <input
+                                      id="timeSinceLastAnswer"
+                                      type="number"
+                                      min="1"
+                                      max="168"
+                                      value={followUpConfig.timeSinceLastAnswer}
+                                      onChange={(e) => setFollowUpConfig(prev => prev ? {
+                                        ...prev,
+                                        timeSinceLastAnswer: Number(e.target.value)
+                                      } : null)}
+                                      className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Wait this long before following up
+                                    </p>
+                                  </div>
+
+                                  <div className="md:col-span-2">
+                                    <Label htmlFor="messageTemplate">Follow-up Message Template</Label>
+                                    <Textarea
+                                      id="messageTemplate"
+                                      value={followUpConfig.messageTemplate}
+                                      onChange={(e) => setFollowUpConfig(prev => prev ? {
+                                        ...prev,
+                                        messageTemplate: e.target.value
+                                      } : null)}
+                                      className="mt-2"
+                                      rows={3}
+                                      placeholder="Enter your follow-up message template..."
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Use {`{name}`} for personalization (e.g., "Hola {`{name}`}!")
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                                  <Button
+                                    onClick={() => saveFollowUpConfig(account.accountId)}
+                                    disabled={followUpSaving}
+                                    size="sm"
+                                    className="w-full sm:w-auto"
+                                  >
+                                    {followUpSaving ? (
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    ) : (
+                                      <Save className="w-4 h-4 mr-2" />
+                                    )}
+                                    Save Configuration
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => testFollowUpConfig(account.accountId)}
+                                    size="sm"
+                                    className="w-full sm:w-auto"
+                                  >
+                                    <Target className="w-4 h-4 mr-2" />
+                                    Test Configuration
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 p-4 rounded-lg text-center">
+                            <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                            <p className="text-sm text-gray-500">
+                              Loading follow-up configuration...
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Milestone Configuration Accordion */}
                   <div className="border-t pt-4 mt-4">
                     <button
@@ -1263,7 +1811,7 @@ const InstagramAccounts = () => {
                             {account.settings?.defaultMilestone ? (
                               <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                                 <div className="flex items-center space-x-2 mb-2">
-                                  {account.settings.defaultMilestone.target === 'link_shared' && <Link className="w-4 h-4 text-violet-600 flex-shrink-0" />}
+                                  {account.settings.defaultMilestone.target === 'link_shared' && <LinkIcon className="w-4 h-4 text-violet-600 flex-shrink-0" />}
                                   {account.settings.defaultMilestone.target === 'meeting_scheduled' && <Calendar className="w-4 h-4 text-violet-600 flex-shrink-0" />}
                                   {account.settings.defaultMilestone.target === 'demo_booked' && <Presentation className="w-4 h-4 text-violet-600 flex-shrink-0" />}
                                   {account.settings.defaultMilestone.target === 'custom' && <Target className="w-4 h-4 text-violet-600 flex-shrink-0" />}

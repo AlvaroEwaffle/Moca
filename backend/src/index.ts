@@ -14,11 +14,13 @@ import instagramOAuthRoutes from './routes/instagramOAuth.routes';
 import globalAgentConfigRoutes from './routes/globalAgentConfig.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import instagramCommentsRoutes from './routes/instagramComments.routes';
+import followUpRoutes from './routes/followUp.routes';
 
 // Import services
 import debounceWorker from './services/debounceWorker.service';
 import senderWorker from './services/senderWorker.service';
 import commentWorker from './services/commentWorker.service';
+import { followUpWorkerService } from './services/followUpWorker.service';
 
 console.log('🚀 Moca Instagram DM Agent: Starting application...');
 
@@ -87,6 +89,7 @@ app.use('/api/instagram/comments', instagramCommentsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/global-agent-config', globalAgentConfigRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/follow-up', followUpRoutes);
 console.log('✅ API routes setup completed');
 
 // Error handling middleware
@@ -137,6 +140,27 @@ mongoose.connect(MONGODB_URI)
       console.log('🔄 Starting comment worker service...');
       commentWorker.start();
       console.log('✅ Comment worker service started successfully');
+      
+      console.log('🔄 Starting follow-up worker service...');
+      // Run follow-up processing every 8 hours (9 AM, 5 PM, 1 AM)
+      setInterval(async () => {
+        try {
+          await followUpWorkerService.processFollowUps();
+        } catch (error) {
+          console.error('❌ Error in follow-up processing:', error);
+        }
+      }, 8 * 60 * 60 * 1000); // 8 hours in milliseconds
+      
+      // Run initial follow-up processing after 30 seconds
+      setTimeout(async () => {
+        try {
+          await followUpWorkerService.processFollowUps();
+        } catch (error) {
+          console.error('❌ Error in initial follow-up processing:', error);
+        }
+      }, 30000);
+      
+      console.log('✅ Follow-up worker service started successfully');
       
       console.log('✅ All background services started successfully');
     } catch (error) {

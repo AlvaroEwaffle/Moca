@@ -18,6 +18,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Settings,
   LogOut,
@@ -28,13 +29,16 @@ import {
   Home,
   MessageSquare,
   Instagram,
-  BarChart3
+  BarChart3,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 const MainLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [notifications, setNotifications] = useState(3);
 
@@ -73,14 +77,8 @@ const MainLayout = () => {
     },
     {
       name: 'Instagram',
-      href: '/app/instagram',
-      icon: Instagram,
-      current: location.pathname.startsWith('/app/instagram')
-    },
-    {
-      name: 'Configuración',
       href: '/app/accounts',
-      icon: Settings,
+      icon: Instagram,
       current: location.pathname.startsWith('/app/accounts')
     }
   ];
@@ -99,7 +97,8 @@ const MainLayout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <TooltipProvider>
+      <div className="min-h-screen bg-gray-50">
       {/* Mobile menu */}
       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
         <SheetContent side="left" className="w-80">
@@ -133,15 +132,31 @@ const MainLayout = () => {
       </Sheet>
 
       {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
+      <div className={`hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:flex-col transition-all duration-300 ${
+        isSidebarCollapsed ? 'lg:w-16' : 'lg:w-64'
+      }`}>
         <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-4 border-r border-gray-200">
-          <div className="flex h-16 shrink-0 items-center">
+          <div className="flex h-16 shrink-0 items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">M</span>
               </div>
-              <span className="text-xl font-bold text-gray-900">Moca</span>
+              {!isSidebarCollapsed && (
+                <span className="text-xl font-bold text-gray-900">Moca</span>
+              )}
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="h-8 w-8 p-0 hover:bg-gray-100"
+            >
+              {isSidebarCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </Button>
           </div>
           
           <nav className="flex flex-1 flex-col">
@@ -150,58 +165,84 @@ const MainLayout = () => {
                 <ul role="list" className="-mx-2 space-y-1">
                   {navigation.map((item) => (
                     <li key={item.name}>
-                      <Link
-                        to={item.href}
-                        className={`group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-medium transition-colors ${
-                          item.current
-                            ? 'bg-violet-50 text-violet-700'
-                            : 'text-gray-700 hover:text-violet-700 hover:bg-violet-50'
-                        }`}
-                      >
-                        <item.icon className="h-6 w-6 shrink-0" />
-                        {item.name}
-                      </Link>
+                      {isSidebarCollapsed ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link
+                              to={item.href}
+                              className={`group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-medium transition-colors justify-center ${
+                                item.current
+                                  ? 'bg-violet-50 text-violet-700'
+                                  : 'text-gray-700 hover:text-violet-700 hover:bg-violet-50'
+                              }`}
+                            >
+                              <item.icon className="h-6 w-6 shrink-0" />
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="ml-2">
+                            <p>{item.name}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Link
+                          to={item.href}
+                          className={`group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-medium transition-colors ${
+                            item.current
+                              ? 'bg-violet-50 text-violet-700'
+                              : 'text-gray-700 hover:text-violet-700 hover:bg-violet-50'
+                          }`}
+                        >
+                          <item.icon className="h-6 w-6 shrink-0" />
+                          {item.name}
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>
               </li>
               
               <li className="mt-auto">
-                <div className="flex items-center space-x-3 p-3 rounded-lg bg-gray-50">
+                <div className={`flex items-center p-3 rounded-lg bg-gray-50 ${
+                  isSidebarCollapsed ? 'justify-center' : 'space-x-3'
+                }`}>
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={userData.avatar} alt={userData.name} />
                     <AvatarFallback className="bg-violet-100 text-violet-700 text-sm font-medium">
                       {getInitials(userData.name)}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {userData.name}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {userData.specialization || 'Doctor'}
-                    </p>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => navigate('/configuracion')}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Configuración
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={handleLogout}>
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Cerrar Sesión
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {!isSidebarCollapsed && (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {userData.name}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {userData.specialization || 'Doctor'}
+                        </p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => navigate('/configuracion')}>
+                            <Settings className="mr-2 h-4 w-4" />
+                            Configuración
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={handleLogout}>
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Cerrar Sesión
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
                 </div>
               </li>
             </ul>
@@ -210,7 +251,9 @@ const MainLayout = () => {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className={`transition-all duration-300 ${
+        isSidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'
+      }`}>
         {/* Top bar */}
         <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
           <Button
@@ -253,6 +296,7 @@ const MainLayout = () => {
         </main>
       </div>
     </div>
+    </TooltipProvider>
   );
 };
 

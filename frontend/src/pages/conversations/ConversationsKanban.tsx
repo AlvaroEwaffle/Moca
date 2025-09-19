@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link as LinkIcon, Presentation, CheckCircle, XCircle, Info, LayoutGrid } from "lucide-react";
+import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link as LinkIcon, Presentation, CheckCircle, XCircle, Info, Bot, BotOff, Calendar as CalendarIcon, List } from "lucide-react";
 import { Helmet } from "react-helmet";
 import LeadScoreIndicator from "@/components/LeadScoreIndicator";
 
@@ -63,14 +63,75 @@ interface Conversation {
   };
 }
 
-const ConversationsList = () => {
+interface KanbanColumn {
+  id: string;
+  title: string;
+  description: string;
+  scoreRange: [number, number];
+  color: string;
+  conversations: Conversation[];
+}
+
+const ConversationsKanban = () => {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("recent");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [agentFilter, setAgentFilter] = useState<string>("all");
+
+  // Define Kanban columns based on lead score
+  const kanbanColumns: Omit<KanbanColumn, 'conversations'>[] = [
+    {
+      id: 'contact-received',
+      title: 'Contact Received',
+      description: 'Initial contact from customer',
+      scoreRange: [1, 1],
+      color: 'bg-gray-100 border-gray-300'
+    },
+    {
+      id: 'answers-question',
+      title: 'Answers 1 Question',
+      description: 'Customer responds to first question',
+      scoreRange: [2, 2],
+      color: 'bg-blue-100 border-blue-300'
+    },
+    {
+      id: 'confirms-interest',
+      title: 'Confirms Interest',
+      description: 'Customer shows clear interest',
+      scoreRange: [3, 3],
+      color: 'bg-yellow-100 border-yellow-300'
+    },
+    {
+      id: 'milestone-met',
+      title: 'Milestone Met',
+      description: 'Specific milestone achieved',
+      scoreRange: [4, 4],
+      color: 'bg-orange-100 border-orange-300'
+    },
+    {
+      id: 'reminder-sent',
+      title: 'Reminder Sent',
+      description: 'Follow-up reminder sent',
+      scoreRange: [5, 5],
+      color: 'bg-purple-100 border-purple-300'
+    },
+    {
+      id: 'reminder-answered',
+      title: 'Reminder Answered',
+      description: 'Customer responds to reminder',
+      scoreRange: [6, 6],
+      color: 'bg-indigo-100 border-indigo-300'
+    },
+    {
+      id: 'sales-done',
+      title: 'Sales Done',
+      description: 'Sale completed successfully',
+      scoreRange: [7, 7],
+      color: 'bg-green-100 border-green-300'
+    }
+  ];
 
   const handleAgentToggle = async (conversationId: string, enabled: boolean) => {
     console.log(`🔧 [Frontend] Toggle agent for conversation ${conversationId}: ${enabled}`);
@@ -127,10 +188,6 @@ const ConversationsList = () => {
   useEffect(() => {
     fetchConversations();
   }, []);
-
-  useEffect(() => {
-    filterAndSortConversations();
-  }, [conversations, searchTerm, statusFilter, sortBy]);
 
   const fetchConversations = async () => {
     try {
@@ -210,7 +267,7 @@ const ConversationsList = () => {
     }
   };
 
-  const filterAndSortConversations = () => {
+  const filterConversations = (conversations: Conversation[]) => {
     let filtered = [...conversations];
 
     // Filter by search term
@@ -222,28 +279,49 @@ const ConversationsList = () => {
       );
     }
 
-    // Filter by status
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(conv => conv.status === statusFilter);
+    // Filter by date
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const filterDate = new Date();
+      
+      switch (dateFilter) {
+        case "today":
+          filterDate.setHours(0, 0, 0, 0);
+          filtered = filtered.filter(conv => new Date(conv.updatedAt) >= filterDate);
+          break;
+        case "week":
+          filterDate.setDate(now.getDate() - 7);
+          filtered = filtered.filter(conv => new Date(conv.updatedAt) >= filterDate);
+          break;
+        case "month":
+          filterDate.setMonth(now.getMonth() - 1);
+          filtered = filtered.filter(conv => new Date(conv.updatedAt) >= filterDate);
+          break;
+      }
     }
 
-    // Sort conversations
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "recent":
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        case "oldest":
-          return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
-        case "most_messages":
-          return b.messageCount - a.messageCount;
-        case "name":
-          return (a.contact?.name || '').localeCompare(b.contact?.name || '');
-        default:
-          return 0;
-      }
-    });
+    // Filter by agent status
+    if (agentFilter !== "all") {
+      filtered = filtered.filter(conv => {
+        if (agentFilter === "enabled") return conv.agentEnabled === true;
+        if (agentFilter === "disabled") return conv.agentEnabled === false;
+        return true;
+      });
+    }
 
-    setFilteredConversations(filtered);
+    return filtered;
+  };
+
+  const getFilteredColumns = (): KanbanColumn[] => {
+    const filteredConversations = filterConversations(conversations);
+    
+    return kanbanColumns.map(column => ({
+      ...column,
+      conversations: filteredConversations.filter(conv => {
+        const score = conv.leadScoring?.currentScore || 1;
+        return score >= column.scoreRange[0] && score <= column.scoreRange[1];
+      })
+    }));
   };
 
   const getStatusBadge = (status: string) => {
@@ -342,19 +420,22 @@ const ConversationsList = () => {
     );
   }
 
+  const columns = getFilteredColumns();
+  const totalConversations = columns.reduce((sum, col) => sum + col.conversations.length, 0);
+
   return (
     <TooltipProvider>
       <Helmet>
-        <title>Conversations | Moca - Instagram DM Agent</title>
-        <meta name="description" content="Manage your Instagram conversations and messages" />
+        <title>Conversations Kanban | Moca - Instagram DM Agent</title>
+        <meta name="description" content="Manage your Instagram conversations with a Kanban board view" />
       </Helmet>
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-6 max-w-full overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold text-gray-900">Conversations</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Conversations Kanban</h1>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -378,14 +459,14 @@ const ConversationsList = () => {
               </Tooltip>
             </div>
             <p className="text-gray-600 mt-1">
-              Manage your Instagram conversations ({filteredConversations.length} total)
+              Organize conversations by lead score ({totalConversations} total)
             </p>
           </div>
           <div className="flex gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link to="/app/conversations-kanban">
-                <LayoutGrid className="w-4 h-4 mr-2" />
-                Kanban View
+              <Link to="/app/conversations">
+                <List className="w-4 h-4 mr-2" />
+                List View
               </Link>
             </Button>
             <Button onClick={fetchConversations} variant="outline" size="sm">
@@ -411,150 +492,154 @@ const ConversationsList = () => {
                 </div>
               </div>
               
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={dateFilter} onValueChange={setDateFilter}>
                 <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Status" />
+                  <SelectValue placeholder="Date Range" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">Last 7 Days</SelectItem>
+                  <SelectItem value="month">Last 30 Days</SelectItem>
                 </SelectContent>
               </Select>
 
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select value={agentFilter} onValueChange={setAgentFilter}>
                 <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Sort by" />
+                  <SelectValue placeholder="AI Agent" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="recent">Most Recent</SelectItem>
-                  <SelectItem value="oldest">Oldest</SelectItem>
-                  <SelectItem value="most_messages">Most Messages</SelectItem>
-                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="all">All Agents</SelectItem>
+                  <SelectItem value="enabled">Enabled</SelectItem>
+                  <SelectItem value="disabled">Disabled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </CardContent>
         </Card>
 
-        {/* Conversations List */}
-        <div className="space-y-4">
-          {filteredConversations.length === 0 ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No conversations found</h3>
-                <p className="text-gray-600">
-                  {searchTerm || statusFilter !== "all" 
-                    ? "Try adjusting your search or filters" 
-                    : "Start by connecting your Instagram account"}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            filteredConversations.map((conversation) => (
-              <Card 
-                key={conversation.id} 
-                className="hover:shadow-md transition-shadow"
-              >
-                <CardContent className="p-4 sm:p-6">
-                  <div className="space-y-4">
-                    {/* Header Section */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-3 flex-1 min-w-0">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-violet-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <User className="w-5 h-5 sm:w-6 sm:h-6 text-violet-600" />
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <span className="text-gray-500 text-sm font-medium">
-                              @{conversation.contact?.username || 'unknown'}
-                            </span>
-                            {getStatusBadge(conversation.status)}
-                            {conversation.milestone && getMilestoneBadge(conversation.milestone)}
-                          </div>
-                          
-                          {/* Lead Score and Meta Information */}
-                          {conversation.leadScoring?.currentScore && (
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                              <span className="text-xs text-gray-500">🎯</span>
-                              <span className="text-sm font-medium text-gray-900">
-                                {conversation.leadScoring.currentScore}/7 Lead Score
-                              </span>
-                              {conversation.leadScoring?.confidence && (
-                                <span className="text-xs text-gray-500">
-                                  ({Math.round(conversation.leadScoring.confidence * 100)}% confidence)
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          
-                          <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
-                            <MessageCircle className="w-3 h-3 flex-shrink-0" />
-                            <span>{conversation.messageCount} messages</span>
-                            <span>•</span>
-                            <Clock className="w-3 h-3 flex-shrink-0" />
-                            <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
-                          </div>
-                        </div>
+        {/* Kanban Board */}
+        <div className="flex gap-6 overflow-x-auto px-2 pb-4">
+          {columns.map((column) => (
+            <div key={column.id} className="w-80 flex-shrink-0">
+              <Card className={`${column.color} border-2`}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold text-gray-800">
+                    {column.title}
+                  </CardTitle>
+                  <CardDescription className="text-xs text-gray-600">
+                    {column.description}
+                  </CardDescription>
+                  <Badge variant="outline" className="w-fit text-xs">
+                    {column.conversations.length} conversations
+                  </Badge>
+                </CardHeader>
+                <CardContent className="pt-0 px-4">
+                  <div className="space-y-4 max-h-96 overflow-y-auto py-2">
+                    {column.conversations.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 text-sm">
+                        <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        No conversations
                       </div>
-                    </div>
-
-                    {/* Mobile Actions Section */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      {/* AI Status and Trend - Left side on mobile, right on desktop */}
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                        {conversation.aiResponseMetadata && (
-                          <div className="flex items-center gap-1">
-                            <span>🤖</span>
-                            <span>AI: {conversation.aiResponseMetadata.lastResponseType}</span>
-                            {conversation.aiResponseMetadata.repetitionDetected && <span>⚠️</span>}
-                            {conversation.aiResponseMetadata.contextAwareness && <span>🧠</span>}
-                          </div>
-                        )}
-                        {conversation.analytics?.leadProgression && (
-                          <div className="flex items-center gap-1">
-                            <span>📈</span>
-                            <span>
-                              {conversation.analytics.leadProgression.trend === 'improving' ? 'Trending up' :
-                               conversation.analytics.leadProgression.trend === 'declining' ? 'Trending down' : 'Stable'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Agent Toggle and Details Button - Right side */}
-                      <div className="flex items-center justify-between sm:justify-end gap-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm text-gray-600">Agent</span>
-                          <Switch
-                            checked={conversation.agentEnabled}
-                            onCheckedChange={(checked) => handleAgentToggle(conversation.id, checked)}
-                          />
-                        </div>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
+                    ) : (
+                      column.conversations.map((conversation) => (
+                        <Card 
+                          key={conversation.id} 
+                          className="hover:shadow-md transition-shadow cursor-pointer bg-white mx-1"
                           onClick={() => navigate(`/app/conversations/${conversation.id}`)}
-                          className="flex items-center space-x-1"
                         >
-                          <Eye className="w-4 h-4" />
-                          <span className="hidden sm:inline">Details</span>
-                        </Button>
-                      </div>
-                    </div>
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              {/* Header */}
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start space-x-2 flex-1 min-w-0">
+                                  <div className="w-8 h-8 bg-violet-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                    <User className="w-4 h-4 text-violet-600" />
+                                  </div>
+                                  
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-1 mb-1">
+                                      <span className="text-gray-500 text-xs font-medium">
+                                        @{conversation.contact?.username || 'unknown'}
+                                      </span>
+                                      {getStatusBadge(conversation.status)}
+                                    </div>
+                                    
+                                    {/* Lead Score */}
+                                    {conversation.leadScoring?.currentScore && (
+                                      <div className="flex items-center gap-1 mb-1">
+                                        <span className="text-xs text-gray-500">🎯</span>
+                                        <span className="text-xs font-medium text-gray-900">
+                                          {conversation.leadScoring.currentScore}/7
+                                        </span>
+                                        {conversation.leadScoring?.confidence && (
+                                          <span className="text-xs text-gray-500">
+                                            ({Math.round(conversation.leadScoring.confidence * 100)}%)
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                    
+                                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                                      <MessageCircle className="w-3 h-3 flex-shrink-0" />
+                                      <span>{conversation.messageCount}</span>
+                                      <span>•</span>
+                                      <Clock className="w-3 h-3 flex-shrink-0" />
+                                      <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Last Message Preview */}
+                              <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                                {truncateText(conversation.lastMessage?.text || 'No messages yet', 60)}
+                              </div>
+
+                              {/* Milestone */}
+                              {conversation.milestone && (
+                                <div className="flex justify-center">
+                                  {getMilestoneBadge(conversation.milestone)}
+                                </div>
+                              )}
+
+                              {/* AI Status and Actions */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1 text-xs text-gray-500">
+                                  {conversation.agentEnabled ? (
+                                    <Bot className="w-3 h-3 text-green-600" />
+                                  ) : (
+                                    <BotOff className="w-3 h-3 text-gray-400" />
+                                  )}
+                                  <span>{conversation.agentEnabled ? 'AI On' : 'AI Off'}</span>
+                                </div>
+
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/app/conversations/${conversation.id}`);
+                                  }}
+                                >
+                                  <Eye className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
-            ))
-          )}
+            </div>
+          ))}
         </div>
       </div>
     </TooltipProvider>
   );
 };
 
-export default ConversationsList;
+export default ConversationsKanban;
