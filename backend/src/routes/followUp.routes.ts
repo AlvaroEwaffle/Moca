@@ -164,6 +164,7 @@ router.post('/test/:accountId', authenticateToken, async (req, res) => {
         id: conv._id,
         leadScore: conv.leadScoring?.currentScore,
         lastUserMessage: conv.timestamps?.lastUserMessage,
+        lastActivity: conv.timestamps?.lastActivity,
         aiEnabled: conv.settings?.aiEnabled,
         status: conv.status,
         contactName: conv.contactId?.name || conv.contactId?.metadata?.instagramData?.username || 'Unknown'

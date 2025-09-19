@@ -76,7 +76,7 @@ export class FollowUpWorkerService {
     const conversations = await Conversation.find({
       accountId: config.accountId,
       'leadScoring.currentScore': { $gte: config.minLeadScore, $lt: 7 }, // Not converted yet
-      'timestamps.lastUserMessage': { $lt: timeThreshold }, // No response in specified time
+      'timestamps.lastActivity': { $lt: timeThreshold }, // No response in specified time
       'settings.aiEnabled': true, // Only active conversations
       status: 'active'
     }).populate('contactId');
@@ -90,6 +90,7 @@ export class FollowUpWorkerService {
         accountId: conv.accountId,
         leadScore: conv.leadScoring?.currentScore,
         lastUserMessage: conv.timestamps?.lastUserMessage,
+        lastActivity: conv.timestamps?.lastActivity,
         aiEnabled: conv.settings?.aiEnabled,
         status: conv.status,
         contactName: conv.contactId?.name || conv.contactId?.metadata?.instagramData?.username || 'Unknown'
