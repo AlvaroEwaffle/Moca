@@ -100,10 +100,10 @@ export class InstagramCommentService {
       const response = await fetch(`https://graph.instagram.com/v23.0/${commentId}/replies`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
         },
-        body: new URLSearchParams({
+        body: JSON.stringify({
           message: replyText
         })
       });
