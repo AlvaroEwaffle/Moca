@@ -143,7 +143,18 @@ export class FollowUpWorkerService {
     });
 
     if (existingFollowUp) {
-      console.log(`⏭️ [FollowUp Worker] Skipping lead ${lead._id} - already has pending follow-up`);
+      console.log(`⏭️ [FollowUp Worker] Skipping lead ${lead._id} - already has pending follow-up (ID: ${existingFollowUp._id})`);
+      return;
+    }
+
+    // Check if we've already sent the maximum number of follow-ups
+    const sentFollowUps = await LeadFollowUp.countDocuments({
+      conversationId: lead._id,
+      status: { $in: ['sent', 'delivered', 'responded'] }
+    });
+
+    if (sentFollowUps >= config.maxFollowUps) {
+      console.log(`⏭️ [FollowUp Worker] Skipping lead ${lead._id} - already sent ${sentFollowUps}/${config.maxFollowUps} follow-ups`);
       return;
     }
 
@@ -208,7 +219,11 @@ export class FollowUpWorkerService {
    * Add follow-up message to outbound queue
    */
   private async addToOutboundQueue(lead: any, message: string, followUpId: string): Promise<void> {
+    // Generate a unique message ID for the follow-up
+    const messageId = `followup_${followUpId}_${Date.now()}`;
+    
     const outboundMessage = new OutboundQueue({
+      messageId: messageId,
       conversationId: lead._id,
       contactId: lead.contactId._id,
       accountId: lead.accountId,
@@ -227,7 +242,7 @@ export class FollowUpWorkerService {
     });
 
     await outboundMessage.save();
-    console.log(`📤 [FollowUp Worker] Follow-up message added to outbound queue`);
+    console.log(`📤 [FollowUp Worker] Follow-up message added to outbound queue with ID: ${messageId}`);
   }
 
   /**
