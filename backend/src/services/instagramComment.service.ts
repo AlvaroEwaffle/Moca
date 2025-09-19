@@ -100,16 +100,27 @@ export class InstagramCommentService {
       const response = await fetch(`https://graph.instagram.com/v23.0/${commentId}/replies`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: JSON.stringify({
+        body: new URLSearchParams({
           message: replyText
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        
+        // Handle specific Instagram API limitations
+        if (response.status === 400 && errorData.error?.code === 20) {
+          console.log(`⚠️ [Comment Reply] Cannot reply to comment ${commentId} - likely private account or non-follower`);
+          return {
+            success: false,
+            error: 'Cannot reply to this comment - account may be private or user doesn\'t follow you',
+            code: 'PRIVATE_ACCOUNT_OR_NON_FOLLOWER'
+          };
+        }
+        
         throw new Error(`Instagram API error: ${response.status} - ${JSON.stringify(errorData)}`);
       }
 
