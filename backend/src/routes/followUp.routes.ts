@@ -188,4 +188,42 @@ router.post('/test/:accountId', authenticateToken, async (req, res) => {
   }
 });
 
+// Send follow-up messages immediately
+router.post('/send/:accountId', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    // Get configuration
+    const config = await FollowUpConfig.findOne({ userId, accountId });
+    if (!config) {
+      return res.status(404).json({ error: 'Follow-up configuration not found' });
+    }
+
+    if (!config.enabled) {
+      return res.status(400).json({ error: 'Follow-up is not enabled for this account' });
+    }
+
+    // Process follow-ups immediately
+    console.log(`🚀 [Follow-up Send] Manually triggering follow-up processing for account ${accountId}`);
+    await followUpWorkerService.processFollowUps();
+
+    // Get the count of leads that were processed
+    const leads = await followUpWorkerService['getLeadsForFollowUp'](config);
+    
+    res.json({
+      message: 'Follow-up messages sent successfully',
+      messagesSent: leads.length,
+      accountId: accountId
+    });
+  } catch (error) {
+    console.error('Error sending follow-up messages:', error);
+    res.status(500).json({ error: 'Failed to send follow-up messages' });
+  }
+});
+
 export default router;
