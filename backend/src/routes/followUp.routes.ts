@@ -1,11 +1,12 @@
 import express from 'express';
 import { FollowUpConfig, LeadFollowUp } from '../models';
 import { followUpWorkerService } from '../services/followUpWorker.service';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
 // Get follow-up configuration for an account
-router.get('/config/:accountId', async (req, res) => {
+router.get('/config/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const userId = req.user?.userId;
@@ -38,7 +39,7 @@ router.get('/config/:accountId', async (req, res) => {
 });
 
 // Update follow-up configuration
-router.put('/config/:accountId', async (req, res) => {
+router.put('/config/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const userId = req.user?.userId;
@@ -81,7 +82,7 @@ router.put('/config/:accountId', async (req, res) => {
 });
 
 // Get follow-up statistics for an account
-router.get('/stats/:accountId', async (req, res) => {
+router.get('/stats/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const userId = req.user?.userId;
@@ -99,7 +100,7 @@ router.get('/stats/:accountId', async (req, res) => {
 });
 
 // Get follow-up history for an account
-router.get('/history/:accountId', async (req, res) => {
+router.get('/history/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const userId = req.user?.userId;
@@ -136,7 +137,7 @@ router.get('/history/:accountId', async (req, res) => {
 });
 
 // Test follow-up configuration
-router.post('/test/:accountId', async (req, res) => {
+router.post('/test/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const userId = req.user?.userId;
