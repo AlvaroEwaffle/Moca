@@ -142,14 +142,46 @@ mongoose.connect(MONGODB_URI)
       console.log('✅ Comment worker service started successfully');
       
              console.log('🔄 Starting follow-up worker service...');
-             // Run follow-up processing every 8 hours (9 AM, 5 PM, 1 AM)
-             setInterval(async () => {
-               try {
-                 await followUpWorkerService.processFollowUps();
-               } catch (error) {
-                 console.error('❌ Error in follow-up processing:', error);
-               }
-             }, 8 * 60 * 60 * 1000); // 8 hours in milliseconds
+             // Run follow-up processing at 9 AM, 4 PM, and 8 PM
+             const scheduleFollowUpRuns = () => {
+               const now = new Date();
+               const times = [9, 16, 20]; // 9 AM, 4 PM, 8 PM in 24-hour format
+               
+               times.forEach(hour => {
+                 const nextRun = new Date();
+                 nextRun.setHours(hour, 0, 0, 0);
+                 
+                 // If the time has passed today, schedule for tomorrow
+                 if (nextRun <= now) {
+                   nextRun.setDate(nextRun.getDate() + 1);
+                 }
+                 
+                 const delay = nextRun.getTime() - now.getTime();
+                 
+                 setTimeout(async () => {
+                   try {
+                     console.log(`🕘 [Follow-up Worker] Running scheduled follow-up at ${hour}:00`);
+                     await followUpWorkerService.processFollowUps();
+                     
+                     // Schedule the next run for the same time tomorrow
+                     setInterval(async () => {
+                       try {
+                         console.log(`🕘 [Follow-up Worker] Running scheduled follow-up at ${hour}:00`);
+                         await followUpWorkerService.processFollowUps();
+                       } catch (error) {
+                         console.error('❌ Error in scheduled follow-up processing:', error);
+                       }
+                     }, 24 * 60 * 60 * 1000); // 24 hours
+                   } catch (error) {
+                     console.error('❌ Error in initial follow-up processing:', error);
+                   }
+                 }, delay);
+                 
+                 console.log(`⏰ [Follow-up Worker] Next run scheduled for ${hour}:00 in ${Math.round(delay / 1000 / 60)} minutes`);
+               });
+             };
+             
+             scheduleFollowUpRuns();
              
              console.log('✅ Follow-up worker service started successfully');
       
