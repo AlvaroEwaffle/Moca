@@ -139,7 +139,13 @@ export class FollowUpWorkerService {
 
     // Basic personalization
     if (lead.contactId && lead.contactId.name) {
-      message = message.replace('Hola!', `Hola ${lead.contactId.name}!`);
+      message = message.replace(/\{name\}/g, lead.contactId.name);
+    } else if (lead.contactId && lead.contactId.metadata?.instagramData?.username) {
+      // Fallback to Instagram username if name not available
+      message = message.replace(/\{name\}/g, `@${lead.contactId.metadata.instagramData.username}`);
+    } else {
+      // Remove {name} placeholder if no name available
+      message = message.replace(/\{name\}/g, '');
     }
 
     // Add lead score context
