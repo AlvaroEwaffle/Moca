@@ -694,8 +694,23 @@ const InstagramAccounts = () => {
 
       if (response.ok) {
         const result = await response.json();
-        setSuccess(`Test completed! Found ${result.leadsFound} leads ready for follow-up.`);
-        setTimeout(() => setSuccess(null), 5000);
+        console.log('Test result:', result);
+        
+        // Show confirmation dialog
+        const shouldSend = window.confirm(
+          `Test completed! Found ${result.leadsFound} leads that would receive follow-up messages.\n\n` +
+          `Total conversations: ${result.totalConversations}\n` +
+          `Eligible leads: ${result.leadsFound}\n\n` +
+          `Do you want to actually send the follow-up messages now?`
+        );
+        
+        if (shouldSend) {
+          // Actually send the follow-up messages
+          await sendFollowUpMessages(accountId);
+        } else {
+          setSuccess('Test completed - no messages sent. This was just a simulation.');
+          setTimeout(() => setSuccess(null), 5000);
+        }
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to test follow-up configuration');
@@ -703,6 +718,32 @@ const InstagramAccounts = () => {
     } catch (error) {
       console.error('Error testing follow-up config:', error);
       setError('Failed to test follow-up configuration');
+    }
+  };
+
+  const sendFollowUpMessages = async (accountId: string) => {
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/follow-up/send/${accountId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Follow-up messages sent:', result);
+        setSuccess(`Follow-up messages sent successfully! ${result.messagesSent} messages queued for delivery.`);
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to send follow-up messages');
+      }
+    } catch (error) {
+      console.error('Error sending follow-up messages:', error);
+      setError('Failed to send follow-up messages');
     }
   };
 

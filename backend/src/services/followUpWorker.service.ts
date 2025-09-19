@@ -69,25 +69,37 @@ export class FollowUpWorkerService {
 
   /**
    * Get leads that need follow-up based on configuration
+   * Respects Instagram's 24-hour window rule
    */
   private async getLeadsForFollowUp(config: any): Promise<any[]> {
     const now = new Date();
-    const timeThreshold = new Date(now.getTime() - (config.timeSinceLastAnswer * 60 * 60 * 1000));
-
-    console.log(`🔍 [FollowUp Worker] Searching for leads with config:`, {
+    
+    // Instagram allows messages only within 24 hours of last user message
+    const instagramWindowStart = new Date(now.getTime() - (24 * 60 * 60 * 1000)); // 24 hours ago
+    
+    // Exclude conversations that had activity in the last X hours (to give them time to respond)
+    const excludeRecentActivity = new Date(now.getTime() - (config.timeSinceLastAnswer * 60 * 60 * 1000));
+    
+    console.log(`🔍 [FollowUp Worker] Searching for leads with Instagram 24h window constraint:`, {
       accountId: config.accountId,
       minLeadScore: config.minLeadScore,
       maxFollowUps: config.maxFollowUps,
       timeSinceLastAnswer: config.timeSinceLastAnswer,
-      timeThreshold: timeThreshold.toISOString(),
-      now: now.toISOString()
+      instagramWindowStart: instagramWindowStart.toISOString(),
+      excludeRecentActivity: excludeRecentActivity.toISOString(),
+      now: now.toISOString(),
+      explanation: `Looking for conversations with activity between ${excludeRecentActivity.toISOString()} and ${instagramWindowStart.toISOString()}`
     });
 
     // Find conversations that meet the criteria
+    // Must be within Instagram's 24-hour window but outside the "recent activity" window
     const conversations = await Conversation.find({
       accountId: config.accountId,
       'leadScoring.currentScore': { $gte: config.minLeadScore, $lt: 7 }, // Not converted yet
-      'timestamps.lastActivity': { $lt: timeThreshold }, // No response in specified time
+      'timestamps.lastActivity': { 
+        $gte: instagramWindowStart,  // Within Instagram's 24-hour window
+        $lt: excludeRecentActivity   // But not too recent (give them time to respond)
+      },
       status: 'open' // Use 'open' status instead of 'active'
       // Note: We include both aiEnabled: true and false conversations
     }).populate('contactId');
