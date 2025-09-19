@@ -63,6 +63,15 @@ export class FollowUpWorkerService {
     const now = new Date();
     const timeThreshold = new Date(now.getTime() - (config.timeSinceLastAnswer * 60 * 60 * 1000));
 
+    console.log(`🔍 [FollowUp Worker] Searching for leads with config:`, {
+      accountId: config.accountId,
+      minLeadScore: config.minLeadScore,
+      maxFollowUps: config.maxFollowUps,
+      timeSinceLastAnswer: config.timeSinceLastAnswer,
+      timeThreshold: timeThreshold.toISOString(),
+      now: now.toISOString()
+    });
+
     // Find conversations that meet the criteria
     const conversations = await Conversation.find({
       accountId: config.accountId,
@@ -74,6 +83,19 @@ export class FollowUpWorkerService {
 
     console.log(`🔍 [FollowUp Worker] Found ${conversations.length} conversations meeting criteria`);
 
+    // Log details of each conversation found
+    conversations.forEach((conv, index) => {
+      console.log(`📊 [FollowUp Worker] Conversation ${index + 1}:`, {
+        id: conv._id,
+        accountId: conv.accountId,
+        leadScore: conv.leadScoring?.currentScore,
+        lastUserMessage: conv.timestamps?.lastUserMessage,
+        aiEnabled: conv.settings?.aiEnabled,
+        status: conv.status,
+        contactName: conv.contactId?.name || conv.contactId?.metadata?.instagramData?.username || 'Unknown'
+      });
+    });
+
     // Filter out conversations that already have max follow-ups
     const validLeads = [];
     for (const conversation of conversations) {
@@ -82,8 +104,13 @@ export class FollowUpWorkerService {
         status: { $in: ['sent', 'delivered'] }
       });
 
+      console.log(`📈 [FollowUp Worker] Conversation ${conversation._id}: ${followUpCount}/${config.maxFollowUps} follow-ups sent`);
+
       if (followUpCount < config.maxFollowUps) {
         validLeads.push(conversation);
+        console.log(`✅ [FollowUp Worker] Added to valid leads: ${conversation._id}`);
+      } else {
+        console.log(`❌ [FollowUp Worker] Skipped (max follow-ups reached): ${conversation._id}`);
       }
     }
 

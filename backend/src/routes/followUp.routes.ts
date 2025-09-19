@@ -1,5 +1,5 @@
 import express from 'express';
-import { FollowUpConfig, LeadFollowUp } from '../models';
+import { FollowUpConfig, LeadFollowUp, Conversation } from '../models';
 import { followUpWorkerService } from '../services/followUpWorker.service';
 import { authenticateToken } from '../middleware/auth';
 
@@ -155,9 +155,25 @@ router.post('/test/:accountId', authenticateToken, async (req, res) => {
     // Get test leads
     const leads = await followUpWorkerService['getLeadsForFollowUp'](config);
 
+    // Additional debugging - get all conversations for this account
+    const allConversations = await Conversation.find({ accountId }).populate('contactId');
+    console.log(`🔍 [Follow-up Test] Total conversations for account ${accountId}: ${allConversations.length}`);
+    
+    allConversations.forEach((conv, index) => {
+      console.log(`📊 [Follow-up Test] All Conversation ${index + 1}:`, {
+        id: conv._id,
+        leadScore: conv.leadScoring?.currentScore,
+        lastUserMessage: conv.timestamps?.lastUserMessage,
+        aiEnabled: conv.settings?.aiEnabled,
+        status: conv.status,
+        contactName: conv.contactId?.name || conv.contactId?.metadata?.instagramData?.username || 'Unknown'
+      });
+    });
+
     res.json({
       message: 'Test completed successfully',
       leadsFound: leads.length,
+      totalConversations: allConversations.length,
       config: {
         enabled: config.enabled,
         minLeadScore: config.minLeadScore,
