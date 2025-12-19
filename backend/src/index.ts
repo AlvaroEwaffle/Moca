@@ -54,8 +54,8 @@ console.log('🔧 Setting up middleware...');
 // CORS configuration
 const corsOptions = {
   origin: [
-    'http://localhost:8080', // Development frontend
-    'http://localhost:3000', // Alternative dev port
+    'http://localhost:3000', // Development frontend (default Vite port)
+    'http://localhost:8080', // Legacy dev port (kept for compatibility)
     'https://moca.pages.dev', // Production frontend
     'https://*.moca.pages.dev', // All Cloudflare Pages subdomains
     'https://*.pages.dev' // All Cloudflare Pages (for dynamic URLs)

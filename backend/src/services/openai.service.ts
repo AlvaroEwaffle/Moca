@@ -11,6 +11,8 @@ import {
 } from '../types/aiResponse'
 import { generateContextualInstructions } from '../templates/aiInstructions'
 import { LeadScoringService } from './leadScoring.service'
+import { mcpService } from './mcp.service'
+import GlobalAgentConfig from '../models/globalAgentConfig.model'
 
 // Ensure environment variables are loaded
 dotenv.config()
@@ -48,12 +50,177 @@ export async function generateInstagramResponse(context: {
     keyInformation?: string;
     fallbackRules?: string[];
   };
+  accountMcpConfig?: { enabled: boolean; servers: any[] }; // Account-specific MCP configuration
 }): Promise<string> {
   try {
     console.log('🤖 Generating Instagram DM response with AI');
 
+    // Get MCP tools if enabled (before building prompts)
+    let functions: any[] = [];
+    let toolsInfo = '';
+    
+    try {
+      // Use account-specific MCP config if provided
+      if (context.accountMcpConfig) {
+        await mcpService.initializeWithAccountConfig(context.accountMcpConfig);
+        functions = await mcpService.getOpenAIFunctions();
+        if (functions.length > 0) {
+          console.log(`🔧 [MCP] ${functions.length} MCP tools available for this conversation (account-specific)`);
+        }
+      } else {
+        // Fallback to global config for backward compatibility
+        const globalConfig = await GlobalAgentConfig.findOne();
+        if (globalConfig?.mcpTools?.enabled) {
+          await mcpService.initialize(globalConfig);
+          functions = await mcpService.getOpenAIFunctions();
+          if (functions.length > 0) {
+            console.log(`🔧 [MCP] ${functions.length} MCP tools available for this conversation (global config)`);
+          }
+        }
+      }
+      
+      if (functions.length > 0) {
+        // Build tools information for the system prompt with detailed parameter info
+        const toolsList = functions.map((fn: any) => {
+            const requiredParams = fn.parameters?.required || [];
+            const optionalParams: string[] = [];
+            const properties = fn.parameters?.properties || {};
+            
+            // Separate required and optional parameters
+            Object.keys(properties).forEach((param: string) => {
+              if (!requiredParams.includes(param)) {
+                optionalParams.push(param);
+              }
+            });
+            
+            // Build required params list with examples and constraints
+            const requiredList = requiredParams.length > 0 
+              ? requiredParams.map((param: string) => {
+                  const paramInfo = properties[param] || {};
+                  const constraints: string[] = [];
+                  if (paramInfo.format) constraints.push(`formato: ${paramInfo.format}`);
+                  if (paramInfo.enum) constraints.push(`valores permitidos: ${paramInfo.enum.join(', ')}`);
+                  if (paramInfo.minLength) constraints.push(`mínimo: ${paramInfo.minLength} caracteres`);
+                  if (paramInfo.maxLength) constraints.push(`máximo: ${paramInfo.maxLength} caracteres`);
+                  if (paramInfo.minimum !== undefined) constraints.push(`mínimo: ${paramInfo.minimum}`);
+                  if (paramInfo.maximum !== undefined) constraints.push(`máximo: ${paramInfo.maximum}`);
+                  if (paramInfo.pattern) constraints.push(`patrón: ${paramInfo.pattern}`);
+                  
+                  const constraintsStr = constraints.length > 0 ? ` [${constraints.join(', ')}]` : '';
+                  const exampleStr = paramInfo.examples && paramInfo.examples.length > 0 
+                    ? ` (ejemplo: ${paramInfo.examples[0]})` 
+                    : (paramInfo.example ? ` (ejemplo: ${paramInfo.example})` : '');
+                  
+                  return `  - ${param} (${paramInfo.type || 'string'})${constraintsStr}${exampleStr}: ${paramInfo.description || 'Sin descripción'}`;
+                }).join('\n')
+              : '  Ninguno';
+            
+            // Build optional params list with examples
+            const optionalList = optionalParams.length > 0
+              ? optionalParams.map((param: string) => {
+                  const paramInfo = properties[param] || {};
+                  const exampleStr = paramInfo.examples && paramInfo.examples.length > 0 
+                    ? ` (ejemplo: ${paramInfo.examples[0]})` 
+                    : (paramInfo.example ? ` (ejemplo: ${paramInfo.example})` : '');
+                  const defaultStr = paramInfo.default !== undefined ? ` (default: ${paramInfo.default})` : '';
+                  return `  - ${param} (${paramInfo.type || 'string'}, opcional)${exampleStr}${defaultStr}: ${paramInfo.description || 'Sin descripción'}`;
+                }).join('\n')
+              : '  Ninguno';
+            
+            return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔧 ${fn.name}
+${fn.description || 'Sin descripción'}
+
+📋 Parámetros requeridos:
+${requiredList}
+
+📝 Parámetros opcionales:
+${optionalList}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+        }).join('\n\n');
+        
+        toolsInfo = `\n\nHERRAMIENTAS DISPONIBLES (MCP Tools):
+Tienes acceso a las siguientes herramientas externas que puedes usar cuando sea apropiado:
+
+${toolsList}
+
+INSTRUCCIONES CRÍTICAS SOBRE EL USO DE HERRAMIENTAS:
+
+**⚠️ REGLAS FUNDAMENTALES - LEE CON ATENCIÓN:**
+1. **NUNCA uses valores por defecto, placeholders o datos inventados** 
+   - ❌ NO uses: "sin especificar", "ejemplo.com", "Negocio sin especificar", "Dueño sin especificar", valores genéricos, etc.
+   - ❌ NO inventes datos que el cliente no haya proporcionado
+   - ❌ NO asumas información que no esté explícitamente en la conversación
+   - ✅ SOLO usa datos que el cliente haya proporcionado explícitamente
+
+2. **SIEMPRE pregunta al cliente por cada parámetro requerido ANTES de llamar a la herramienta**
+   - NO llames a la herramienta hasta tener TODOS los parámetros requeridos
+   - NO uses valores por defecto si faltan parámetros
+
+3. **Pregunta UN dato a la vez** de forma natural y conversacional
+   - Espera la respuesta del cliente antes de preguntar el siguiente dato
+   - No preguntes múltiples datos en un solo mensaje
+
+4. **VERIFICA antes de ejecutar**: Antes de llamar a una herramienta, verifica que TODOS los parámetros requeridos sean datos reales proporcionados por el cliente
+
+5. **Maneja datos parciales**: Si el cliente proporciona algunos datos pero faltan otros, pregunta por los que faltan. NO asumas valores por defecto.
+
+**FLUJO PASO A PASO OBLIGATORIO:**
+
+**Paso 1: Identificar necesidad**
+- El cliente expresa una necesidad (ej: "quiero crear una cuenta", "necesito programar una cita")
+
+**Paso 2: Identificar herramienta**
+- Revisa la lista de herramientas disponibles arriba
+- Identifica qué herramienta es apropiada para la solicitud
+
+**Paso 3: Revisar parámetros requeridos**
+- Lee la lista de parámetros requeridos de esa herramienta (ver lista arriba)
+- Anota qué datos necesitas del cliente
+
+**Paso 4: Preguntar por datos (UNO A LA VEZ)**
+- Pregunta al cliente por el primer parámetro requerido
+- Ejemplo: "¡Perfecto! Te ayudo con eso. ¿Cuál es el nombre de tu negocio?"
+- ESPERA la respuesta del cliente
+
+**Paso 5: Continuar preguntando**
+- Una vez que tengas la respuesta, pregunta por el siguiente parámetro requerido
+- Repite hasta tener TODOS los parámetros requeridos
+
+**Paso 6: Verificar datos completos**
+- Antes de ejecutar, verifica que tienes TODOS los parámetros requeridos
+- Verifica que todos son datos reales del cliente, NO valores por defecto
+
+**Paso 7: Ejecutar herramienta**
+- SOLO cuando tengas todos los datos reales, llama a la herramienta
+- Incorpora los resultados de manera natural en tu respuesta
+
+**EJEMPLO DE FLUJO CORRECTO:**
+Cliente: "Quiero crear una cuenta"
+Agente: "¡Perfecto! Te ayudo a crear tu cuenta. ¿Cuál es el nombre de tu negocio?"
+Cliente: "Mi negocio se llama Ewaffle"
+Agente: "Excelente. ¿Y cómo te llamas tú (dueño/responsable)?"
+Cliente: "Alvaro Villena"
+Agente: "Perfecto. ¿Cuál es tu email de contacto?"
+Cliente: "alvaro@ewaffle.cl"
+Agente: "¿Y tu teléfono? (con código de país, ej: +56912345678)"
+Cliente: "+56920115198"
+Agente: (AHORA SÍ ejecuta la herramienta con los datos reales)
+
+**INCORPORACIÓN NATURAL:**
+- Después de usar una herramienta, incorpora los resultados de manera natural en tu respuesta
+- **NO MENCIONES LA HERRAMIENTA**: No menciones que estás usando una herramienta técnica, simplemente proporciona la información obtenida o confirma la acción realizada
+
+**MANEJO DE ERRORES:**
+- Si una herramienta falla, continúa con la conversación de manera natural sin mencionar el error técnico
+- Ofrece una alternativa apropiada si la herramienta no puede completar la acción`;
+      }
+    } catch (error) {
+      console.warn('⚠️ [MCP] Error loading MCP tools:', error);
+    }
+
     // Use custom system prompt if provided, otherwise use default
-    const systemPrompt = context.agentBehavior?.systemPrompt || `Eres un asistente virtual profesional y amigable para una empresa de servicios digitales. 
+    let baseSystemPrompt = context.agentBehavior?.systemPrompt || `Eres un asistente virtual profesional y amigable.
     
 Tu objetivo es:
 - Proporcionar respuestas útiles y profesionales
@@ -69,7 +236,14 @@ Instrucciones:
 - Mantén el tono profesional pero cercano
 - Usa emojis ocasionalmente para hacer la conversación más amigable`;
 
-    console.log(`🤖 Using ${context.agentBehavior?.systemPrompt ? 'custom' : 'default'} system prompt`);
+    // Append tools information if available
+    const systemPrompt = baseSystemPrompt + toolsInfo;
+
+    console.log(`🤖 [OpenAI] Using ${context.agentBehavior?.systemPrompt ? 'custom' : 'default'} system prompt${functions.length > 0 ? ` with ${functions.length} MCP tools` : ''}`);
+    console.log(`📏 [OpenAI] System prompt length: ${systemPrompt.length} characters`);
+    if (context.agentBehavior?.systemPrompt) {
+      console.log(`📝 [OpenAI] Custom system prompt preview: ${context.agentBehavior.systemPrompt.substring(0, 200)}...`);
+    }
 
     // Build key information section
     const keyInfoSection = context.agentBehavior?.keyInformation 
@@ -81,12 +255,26 @@ Instrucciones:
       ? `\nTono de voz: ${context.agentBehavior.toneOfVoice}\n`
       : '';
 
+    // Build conversation context - use the last message as the current one
+    const lastMessage = context.conversationHistory[context.conversationHistory.length - 1];
+    const previousHistory = context.conversationHistory.slice(0, -1);
+    
+    console.log('📋 [OpenAI] Building user prompt:', {
+      totalMessages: context.conversationHistory.length,
+      previousHistoryLength: previousHistory.length,
+      lastMessageRole: lastMessage?.role,
+      lastMessageLength: lastMessage?.content?.length || 0
+    });
+    
     const userPrompt = `Por favor, genera una respuesta natural para este mensaje del cliente:
 
-Contexto de la conversación:
-${context.conversationHistory.map(msg => 
+${previousHistory.length > 0 ? `Contexto de la conversación anterior:
+${previousHistory.map(msg => 
   `${msg.role === 'user' ? '👤 Cliente' : '🤖 Asistente'}: ${msg.content}`
 ).join('\n')}
+
+` : ''}Mensaje actual del cliente:
+👤 Cliente: ${lastMessage?.content || 'Sin mensaje'}
 
 Información adicional:
 - Intención del usuario: ${context.userIntent || 'No especificada'}
@@ -96,34 +284,150 @@ Información adicional:
 - Sector: ${context.businessContext?.sector || 'No especificado'}
 - Servicios de interés: ${context.businessContext?.services?.join(', ') || 'No especificados'}${keyInfoSection}${toneInstruction}
 
-Genera una respuesta natural, útil y profesional que:
-1. Responda directamente a la consulta del cliente
-2. Sea apropiada para el contexto de la conversación
-3. Mantenga un tono profesional pero amigable
-4. No sea demasiado larga (máximo 2-3 frases)
-5. Use el idioma ${context.language || 'español'}
-6. Incluya información relevante del negocio cuando sea apropiado
-7. Si el cliente pide información, debes responder en función del contexto de la conversación y la información del negocio.
+INSTRUCCIONES IMPORTANTES:
+1. Responde DIRECTAMENTE al mensaje actual del cliente, considerando el contexto de la conversación anterior
+2. NO repitas saludos si ya saludaste antes en la conversación
+3. NO repitas información que ya mencionaste anteriormente
+4. Si el cliente hace una pregunta nueva, responde a esa pregunta específica
+5. Mantén un tono profesional pero amigable
+6. No sea demasiado larga (máximo 2-3 frases)
+7. Use el idioma ${context.language || 'español'}
+8. Incluya información relevante del negocio cuando sea apropiado
+9. Si el cliente menciona información nueva (como tipo de negocio), incorpórala en tu respuesta
 
 Respuesta:`;
+
+    console.log(`📏 [OpenAI] User prompt length: ${userPrompt.length} characters`);
+    console.log(`💬 [OpenAI] Last message preview: ${lastMessage?.content?.substring(0, 100) || 'N/A'}...`);
 
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ];
 
-    const response = await openai.chat.completions.create({
+    const requestConfig: any = {
       model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
       messages,
       max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '150'),
       temperature: 0.7,
       presence_penalty: 0.1,
       frequency_penalty: 0.1
+    };
+
+    // Add functions if MCP tools are available
+    if (functions.length > 0) {
+      requestConfig.tools = functions.map(fn => ({
+        type: 'function',
+        function: fn
+      }));
+      requestConfig.tool_choice = 'auto';
+      console.log(`🔧 [OpenAI] Added ${functions.length} tools to request`);
+    }
+
+    console.log('🚀 [OpenAI] Calling OpenAI API...');
+    console.log('⚙️ [OpenAI] Request config:', {
+      model: requestConfig.model,
+      max_tokens: requestConfig.max_tokens,
+      hasTools: !!requestConfig.tools,
+      toolsCount: requestConfig.tools?.length || 0,
+      messagesCount: messages.length
     });
+    
+    const apiStartTime = Date.now();
+    let response = await openai.chat.completions.create(requestConfig);
+    const apiDuration = Date.now() - apiStartTime;
+    
+    console.log(`✅ [OpenAI] OpenAI API response received in ${apiDuration}ms`);
+    console.log('📊 [OpenAI] Response metadata:', {
+      finishReason: response.choices[0]?.finish_reason,
+      hasToolCalls: !!(response.choices[0]?.message?.tool_calls?.length),
+      toolCallsCount: response.choices[0]?.message?.tool_calls?.length || 0,
+      usage: response.usage ? {
+        prompt_tokens: response.usage.prompt_tokens,
+        completion_tokens: response.usage.completion_tokens,
+        total_tokens: response.usage.total_tokens
+      } : null
+    });
+    
+    // Handle function calls if any
+    const toolCalls = response.choices[0]?.message?.tool_calls || [];
+    if (toolCalls.length > 0) {
+      console.log(`🔧 [OpenAI] Processing ${toolCalls.length} tool call(s) in Instagram response`);
+      toolCalls.forEach((call, idx) => {
+        console.log(`🔧 [OpenAI] Tool call ${idx + 1}:`, {
+          id: call.id,
+          type: call.type,
+          functionName: call.type === 'function' ? call.function.name : 'N/A',
+          arguments: call.type === 'function' ? call.function.arguments?.substring(0, 200) : 'N/A'
+        });
+      });
+      
+      // Execute tool calls
+      const toolResults = [];
+      for (const toolCall of toolCalls) {
+        if (toolCall.type === 'function') {
+          try {
+            console.log(`🔧 [OpenAI] Executing tool: ${toolCall.function.name}`);
+            const parameters = JSON.parse(toolCall.function.arguments || '{}');
+            console.log(`🔧 [OpenAI] Tool parameters:`, JSON.stringify(parameters, null, 2));
+            
+            const toolStartTime = Date.now();
+            const result = await mcpService.executeTool(toolCall.function.name, parameters);
+            const toolDuration = Date.now() - toolStartTime;
+            
+            console.log(`✅ [OpenAI] Tool ${toolCall.function.name} executed in ${toolDuration}ms`);
+            console.log(`📤 [OpenAI] Tool result:`, JSON.stringify(result, null, 2).substring(0, 500));
+            
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: 'tool' as const,
+              name: toolCall.function.name,
+              content: JSON.stringify(result.success ? result.result : { error: result.error })
+            });
+          } catch (error: any) {
+            console.error(`❌ [MCP] Error executing tool ${toolCall.function.name}:`, error);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: 'tool' as const,
+              name: toolCall.function.name,
+              content: JSON.stringify({ error: error.message })
+            });
+          }
+        }
+      }
+      
+      // Add tool results to messages and get final response
+      messages.push(response.choices[0].message as ChatCompletionMessageParam);
+      messages.push(...toolResults);
+      
+      console.log(`🔄 [OpenAI] Requesting final response with ${toolResults.length} tool result(s)`);
+      
+      // Get final response with tool results
+      const finalRequestConfig: any = {
+        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        messages,
+        max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '150'),
+        temperature: 0.7,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1
+      };
+      
+      if (functions.length > 0) {
+        finalRequestConfig.tools = requestConfig.tools;
+        finalRequestConfig.tool_choice = 'none'; // Don't allow more tool calls in final response
+      }
+      
+      const finalApiStartTime = Date.now();
+      response = await openai.chat.completions.create(finalRequestConfig);
+      const finalApiDuration = Date.now() - finalApiStartTime;
+      console.log(`✅ [OpenAI] Final response received in ${finalApiDuration}ms`);
+    }
 
     const aiResponse = response.choices[0]?.message?.content || '';
     
-    console.log('✅ Instagram DM response generated successfully');
+    console.log('✅ [OpenAI] Instagram DM response generated successfully');
+    console.log(`📤 [OpenAI] Final response length: ${aiResponse.length} characters`);
+    console.log(`📤 [OpenAI] Final response: ${aiResponse.substring(0, 300)}${aiResponse.length > 300 ? '...' : ''}`);
     return aiResponse.trim();
 
   } catch (error) {
@@ -144,12 +448,50 @@ export async function generateStructuredResponse(
   try {
     console.log('🤖 Generating structured Instagram DM response with AI');
 
+    // Get MCP tools if enabled
+    let functions: any[] = [];
+    let toolsInfo = '';
+    
+    try {
+      const globalConfig = await GlobalAgentConfig.findOne();
+      if (globalConfig?.mcpTools?.enabled) {
+        await mcpService.initialize(globalConfig);
+        functions = await mcpService.getOpenAIFunctions();
+        if (functions.length > 0) {
+          console.log(`🔧 [MCP] ${functions.length} MCP tools available for structured response`);
+          
+          // Build tools information for the system prompt
+          const toolsList = functions.map(fn => 
+            `- ${fn.name}: ${fn.description}`
+          ).join('\n');
+          
+          toolsInfo = `\n\nAVAILABLE TOOLS (MCP Tools):
+You have access to the following external tools that you can use when appropriate:
+${toolsList}
+
+TOOL USAGE INSTRUCTIONS:
+- Use these tools when the customer needs information that requires external data or specific actions
+- If the customer asks something that can be answered with a tool, use it automatically
+- After using a tool, incorporate the results naturally into your response
+- Do not mention that you are using a tool, simply provide the information obtained
+- If a tool fails, continue the conversation naturally without mentioning the technical error`;
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ [MCP] Error loading MCP tools:', error);
+    }
+
     // Generate contextual instructions
-    const contextualInstructions = generateContextualInstructions(
+    let contextualInstructions = generateContextualInstructions(
       conversationContext.conversationHistory,
       conversationContext.businessName,
       config.customInstructions
     );
+    
+    // Append tools information if available
+    if (toolsInfo) {
+      contextualInstructions += toolsInfo;
+    }
 
     // Analyze conversation for repetition patterns
     const repetitionPatterns = LeadScoringService.detectRepetition(conversationContext);
@@ -220,14 +562,81 @@ RESPONDE SOLO CON JSON VÁLIDO:
       { role: 'user', content: userPrompt }
     ];
 
-    const response = await openai.chat.completions.create({
+    // Use the functions already loaded above
+    let functionCall: 'none' | 'auto' | { name: string } = functions.length > 0 ? 'auto' : 'none';
+
+    const requestConfig: any = {
       model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
       messages,
       max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '200'),
       temperature: 0.7,
       presence_penalty: 0.1,
       frequency_penalty: 0.1
-    });
+    };
+
+    // Add functions if MCP tools are available
+    if (functions.length > 0) {
+      requestConfig.tools = functions.map(fn => ({
+        type: 'function',
+        function: fn
+      }));
+      requestConfig.tool_choice = functionCall;
+    }
+
+    let response = await openai.chat.completions.create(requestConfig);
+    
+    // Handle function calls if any
+    const toolCalls = response.choices[0]?.message?.tool_calls || [];
+    if (toolCalls.length > 0) {
+      console.log(`🔧 [MCP] Processing ${toolCalls.length} tool call(s)`);
+      
+      // Execute tool calls
+      const toolResults = [];
+      for (const toolCall of toolCalls) {
+        if (toolCall.type === 'function') {
+          try {
+            const parameters = JSON.parse(toolCall.function.arguments || '{}');
+            const result = await mcpService.executeTool(toolCall.function.name, parameters);
+            
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: 'tool' as const,
+              name: toolCall.function.name,
+              content: JSON.stringify(result.success ? result.result : { error: result.error })
+            });
+          } catch (error: any) {
+            console.error(`❌ [MCP] Error executing tool ${toolCall.function.name}:`, error);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: 'tool' as const,
+              name: toolCall.function.name,
+              content: JSON.stringify({ error: error.message })
+            });
+          }
+        }
+      }
+      
+      // Add tool results to messages and get final response
+      messages.push(response.choices[0].message as ChatCompletionMessageParam);
+      messages.push(...toolResults);
+      
+      // Get final response with tool results
+      const finalRequestConfig: any = {
+        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        messages,
+        max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '200'),
+        temperature: 0.7,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1
+      };
+      
+      if (functions.length > 0) {
+        finalRequestConfig.tools = requestConfig.tools;
+        finalRequestConfig.tool_choice = 'none'; // Don't allow more tool calls in final response
+      }
+      
+      response = await openai.chat.completions.create(finalRequestConfig);
+    }
 
     const aiResponse = response.choices[0]?.message?.content || '';
     console.log('🤖 Raw AI response:', aiResponse);

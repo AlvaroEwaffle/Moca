@@ -28,10 +28,19 @@ import {
   Clock,
   AlertTriangle,
   ExternalLink,
-  Copy
+  Copy,
+  Plug,
+  Plus,
+  Trash2,
+  TestTube,
+  Heart,
+  Activity,
+  Download,
+  CheckCircle2
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { useToast } from "@/hooks/use-toast";
+import ChatbotTest from "@/components/ChatbotTest";
 
 interface InstagramAccount {
   id: string;
@@ -54,8 +63,39 @@ interface InstagramAccount {
     dmMessage: string;
     replyDelay: number;
   };
+  mcpServers?: string[]; // List of MCP server names this account should use
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface MCPServer {
+  name: string;
+  url: string;
+  connectionType: 'http' | 'websocket' | 'stdio';
+  authentication: {
+    type: 'none' | 'api_key' | 'bearer' | 'oauth2';
+    apiKey?: string;
+    bearerToken?: string;
+    oauth2Config?: {
+      clientId?: string;
+      clientSecret?: string;
+      tokenUrl?: string;
+    };
+  };
+  tools: Array<{
+    name: string;
+    description: string;
+    enabled: boolean;
+    parameters?: any;
+  }>;
+  enabled: boolean;
+  timeout: number;
+  retryAttempts: number;
+}
+
+interface MCPToolsConfig {
+  enabled: boolean;
+  servers: MCPServer[];
 }
 
 interface GlobalAgentConfig {
@@ -83,6 +123,7 @@ interface GlobalAgentConfig {
     enableMilestoneAutoDisable: boolean;
     logAllDecisions: boolean;
   };
+  mcpTools?: MCPToolsConfig;
 }
 
 interface FollowUpConfig {
@@ -131,6 +172,55 @@ const InstagramAccounts = () => {
     replyDelay: 0
   });
   
+  // MCP server selection state per account
+  const [editingMcpServers, setEditingMcpServers] = useState<string | null>(null);
+  const [accountMcpServers, setAccountMcpServers] = useState<string[]>([]);
+  const [savingMcpServers, setSavingMcpServers] = useState(false);
+
+  // Function to start editing MCP servers for an account
+  const startEditingMcpServers = (account: InstagramAccount) => {
+    setEditingMcpServers(account.accountId);
+    setAccountMcpServers(account.mcpServers || []);
+  };
+
+  // Function to save MCP server selection for an account
+  const saveAccountMcpServers = async (accountId: string) => {
+    setSavingMcpServers(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/instagram/accounts/${accountId}/mcp-servers`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          mcpServers: accountMcpServers
+        })
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "MCP server selection updated successfully",
+        });
+        setEditingMcpServers(null);
+        fetchAccounts(); // Refresh accounts to get updated data
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update MCP server selection');
+      }
+    } catch (error: any) {
+      console.error('Error saving MCP server selection:', error);
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to update MCP server selection',
+        variant: "destructive",
+      });
+    } finally {
+      setSavingMcpServers(false);
+    }
+  };
+  
   // Global agent configuration state
   const [globalConfig, setGlobalConfig] = useState<GlobalAgentConfig | null>(null);
   const [editingGlobalConfig, setEditingGlobalConfig] = useState<boolean>(false);
@@ -147,12 +237,33 @@ const InstagramAccounts = () => {
   
   // Accordion state
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
+  
+  // MCP Tools state
+  const [mcpConfig, setMcpConfig] = useState<MCPToolsConfig>({
+    enabled: false,
+    servers: []
+  });
+  const [editingMcp, setEditingMcp] = useState(false);
+  const [editingMcpServer, setEditingMcpServer] = useState<MCPServer | null>(null);
+  const [availableTools, setAvailableTools] = useState<any[]>([]);
+  const [testingMcpConnection, setTestingMcpConnection] = useState<string | null>(null);
+  const [healthChecking, setHealthChecking] = useState(false);
+  const [healthCheckResult, setHealthCheckResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [fetchingTools, setFetchingTools] = useState(false);
+  const [discoveredTools, setDiscoveredTools] = useState<Array<{name: string; description: string; parameters?: any}>>([]);
 
   useEffect(() => {
     fetchAccounts();
     fetchGlobalConfig();
+    fetchMcpConfig();
     testConnection();
   }, []);
+
+  useEffect(() => {
+    if (mcpConfig.enabled) {
+      fetchAvailableTools();
+    }
+  }, [mcpConfig.enabled]);
 
   // Fetch follow-up configuration when accounts change
   useEffect(() => {
@@ -206,10 +317,465 @@ const InstagramAccounts = () => {
             enableMilestoneAutoDisable: data.data.systemSettings.enableMilestoneAutoDisable,
             logAllDecisions: data.data.systemSettings.logAllDecisions
           });
+          
+          // Update MCP config if available
+          if (data.data.mcpTools) {
+            setMcpConfig(data.data.mcpTools);
+          }
         }
       }
     } catch (error) {
       console.error('Error fetching global config:', error);
+    }
+  };
+
+  const fetchMcpConfig = async () => {
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/global-agent-config/mcp-tools`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔧 [MCP] Fetched MCP config:', data);
+        if (data.data) {
+          setMcpConfig({
+            enabled: data.data.enabled || false,
+            servers: data.data.servers || []
+          });
+          console.log('✅ [MCP] MCP config state updated:', {
+            enabled: data.data.enabled,
+            serversCount: data.data.servers?.length || 0
+          });
+        }
+      } else {
+        console.error('❌ [MCP] Failed to fetch MCP config:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ [MCP] Error fetching MCP config:', error);
+    }
+  };
+
+  const fetchAvailableTools = async () => {
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/global-agent-config/mcp-tools/available`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableTools(data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching available tools:', error);
+    }
+  };
+
+  const saveMcpConfig = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/global-agent-config/mcp-tools`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify(mcpConfig)
+      });
+
+      if (response.ok) {
+        setSuccess('MCP tools configuration saved successfully');
+        setEditingMcp(false);
+        await fetchMcpConfig();
+        await fetchAvailableTools();
+        toast({
+          title: "Success",
+          description: "MCP tools configuration saved successfully",
+        });
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to save MCP configuration');
+        toast({
+          title: "Error",
+          description: errorData.error || 'Failed to save MCP configuration',
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      setError('Failed to save MCP configuration');
+      toast({
+        title: "Error",
+        description: 'Failed to save MCP configuration',
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addMcpServer = () => {
+    const newServer: MCPServer = {
+      name: '',
+      url: '',
+      connectionType: 'http',
+      authentication: { type: 'none' },
+      tools: [],
+      enabled: true,
+      timeout: 30000,
+      retryAttempts: 3
+    };
+    setEditingMcpServer(newServer);
+  };
+
+  const saveMcpServer = async (server: MCPServer) => {
+    try {
+      const backendUrl = BACKEND_URL;
+      console.log('🔧 [MCP] Saving server:', server);
+      const response = await fetch(`${backendUrl}/api/global-agent-config/mcp-tools/servers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify(server)
+      });
+
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('✅ [MCP] Server saved successfully:', responseData);
+        setEditingMcpServer(null);
+        setDiscoveredTools([]); // Clear discovered tools after saving
+        await fetchMcpConfig(); // Refresh the config to show the new server
+        toast({
+          title: "Success",
+          description: "MCP server saved successfully",
+        });
+      } else {
+        const errorData = await response.json();
+        console.error('❌ [MCP] Failed to save server:', errorData);
+        toast({
+          title: "Error",
+          description: errorData.error || 'Failed to save MCP server',
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ [MCP] Error saving server:', error);
+      toast({
+        title: "Error",
+        description: 'Failed to save MCP server',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteMcpServer = async (serverName: string) => {
+    if (!confirm(`Are you sure you want to delete the MCP server "${serverName}"?`)) {
+      return;
+    }
+
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/global-agent-config/mcp-tools/servers/${serverName}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        await fetchMcpConfig();
+        toast({
+          title: "Success",
+          description: "MCP server deleted successfully",
+        });
+      } else {
+        const errorData = await response.json();
+        toast({
+          title: "Error",
+          description: errorData.error || 'Failed to delete MCP server',
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: 'Failed to delete MCP server',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const testMcpConnection = async (serverName: string) => {
+    setTestingMcpConnection(serverName);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/global-agent-config/mcp-tools/servers/${serverName}/test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: `Connection to ${serverName} successful`,
+        });
+      } else {
+        toast({
+          title: "Connection Failed",
+          description: data.error || `Failed to connect to ${serverName}`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: 'Failed to test connection',
+        variant: "destructive",
+      });
+    } finally {
+      setTestingMcpConnection(null);
+    }
+  };
+
+  const healthCheckMcpServer = async (server: MCPServer) => {
+    if (!server.url) {
+      setHealthCheckResult({ success: false, message: 'Please enter a server URL first' });
+      return;
+    }
+
+    setHealthChecking(true);
+    setHealthCheckResult(null);
+
+    try {
+      // Build the health check URL
+      // If the URL already ends with /health, use it as-is
+      // Otherwise, try to append /health or use the base URL
+      let healthCheckUrl = server.url.trim();
+      
+      // If URL doesn't end with /health, try to add it
+      if (!healthCheckUrl.endsWith('/health') && !healthCheckUrl.endsWith('/health/')) {
+        // Remove trailing slash if present
+        healthCheckUrl = healthCheckUrl.replace(/\/$/, '');
+        healthCheckUrl = healthCheckUrl + '/health';
+      }
+
+      // Build headers for authentication
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      // Add authentication headers based on server config
+      if (server.authentication.type === 'api_key' && server.authentication.apiKey) {
+        headers['X-API-Key'] = server.authentication.apiKey;
+      } else if (server.authentication.type === 'bearer' && server.authentication.bearerToken) {
+        headers['Authorization'] = `Bearer ${server.authentication.bearerToken}`;
+      }
+
+      // Directly test the MCP server health endpoint with timeout
+      const timeout = server.timeout || 10000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(healthCheckUrl, {
+        method: 'GET',
+        headers: headers,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json().catch(() => ({})); // Try to parse JSON, but don't fail if it's not JSON
+        setHealthCheckResult({ 
+          success: true, 
+          message: `Health check passed! Server responded with status ${response.status}.` 
+        });
+        toast({
+          title: "Health Check Passed",
+          description: `Server at ${server.url} is healthy and reachable`,
+        });
+      } else {
+        setHealthCheckResult({ 
+          success: false, 
+          message: `Health check failed: Server returned status ${response.status}` 
+        });
+        toast({
+          title: "Health Check Failed",
+          description: `Server returned status ${response.status}`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      let errorMessage = 'Unknown error';
+      
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        errorMessage = 'Request timed out - server did not respond in time';
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      // Check for CORS errors
+      if (errorMessage.includes('CORS') || errorMessage.includes('Failed to fetch')) {
+        errorMessage = 'CORS error: Server may not allow requests from this origin. Check server CORS settings.';
+      }
+
+      setHealthCheckResult({ 
+        success: false, 
+        message: `Health check error: ${errorMessage}` 
+      });
+      toast({
+        title: "Health Check Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setHealthChecking(false);
+    }
+  };
+
+  const fetchToolsFromServer = async (server: MCPServer) => {
+    if (!server.url) {
+      toast({
+        title: "Error",
+        description: 'Please enter a server URL first',
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setFetchingTools(true);
+    setDiscoveredTools([]);
+
+    try {
+      // Build the tools URL
+      let toolsUrl = server.url.trim();
+      toolsUrl = toolsUrl.replace(/\/$/, ''); // Remove trailing slash
+      if (!toolsUrl.endsWith('/tools')) {
+        toolsUrl = toolsUrl + '/tools';
+      }
+
+      // Build headers for authentication
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      // Add authentication headers based on server config
+      if (server.authentication.type === 'api_key' && server.authentication.apiKey) {
+        headers['X-API-Key'] = server.authentication.apiKey;
+      } else if (server.authentication.type === 'bearer' && server.authentication.bearerToken) {
+        headers['Authorization'] = `Bearer ${server.authentication.bearerToken}`;
+      }
+
+      // Fetch tools from MCP server
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), server.timeout || 10000);
+
+      const response = await fetch(toolsUrl, {
+        method: 'GET',
+        headers: headers,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Handle different response formats
+        let toolsList: any[] = [];
+        
+        if (Array.isArray(data)) {
+          toolsList = data;
+        } else if (data.tools && Array.isArray(data.tools)) {
+          toolsList = data.tools;
+        } else if (data.data && Array.isArray(data.data)) {
+          toolsList = data.data;
+        }
+
+        if (toolsList.length > 0) {
+          const formattedTools = toolsList.map((tool: any) => {
+            // Handle OpenAI-style format: { type: "function", function: { name, description, parameters } }
+            if (tool.type === 'function' && tool.function) {
+              return {
+                name: tool.function.name,
+                description: tool.function.description || 'No description available',
+                parameters: tool.function.parameters || {}
+              };
+            }
+            // Handle direct format: { name, description, parameters }
+            return {
+              name: tool.name || tool.function?.name,
+              description: tool.description || tool.desc || tool.function?.description || 'No description available',
+              parameters: tool.parameters || tool.schema || tool.inputSchema || tool.function?.parameters || {}
+            };
+          });
+
+          setDiscoveredTools(formattedTools);
+          
+          // Auto-populate tools in the server config
+          if (editingMcpServer) {
+            setEditingMcpServer(prev => prev ? {
+              ...prev,
+              tools: formattedTools.map(tool => ({
+                name: tool.name,
+                description: tool.description,
+                enabled: true,
+                parameters: tool.parameters
+              }))
+            } : null);
+          }
+
+          toast({
+            title: "Tools Discovered",
+            description: `Found ${formattedTools.length} tool(s) from the server`,
+          });
+        } else {
+          toast({
+            title: "No Tools Found",
+            description: 'The server returned an empty tools list',
+            variant: "destructive",
+          });
+        }
+      } else {
+        throw new Error(`Server returned status ${response.status}`);
+      }
+    } catch (error: any) {
+      let errorMessage = 'Unknown error';
+      
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        errorMessage = 'Request timed out - server did not respond in time';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      // Check for CORS errors
+      if (errorMessage.includes('CORS') || errorMessage.includes('Failed to fetch')) {
+        errorMessage = 'CORS error: Server may not allow requests from this origin. Check server CORS settings.';
+      }
+
+      toast({
+        title: "Error Fetching Tools",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setFetchingTools(false);
     }
   };
 
@@ -868,65 +1434,6 @@ const InstagramAccounts = () => {
           </CardContent>
         </Card>
 
-        {/* Webhook Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Información del Webhook</CardTitle>
-            <CardDescription>
-              Configura este webhook en Meta Developer Console
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>URL del Webhook</Label>
-              <div className="flex items-center space-x-2">
-                <Input
-                  value={`${window.location.origin}/api/instagram/webhook`}
-                  readOnly
-                  className="bg-gray-50"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(`${window.location.origin}/api/instagram/webhook`, 'URL del webhook')}
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Verify Token</Label>
-              <div className="flex items-center space-x-2">
-                <Input
-                  value="cataleya"
-                  readOnly
-                  className="bg-gray-50"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard('cataleya', 'Verify Token')}
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            <Alert>
-              <AlertDescription>
-                <strong>Configuración del Webhook:</strong>
-                <ol className="mt-2 space-y-1 text-sm">
-                  <li>1. Ve a tu app en Meta Developer Console</li>
-                  <li>2. Navega a Instagram Basic Display → Webhooks</li>
-                  <li>3. Agrega la URL del webhook y el verify token</li>
-                  <li>4. Suscríbete a los eventos: messages, comments</li>
-                </ol>
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-
         {/* Success/Error Messages */}
         {success && (
           <Alert className="border-green-200 bg-green-50">
@@ -1227,6 +1734,381 @@ const InstagramAccounts = () => {
                     </Button>
                   )}
                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* MCP Tools Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Plug className="w-5 h-5 text-violet-600" />
+              <span>MCP Tools Configuration</span>
+            </CardTitle>
+            <CardDescription>
+              Configure Model Context Protocol (MCP) tools to extend your agent's capabilities
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {/* Enable/Disable MCP Tools */}
+              <div className="flex items-center justify-between border rounded-lg p-4">
+                <div>
+                  <Label htmlFor="enableMcpTools" className="text-base font-medium">
+                    Enable MCP Tools
+                  </Label>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Allow the agent to use external tools via MCP servers
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  id="enableMcpTools"
+                  checked={mcpConfig.enabled}
+                  onChange={(e) => setMcpConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+                  className="h-5 w-5 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                />
+              </div>
+
+              {/* Available Tools - Only show when enabled */}
+              {mcpConfig.enabled && availableTools.length > 0 && (
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Bot className="w-4 h-4 text-violet-600" />
+                    <h4 className="font-medium text-gray-900">Available Tools</h4>
+                    <Badge variant="outline">{availableTools.length}</Badge>
+                  </div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {availableTools.map((tool, idx) => (
+                      <div key={idx} className="text-sm p-2 bg-gray-50 rounded">
+                        <div className="font-medium">{tool.name}</div>
+                        <div className="text-gray-600 text-xs">{tool.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* MCP Servers List - Always show so servers can be managed */}
+              <div className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        <Settings className="w-4 h-4 text-violet-600" />
+                        <h4 className="font-medium text-gray-900">MCP Servers</h4>
+                        <Badge variant="outline">{mcpConfig.servers.length}</Badge>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addMcpServer}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Server
+                      </Button>
+                    </div>
+
+                    {mcpConfig.servers.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <Plug className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                        <p>No MCP servers configured</p>
+                        <p className="text-sm">Add a server to enable MCP tools</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {mcpConfig.servers.map((server, idx) => (
+                          <div key={idx} className="border rounded-lg p-4 bg-gray-50">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <Badge variant={server.enabled ? "default" : "secondary"}>
+                                  {server.enabled ? "Enabled" : "Disabled"}
+                                </Badge>
+                                <span className="font-medium">{server.name}</span>
+                                <span className="text-sm text-gray-500">({server.connectionType})</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => testMcpConnection(server.name)}
+                                  disabled={testingMcpConnection === server.name}
+                                >
+                                  {testingMcpConnection === server.name ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-violet-600"></div>
+                                  ) : (
+                                    <TestTube className="w-4 h-4 mr-1" />
+                                  )}
+                                  Test
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditingMcpServer(server)}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => deleteMcpServer(server.name)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              <div>URL: {server.url}</div>
+                              <div>Tools: {server.tools.length}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Edit Server Modal */}
+                  {editingMcpServer && (
+                    <div className="border rounded-lg p-4 bg-white">
+                      <h4 className="font-medium mb-4">
+                        {mcpConfig.servers.find(s => s.name === editingMcpServer.name) ? 'Edit' : 'Add'} MCP Server
+                      </h4>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="serverName">Server Name *</Label>
+                          <Input
+                            id="serverName"
+                            value={editingMcpServer.name}
+                            onChange={(e) => setEditingMcpServer(prev => prev ? { ...prev, name: e.target.value } : null)}
+                            placeholder="e.g., weather-service"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <Label htmlFor="serverUrl">Server URL *</Label>
+                            <div className="flex space-x-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => editingMcpServer && fetchToolsFromServer(editingMcpServer)}
+                                disabled={fetchingTools || !editingMcpServer?.url}
+                                className="h-7 text-xs"
+                              >
+                                {fetchingTools ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-violet-600 mr-1"></div>
+                                    Loading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="w-3 h-3 mr-1" />
+                                    Get Tools
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => editingMcpServer && healthCheckMcpServer(editingMcpServer)}
+                                disabled={healthChecking || !editingMcpServer?.url}
+                                className="h-7 text-xs"
+                              >
+                                {healthChecking ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-violet-600 mr-1"></div>
+                                    Checking...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Activity className="w-3 h-3 mr-1" />
+                                    Health Check
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          <Input
+                            id="serverUrl"
+                            value={editingMcpServer.url}
+                            onChange={(e) => {
+                              setEditingMcpServer(prev => prev ? { ...prev, url: e.target.value } : null);
+                              setHealthCheckResult(null); // Clear result when URL changes
+                            }}
+                            placeholder="https://api.example.com/mcp"
+                          />
+                          {healthCheckResult && (
+                            <div className={`mt-2 p-2 rounded text-sm flex items-center space-x-2 ${
+                              healthCheckResult.success 
+                                ? 'bg-green-50 text-green-700 border border-green-200' 
+                                : 'bg-red-50 text-red-700 border border-red-200'
+                            }`}>
+                              {healthCheckResult.success ? (
+                                <Heart className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <XCircle className="w-4 h-4 text-red-600" />
+                              )}
+                              <span>{healthCheckResult.message}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="connectionType">Connection Type</Label>
+                          <select
+                            id="connectionType"
+                            value={editingMcpServer.connectionType}
+                            onChange={(e) => setEditingMcpServer(prev => prev ? { ...prev, connectionType: e.target.value as any } : null)}
+                            className="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                          >
+                            <option value="http">HTTP</option>
+                            <option value="websocket">WebSocket</option>
+                            <option value="stdio">STDIO</option>
+                          </select>
+                        </div>
+                        <div>
+                          <Label htmlFor="authType">Authentication Type</Label>
+                          <select
+                            id="authType"
+                            value={editingMcpServer.authentication.type}
+                            onChange={(e) => setEditingMcpServer(prev => prev ? { ...prev, authentication: { ...prev.authentication, type: e.target.value as any } } : null)}
+                            className="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                          >
+                            <option value="none">None</option>
+                            <option value="api_key">API Key</option>
+                            <option value="bearer">Bearer Token</option>
+                            <option value="oauth2">OAuth2</option>
+                          </select>
+                        </div>
+                        {editingMcpServer.authentication.type === 'api_key' && (
+                          <div>
+                            <Label htmlFor="apiKey">API Key</Label>
+                            <Input
+                              id="apiKey"
+                              type="password"
+                              value={editingMcpServer.authentication.apiKey || ''}
+                              onChange={(e) => setEditingMcpServer(prev => prev ? { ...prev, authentication: { ...prev.authentication, apiKey: e.target.value } } : null)}
+                              placeholder="Enter API key"
+                            />
+                          </div>
+                        )}
+                        {editingMcpServer.authentication.type === 'bearer' && (
+                          <div>
+                            <Label htmlFor="bearerToken">Bearer Token</Label>
+                            <Input
+                              id="bearerToken"
+                              type="password"
+                              value={editingMcpServer.authentication.bearerToken || ''}
+                              onChange={(e) => setEditingMcpServer(prev => prev ? { ...prev, authentication: { ...prev.authentication, bearerToken: e.target.value } } : null)}
+                              placeholder="Enter bearer token"
+                            />
+                          </div>
+                        )}
+                        
+                        {/* Discovered Tools Display */}
+                        {discoveredTools.length > 0 && (
+                          <div className="border rounded-lg p-4 bg-gray-50">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                <Label className="font-medium">Discovered Tools ({discoveredTools.length})</Label>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setDiscoveredTools([])}
+                                className="h-6 text-xs"
+                              >
+                                Clear
+                              </Button>
+                            </div>
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                              {discoveredTools.map((tool, idx) => (
+                                <div key={idx} className="bg-white p-3 rounded border">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-sm">{tool.name}</div>
+                                      <div className="text-xs text-gray-600 mt-1">{tool.description}</div>
+                                      {tool.parameters && Object.keys(tool.parameters).length > 0 && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                          Has {Object.keys(tool.parameters.properties || {}).length} parameter(s)
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Badge variant="outline" className="ml-2">
+                                      Auto-enabled
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                              These tools have been automatically added to the server configuration
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="serverEnabled"
+                            checked={editingMcpServer.enabled}
+                            onChange={(e) => setEditingMcpServer(prev => prev ? { ...prev, enabled: e.target.checked } : null)}
+                            className="h-4 w-4 text-violet-600"
+                          />
+                          <Label htmlFor="serverEnabled">Enable this server</Label>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            onClick={() => {
+                              if (editingMcpServer) {
+                                saveMcpServer(editingMcpServer);
+                                // Update local state
+                                const existingIndex = mcpConfig.servers.findIndex(s => s.name === editingMcpServer.name);
+                                if (existingIndex >= 0) {
+                                  const newServers = [...mcpConfig.servers];
+                                  newServers[existingIndex] = editingMcpServer;
+                                  setMcpConfig(prev => ({ ...prev, servers: newServers }));
+                                } else {
+                                  setMcpConfig(prev => ({ ...prev, servers: [...prev.servers, editingMcpServer] }));
+                                }
+                              }
+                            }}
+                            size="sm"
+                          >
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Server
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setEditingMcpServer(null);
+                              setDiscoveredTools([]);
+                              setHealthCheckResult(null);
+                            }}
+                            size="sm"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-2 pt-4 border-t">
+                <Button
+                  onClick={saveMcpConfig}
+                  disabled={saving}
+                  size="sm"
+                >
+                  {saving ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save MCP Configuration
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -1896,6 +2778,149 @@ const InstagramAccounts = () => {
                         )}
                       </div>
                     )}
+
+                    {/* MCP Server Selection Accordion */}
+                    <div className="border-t pt-4 mt-4">
+                      <button
+                        onClick={() => toggleAccordion(account.accountId, 'mcpServers')}
+                        className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Plug className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                          <h4 className="text-sm font-medium text-gray-700">MCP Server Selection</h4>
+                          {account.mcpServers && account.mcpServers.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              {account.mcpServers.length} selected
+                            </Badge>
+                          )}
+                        </div>
+                        {isAccordionExpanded(account.accountId, 'mcpServers') ? (
+                          <ChevronDown className="w-4 h-4 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-gray-500" />
+                        )}
+                      </button>
+                      
+                      {isAccordionExpanded(account.accountId, 'mcpServers') && (
+                        <div className="mt-3 space-y-4">
+                          {editingMcpServers === account.accountId ? (
+                            <div className="space-y-4">
+                              <div>
+                                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                                  Select MCP Servers for this Account
+                                </Label>
+                                <p className="text-xs text-gray-500 mb-3">
+                                  Choose which MCP servers this account should use. Leave empty to use all enabled servers.
+                                </p>
+                                <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                                  {mcpConfig.servers.filter(s => s.enabled).length === 0 ? (
+                                    <p className="text-sm text-gray-500 text-center py-4">
+                                      No enabled MCP servers available
+                                    </p>
+                                  ) : (
+                                    mcpConfig.servers.filter(s => s.enabled).map((server) => (
+                                      <div key={server.name} className="flex items-center space-x-2">
+                                        <input
+                                          type="checkbox"
+                                          id={`mcp-${account.accountId}-${server.name}`}
+                                          checked={accountMcpServers.includes(server.name)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setAccountMcpServers([...accountMcpServers, server.name]);
+                                            } else {
+                                              setAccountMcpServers(accountMcpServers.filter(s => s !== server.name));
+                                            }
+                                          }}
+                                          className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
+                                        />
+                                        <Label 
+                                          htmlFor={`mcp-${account.accountId}-${server.name}`}
+                                          className="text-sm text-gray-700 cursor-pointer flex-1"
+                                        >
+                                          {server.name}
+                                        </Label>
+                                        <Badge variant="outline" className="text-xs">
+                                          {server.tools?.filter((t: any) => t.enabled).length || 0} tools
+                                        </Badge>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mt-4">
+                                  <Button
+                                    onClick={() => saveAccountMcpServers(account.accountId)}
+                                    disabled={savingMcpServers}
+                                    size="sm"
+                                    className="w-full sm:w-auto"
+                                  >
+                                    {savingMcpServers ? (
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    ) : (
+                                      <Save className="w-4 h-4 mr-2" />
+                                    )}
+                                    Save Selection
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingMcpServers(null);
+                                      setAccountMcpServers([]);
+                                    }}
+                                    size="sm"
+                                    className="w-full sm:w-auto"
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <Plug className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                                  <span className="text-sm font-medium text-gray-700">
+                                    MCP Servers
+                                  </span>
+                                </div>
+                                {account.mcpServers && account.mcpServers.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {account.mcpServers.map((serverName) => (
+                                      <div key={serverName} className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-600">{serverName}</span>
+                                        <Badge variant="outline" className="text-xs">
+                                          Active
+                                        </Badge>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-500">
+                                    Using all enabled MCP servers
+                                  </p>
+                                )}
+                                <div className="flex justify-between items-center mt-3">
+                                  <div className="text-xs text-gray-500">
+                                    {account.mcpServers && account.mcpServers.length > 0 
+                                      ? `${account.mcpServers.length} server(s) selected` 
+                                      : 'All servers'}
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => startEditingMcpServers(account)}
+                                    className="text-xs"
+                                  >
+                                    <Plug className="w-3 h-3 mr-1" />
+                                    {account.mcpServers && account.mcpServers.length > 0 ? 'Edit' : 'Configure'}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1903,6 +2928,9 @@ const InstagramAccounts = () => {
           )}
         </div>
       </div>
+
+      {/* Chatbot Test Component */}
+      <ChatbotTest />
     </>
   );
 };

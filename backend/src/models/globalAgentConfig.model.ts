@@ -80,6 +80,43 @@ const GlobalAgentConfigSchema = new Schema({
     logAllDecisions: { type: Boolean, default: true }
   },
   
+  // MCP (Model Context Protocol) tool configuration
+  mcpTools: {
+    enabled: { type: Boolean, default: false },
+    servers: [{
+      name: { type: String, required: true },
+      url: { type: String, required: true }, // MCP server URL (HTTP/WebSocket)
+      connectionType: { 
+        type: String, 
+        enum: ['http', 'websocket', 'stdio'], 
+        default: 'http' 
+      },
+      authentication: {
+        type: { 
+          type: String, 
+          enum: ['none', 'api_key', 'bearer', 'oauth2'], 
+          default: 'none' 
+        },
+        apiKey: { type: String, required: false },
+        bearerToken: { type: String, required: false },
+        oauth2Config: {
+          clientId: { type: String, required: false },
+          clientSecret: { type: String, required: false },
+          tokenUrl: { type: String, required: false }
+        }
+      },
+      tools: [{
+        name: { type: String, required: true },
+        description: { type: String, required: true },
+        enabled: { type: Boolean, default: true },
+        parameters: { type: Schema.Types.Mixed, default: {} }
+      }],
+      enabled: { type: Boolean, default: true },
+      timeout: { type: Number, default: 30000 }, // Timeout in milliseconds
+      retryAttempts: { type: Number, default: 3 }
+    }]
+  },
+  
   // Metadata
   metadata: {
     createdBy: { type: String, required: true }, // User ID who created this config
@@ -118,6 +155,33 @@ export interface IGlobalAgentConfig extends Document {
     enableLeadScoreAutoDisable: boolean;
     enableMilestoneAutoDisable: boolean;
     logAllDecisions: boolean;
+  };
+  mcpTools: {
+    enabled: boolean;
+    servers: Array<{
+      name: string;
+      url: string;
+      connectionType: 'http' | 'websocket' | 'stdio';
+      authentication: {
+        type: 'none' | 'api_key' | 'bearer' | 'oauth2';
+        apiKey?: string;
+        bearerToken?: string;
+        oauth2Config?: {
+          clientId?: string;
+          clientSecret?: string;
+          tokenUrl?: string;
+        };
+      };
+      tools: Array<{
+        name: string;
+        description: string;
+        enabled: boolean;
+        parameters?: any;
+      }>;
+      enabled: boolean;
+      timeout: number;
+      retryAttempts: number;
+    }>;
   };
   metadata: {
     createdBy: string;

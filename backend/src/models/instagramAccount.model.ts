@@ -53,6 +53,43 @@ const CommentSettingsSchema = new Schema({
   replyDelay: { type: Number, default: 0, min: 0, max: 300 } // Delay in seconds
 });
 
+// MCP Tools configuration sub-schema (per account)
+const MCPToolsSchema = new Schema({
+  enabled: { type: Boolean, default: false },
+  servers: [{
+    name: { type: String, required: true },
+    url: { type: String, required: true },
+    connectionType: { 
+      type: String, 
+      enum: ['http', 'websocket', 'stdio'], 
+      default: 'http' 
+    },
+    authentication: {
+      type: { 
+        type: String, 
+        enum: ['none', 'api_key', 'bearer', 'oauth2'], 
+        default: 'none' 
+      },
+      apiKey: { type: String, required: false },
+      bearerToken: { type: String, required: false },
+      oauth2Config: {
+        clientId: { type: String, required: false },
+        clientSecret: { type: String, required: false },
+        tokenUrl: { type: String, required: false }
+      }
+    },
+    tools: [{
+      name: { type: String, required: true },
+      description: { type: String, required: true },
+      enabled: { type: Boolean, default: true },
+      parameters: { type: Schema.Types.Mixed, default: {} }
+    }],
+    enabled: { type: Boolean, default: true },
+    timeout: { type: Number, default: 30000 },
+    retryAttempts: { type: Number, default: 3 }
+  }]
+}, { _id: false });
+
 export interface IInstagramAccount extends Document {
   id: string;
   userId: string; // Moca user ID (links to User model)
@@ -87,6 +124,33 @@ export interface IInstagramAccount extends Document {
     dmMessage: string;
     replyDelay: number;
   };
+  mcpTools?: {
+    enabled: boolean;
+    servers: Array<{
+      name: string;
+      url: string;
+      connectionType: 'http' | 'websocket' | 'stdio';
+      authentication: {
+        type: 'none' | 'api_key' | 'bearer' | 'oauth2';
+        apiKey?: string;
+        bearerToken?: string;
+        oauth2Config?: {
+          clientId?: string;
+          clientSecret?: string;
+          tokenUrl?: string;
+        };
+      };
+      tools: Array<{
+        name: string;
+        description: string;
+        enabled: boolean;
+        parameters?: any;
+      }>;
+      enabled: boolean;
+      timeout: number;
+      retryAttempts: number;
+    }>;
+  };
   isActive: boolean;
 }
 
@@ -102,6 +166,7 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
   settings: { type: InstagramSettingsSchema, default: () => ({}) },
   rateLimits: { type: RateLimitsSchema, default: () => ({}) },
   commentSettings: { type: CommentSettingsSchema, default: () => ({}) },
+  mcpTools: { type: MCPToolsSchema, default: () => ({ enabled: false, servers: [] }) },
   isActive: { type: Boolean, default: true }
 }, {
   timestamps: true,

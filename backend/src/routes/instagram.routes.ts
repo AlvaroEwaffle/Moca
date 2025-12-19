@@ -7,6 +7,7 @@ import Message from '../models/message.model';
 import OutboundQueue from '../models/outboundQueue.model';
 import InstagramAccount from '../models/instagramAccount.model';
 import { authenticateToken } from '../middleware/auth';
+import { generateInstagramResponse } from '../services/openai.service';
 
 const router = express.Router();
 const webhookService = new InstagramWebhookService();
@@ -720,6 +721,165 @@ router.put('/accounts/:accountId/instructions', authenticateToken, async (req, r
   }
 });
 
+// Get account MCP tools configuration
+router.get('/accounts/:accountId/mcp-tools', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const account = await InstagramAccount.findOne({ accountId });
+    
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: account.mcpTools || { enabled: false, servers: [] }
+    });
+  } catch (error: any) {
+    console.error('❌ Error fetching account MCP tools:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch MCP tools'
+    });
+  }
+});
+
+// Update account MCP tools configuration (enable/disable)
+router.put('/accounts/:accountId/mcp-tools', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { enabled } = req.body;
+
+    const account = await InstagramAccount.findOne({ accountId });
+    
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    if (!account.mcpTools) {
+      account.mcpTools = { enabled: false, servers: [] };
+    }
+    account.mcpTools.enabled = enabled !== undefined ? enabled : account.mcpTools.enabled;
+    await account.save();
+
+    res.json({
+      success: true,
+      data: account.mcpTools
+    });
+  } catch (error: any) {
+    console.error('❌ Error updating account MCP tools:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update MCP tools'
+    });
+  }
+});
+
+// Add or update MCP server for an account
+router.post('/accounts/:accountId/mcp-tools/servers', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const server = req.body;
+
+    if (!server.name || !server.url) {
+      return res.status(400).json({
+        success: false,
+        error: 'Server name and URL are required'
+      });
+    }
+
+    const account = await InstagramAccount.findOne({ accountId });
+    
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    if (!account.mcpTools) {
+      account.mcpTools = { enabled: false, servers: [] };
+    }
+
+    const existingIndex = account.mcpTools.servers.findIndex(s => s.name === server.name);
+    
+    if (existingIndex >= 0) {
+      account.mcpTools.servers[existingIndex] = {
+        ...account.mcpTools.servers[existingIndex],
+        ...server,
+        name: server.name
+      };
+    } else {
+      account.mcpTools.servers.push({
+        name: server.name,
+        url: server.url,
+        connectionType: server.connectionType || 'http',
+        authentication: server.authentication || { type: 'none' },
+        tools: server.tools || [],
+        enabled: server.enabled !== undefined ? server.enabled : true,
+        timeout: server.timeout || 30000,
+        retryAttempts: server.retryAttempts || 3
+      });
+    }
+
+    await account.save();
+
+    res.json({
+      success: true,
+      data: account.mcpTools.servers.find(s => s.name === server.name)
+    });
+  } catch (error: any) {
+    console.error('❌ Error adding/updating account MCP server:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to add/update MCP server'
+    });
+  }
+});
+
+// Delete MCP server from an account
+router.delete('/accounts/:accountId/mcp-tools/servers/:serverName', authenticateToken, async (req, res) => {
+  try {
+    const { accountId, serverName } = req.params;
+
+    const account = await InstagramAccount.findOne({ accountId });
+    
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    if (!account.mcpTools) {
+      return res.status(404).json({
+        success: false,
+        error: 'No MCP tools configuration found'
+      });
+    }
+
+    account.mcpTools.servers = account.mcpTools.servers.filter(s => s.name !== serverName);
+    await account.save();
+
+    res.json({
+      success: true,
+      message: 'MCP server deleted successfully'
+    });
+  } catch (error: any) {
+    console.error('❌ Error deleting account MCP server:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete MCP server'
+    });
+  }
+});
+
 // Toggle agent status for a conversation
 router.put('/conversations/:id/agent', authenticateToken, async (req, res) => {
   try {
@@ -1141,6 +1301,119 @@ router.post('/conversations/:id/milestone/achieve', authenticateToken, async (re
     res.status(500).json({
       success: false,
       error: 'Failed to achieve milestone'
+    });
+  }
+});
+
+// Test chat endpoint for testing agent responses
+router.post('/test-chat', authenticateToken, async (req, res) => {
+  try {
+    console.log('💬 [Test Chat] POST request received');
+    console.log('📥 [Test Chat] Request body:', JSON.stringify({
+      message: req.body.message,
+      conversationHistoryLength: req.body.conversationHistory?.length || 0
+    }, null, 2));
+    
+    const { message, conversationHistory } = req.body;
+    
+    if (!message) {
+      console.log('❌ [Test Chat] Missing message in request');
+      return res.status(400).json({
+        success: false,
+        error: 'Message is required'
+      });
+    }
+
+    console.log('👤 [Test Chat] User ID:', req.user?.userId);
+    console.log('💬 [Test Chat] Current message:', message);
+    console.log('📜 [Test Chat] Previous conversation history length:', conversationHistory?.length || 0);
+
+    // Get user's Instagram account settings for agent behavior
+    const userId = req.user?.userId;
+    let agentBehavior = {
+      systemPrompt: undefined as string | undefined,
+      toneOfVoice: undefined as string | undefined,
+      keyInformation: undefined as string | undefined,
+      fallbackRules: undefined as string[] | undefined
+    };
+
+    let accountMcpConfig: { enabled: boolean; servers: any[] } | undefined;
+    if (userId) {
+      console.log('🔍 [Test Chat] Looking up Instagram account for userId:', userId);
+      const account = await InstagramAccount.findOne({ userId });
+      if (account?.settings) {
+        agentBehavior = {
+          systemPrompt: account.settings.systemPrompt,
+          toneOfVoice: account.settings.toneOfVoice,
+          keyInformation: account.settings.keyInformation,
+          fallbackRules: account.settings.fallbackRules
+        };
+        // Get account-specific MCP configuration
+        accountMcpConfig = account.mcpTools || undefined;
+        console.log('✅ [Test Chat] Found account settings:', {
+          hasSystemPrompt: !!agentBehavior.systemPrompt,
+          systemPromptLength: agentBehavior.systemPrompt?.length || 0,
+          toneOfVoice: agentBehavior.toneOfVoice,
+          hasKeyInformation: !!agentBehavior.keyInformation,
+          fallbackRulesCount: agentBehavior.fallbackRules?.length || 0,
+          hasMcpConfig: !!accountMcpConfig,
+          mcpServersCount: accountMcpConfig?.servers?.length || 0
+        });
+      } else {
+        console.log('⚠️ [Test Chat] No account or settings found for userId:', userId);
+      }
+    } else {
+      console.log('⚠️ [Test Chat] No userId in request');
+    }
+
+    // Build complete conversation history including current message
+    const fullHistory = [
+      ...(conversationHistory || []),
+      {
+        role: 'user' as const,
+        content: message,
+        timestamp: new Date()
+      }
+    ];
+
+    console.log('📋 [Test Chat] Full conversation history:', JSON.stringify(
+      fullHistory.map(msg => ({
+        role: msg.role,
+        content: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
+        timestamp: msg.timestamp
+      })),
+      null,
+      2
+    ));
+
+    console.log('🤖 [Test Chat] Calling generateInstagramResponse...');
+    const startTime = Date.now();
+
+    // Generate response using OpenAI service
+    const response = await generateInstagramResponse({
+      conversationHistory: fullHistory,
+      language: 'es',
+      agentBehavior: agentBehavior,
+      accountMcpConfig: accountMcpConfig
+    });
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [Test Chat] Response generated successfully in ${duration}ms`);
+    console.log('📤 [Test Chat] Response length:', response.length);
+    console.log('📤 [Test Chat] Response preview:', response.substring(0, 200) + (response.length > 200 ? '...' : ''));
+    
+    res.json({
+      success: true,
+      data: {
+        response: response
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ [Test Chat] Error in test chat:', error);
+    console.error('❌ [Test Chat] Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate response'
     });
   }
 });

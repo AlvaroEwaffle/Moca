@@ -38,15 +38,10 @@ export const getBackendUrl = (): string => {
     return envBackendUrl;
   }
   
-  // TEMPORARY: Force production URL for local development testing
-  // TODO: Change this back to developmentBackendUrl when done testing
-  console.log('🚀 [Backend URL] Using PRODUCTION backend for local testing:', productionBackendUrl);
-  return productionBackendUrl;
-  
-  // Original fallback (commented out for testing)
-  // const finalUrl = isProduction ? productionBackendUrl : developmentBackendUrl;
-  // console.log('✅ [Backend URL] Using fallback:', finalUrl);
-  // return finalUrl;
+  // Use development URL for local development
+  const finalUrl = isProduction ? productionBackendUrl : developmentBackendUrl;
+  console.log('✅ [Backend URL] Using fallback:', finalUrl);
+  return finalUrl;
 };
 
 // Export the backend URL
