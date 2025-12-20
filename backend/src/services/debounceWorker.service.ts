@@ -403,8 +403,12 @@ class DebounceWorkerService {
         }
       };
 
-      // Generate structured response
-      const structuredResponse = await generateStructuredResponse(conversationContext, aiConfig);
+      // Generate structured response with account-specific MCP config if available
+      const structuredResponse = await generateStructuredResponse(
+        conversationContext, 
+        aiConfig,
+        userContext.accountMcpConfig
+      );
       
       // Update conversation with structured response data
       await this.updateConversationWithStructuredResponse(conversation.id, structuredResponse);
@@ -447,6 +451,7 @@ class DebounceWorkerService {
       // Get Instagram account settings for agent behavior
       const instagramAccount = await InstagramAccount.findOne({ accountId, isActive: true });
       let agentSettings = {};
+      let accountMcpConfig: { enabled: boolean; servers: any[] } | undefined = undefined;
       
       if (instagramAccount && instagramAccount.settings) {
         agentSettings = {
@@ -456,6 +461,12 @@ class DebounceWorkerService {
           fallbackRules: instagramAccount.settings.fallbackRules
         };
         console.log(`✅ DebounceWorkerService: Found agent settings for account: ${instagramAccount.accountName}`);
+        
+        // Get account-specific MCP configuration if available
+        if (instagramAccount.mcpTools) {
+          accountMcpConfig = instagramAccount.mcpTools;
+          console.log(`🔧 DebounceWorkerService: Found account-specific MCP config for account: ${instagramAccount.accountName} (enabled: ${accountMcpConfig.enabled}, servers: ${accountMcpConfig.servers?.length || 0})`);
+        }
       } else {
         console.log(`⚠️ DebounceWorkerService: No agent settings found for account: ${accountId}`);
       }
@@ -466,7 +477,8 @@ class DebounceWorkerService {
         businessName: contact.businessInfo?.company || 'Business',
         specialization: contact.businessInfo?.sector || 'General',
         preferences: contact.preferences || {},
-        agentBehavior: agentSettings
+        agentBehavior: agentSettings,
+        accountMcpConfig: accountMcpConfig
       };
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error getting user context:`, error);
@@ -516,8 +528,12 @@ class DebounceWorkerService {
         }
       };
 
-      // Generate structured response
-      const structuredResponse = await generateStructuredResponse(conversationContext, aiConfig);
+      // Generate structured response with account-specific MCP config if available
+      const structuredResponse = await generateStructuredResponse(
+        conversationContext, 
+        aiConfig,
+        userContext.accountMcpConfig
+      );
       
       console.log('✅ DebounceWorkerService: Structured response generated:', {
         leadScore: structuredResponse.leadScore,

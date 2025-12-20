@@ -305,10 +305,16 @@ Respuesta:`;
       { role: 'user', content: userPrompt }
     ];
 
+    // Use a model that supports tools. Default to gpt-3.5-turbo-1106 or newer which has better tool support
+    const modelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo-1106';
+    const baseMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '150');
+    // Increase max_tokens when tools are available to allow for tool calls and responses
+    const maxTokens = functions.length > 0 ? Math.max(baseMaxTokens, 500) : baseMaxTokens;
+    
     const requestConfig: any = {
-      model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+      model: modelName,
       messages,
-      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '150'),
+      max_tokens: maxTokens,
       temperature: 0.7,
       presence_penalty: 0.1,
       frequency_penalty: 0.1
@@ -322,6 +328,8 @@ Respuesta:`;
       }));
       requestConfig.tool_choice = 'auto';
       console.log(`🔧 [OpenAI] Added ${functions.length} tools to request`);
+      console.log(`🔧 [OpenAI] Using model: ${modelName} (supports tools)`);
+      console.log(`🔧 [OpenAI] Increased max_tokens to ${maxTokens} to accommodate tool calls`);
     }
 
     console.log('🚀 [OpenAI] Calling OpenAI API...');
@@ -403,10 +411,12 @@ Respuesta:`;
       console.log(`🔄 [OpenAI] Requesting final response with ${toolResults.length} tool result(s)`);
       
       // Get final response with tool results
+      const finalModelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo-1106';
+      const finalMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '150');
       const finalRequestConfig: any = {
-        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        model: finalModelName,
         messages,
-        max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '150'),
+        max_tokens: finalMaxTokens,
         temperature: 0.7,
         presence_penalty: 0.1,
         frequency_penalty: 0.1
@@ -443,54 +453,191 @@ Respuesta:`;
  */
 export async function generateStructuredResponse(
   conversationContext: ConversationContext,
-  config: AIResponseConfig
+  config: AIResponseConfig,
+  accountMcpConfig?: { enabled: boolean; servers: any[] } // Account-specific MCP configuration
 ): Promise<StructuredResponse> {
   try {
     console.log('🤖 Generating structured Instagram DM response with AI');
 
-    // Get MCP tools if enabled
+    // Get MCP tools if enabled (before building prompts)
     let functions: any[] = [];
     let toolsInfo = '';
     
     try {
-      const globalConfig = await GlobalAgentConfig.findOne();
-      if (globalConfig?.mcpTools?.enabled) {
-        await mcpService.initialize(globalConfig);
+      // Use account-specific MCP config if provided
+      if (accountMcpConfig) {
+        await mcpService.initializeWithAccountConfig(accountMcpConfig);
         functions = await mcpService.getOpenAIFunctions();
         if (functions.length > 0) {
-          console.log(`🔧 [MCP] ${functions.length} MCP tools available for structured response`);
-          
-          // Build tools information for the system prompt
-          const toolsList = functions.map(fn => 
-            `- ${fn.name}: ${fn.description}`
-          ).join('\n');
-          
-          toolsInfo = `\n\nAVAILABLE TOOLS (MCP Tools):
-You have access to the following external tools that you can use when appropriate:
+          console.log(`🔧 [MCP] ${functions.length} MCP tools available for structured response (account-specific)`);
+        }
+      } else {
+        // Fallback to global config for backward compatibility
+        const globalConfig = await GlobalAgentConfig.findOne();
+        if (globalConfig?.mcpTools?.enabled) {
+          await mcpService.initialize(globalConfig);
+          functions = await mcpService.getOpenAIFunctions();
+          if (functions.length > 0) {
+            console.log(`🔧 [MCP] ${functions.length} MCP tools available for structured response (global config)`);
+          }
+        }
+      }
+      
+      if (functions.length > 0) {
+        // Build tools information for the system prompt with detailed parameter info
+        const toolsList = functions.map((fn: any) => {
+            const requiredParams = fn.parameters?.required || [];
+            const optionalParams: string[] = [];
+            const properties = fn.parameters?.properties || {};
+            
+            // Separate required and optional parameters
+            Object.keys(properties).forEach((param: string) => {
+              if (!requiredParams.includes(param)) {
+                optionalParams.push(param);
+              }
+            });
+            
+            // Build required params list with examples and constraints
+            const requiredList = requiredParams.length > 0 
+              ? requiredParams.map((param: string) => {
+                  const paramInfo = properties[param] || {};
+                  const constraints: string[] = [];
+                  if (paramInfo.format) constraints.push(`formato: ${paramInfo.format}`);
+                  if (paramInfo.enum) constraints.push(`valores permitidos: ${paramInfo.enum.join(', ')}`);
+                  if (paramInfo.minLength) constraints.push(`mínimo: ${paramInfo.minLength} caracteres`);
+                  if (paramInfo.maxLength) constraints.push(`máximo: ${paramInfo.maxLength} caracteres`);
+                  if (paramInfo.minimum !== undefined) constraints.push(`mínimo: ${paramInfo.minimum}`);
+                  if (paramInfo.maximum !== undefined) constraints.push(`máximo: ${paramInfo.maximum}`);
+                  if (paramInfo.pattern) constraints.push(`patrón: ${paramInfo.pattern}`);
+                  
+                  const constraintsStr = constraints.length > 0 ? ` [${constraints.join(', ')}]` : '';
+                  const exampleStr = paramInfo.examples && paramInfo.examples.length > 0 
+                    ? ` (ejemplo: ${paramInfo.examples[0]})` 
+                    : (paramInfo.example ? ` (ejemplo: ${paramInfo.example})` : '');
+                  
+                  return `  - ${param} (${paramInfo.type || 'string'})${constraintsStr}${exampleStr}: ${paramInfo.description || 'Sin descripción'}`;
+                }).join('\n')
+              : '  Ninguno';
+            
+            // Build optional params list with examples
+            const optionalList = optionalParams.length > 0
+              ? optionalParams.map((param: string) => {
+                  const paramInfo = properties[param] || {};
+                  const exampleStr = paramInfo.examples && paramInfo.examples.length > 0 
+                    ? ` (ejemplo: ${paramInfo.examples[0]})` 
+                    : (paramInfo.example ? ` (ejemplo: ${paramInfo.example})` : '');
+                  const defaultStr = paramInfo.default !== undefined ? ` (default: ${paramInfo.default})` : '';
+                  return `  - ${param} (${paramInfo.type || 'string'}, opcional)${exampleStr}${defaultStr}: ${paramInfo.description || 'Sin descripción'}`;
+                }).join('\n')
+              : '  Ninguno';
+            
+            return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔧 ${fn.name}
+${fn.description || 'Sin descripción'}
+
+📋 Parámetros requeridos:
+${requiredList}
+
+📝 Parámetros opcionales:
+${optionalList}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+        }).join('\n\n');
+        
+        toolsInfo = `\n\nHERRAMIENTAS DISPONIBLES (MCP Tools):
+Tienes acceso a las siguientes herramientas externas que puedes usar cuando sea apropiado:
+
 ${toolsList}
 
-TOOL USAGE INSTRUCTIONS:
-- Use these tools when the customer needs information that requires external data or specific actions
-- If the customer asks something that can be answered with a tool, use it automatically
-- After using a tool, incorporate the results naturally into your response
-- Do not mention that you are using a tool, simply provide the information obtained
-- If a tool fails, continue the conversation naturally without mentioning the technical error`;
-        }
+INSTRUCCIONES CRÍTICAS SOBRE EL USO DE HERRAMIENTAS:
+
+**⚠️ REGLAS FUNDAMENTALES - LEE CON ATENCIÓN:**
+1. **NUNCA uses valores por defecto, placeholders o datos inventados** 
+   - ❌ NO uses: "sin especificar", "ejemplo.com", "Negocio sin especificar", "Dueño sin especificar", valores genéricos, etc.
+   - ❌ NO inventes datos que el cliente no haya proporcionado
+   - ❌ NO asumas información que no esté explícitamente en la conversación
+   - ✅ SOLO usa datos que el cliente haya proporcionado explícitamente
+
+2. **SIEMPRE pregunta al cliente por cada parámetro requerido ANTES de llamar a la herramienta**
+   - NO llames a la herramienta hasta tener TODOS los parámetros requeridos
+   - NO uses valores por defecto si faltan parámetros
+
+3. **Pregunta UN dato a la vez** de forma natural y conversacional
+   - Espera la respuesta del cliente antes de preguntar el siguiente dato
+   - No preguntes múltiples datos en un solo mensaje
+
+4. **VERIFICA antes de ejecutar**: Antes de llamar a una herramienta, verifica que TODOS los parámetros requeridos sean datos reales proporcionados por el cliente
+
+5. **Maneja datos parciales**: Si el cliente proporciona algunos datos pero faltan otros, pregunta por los que faltan. NO asumas valores por defecto.
+
+**FLUJO PASO A PASO OBLIGATORIO:**
+
+**Paso 1: Identificar necesidad**
+- El cliente expresa una necesidad (ej: "quiero crear una cuenta", "necesito programar una cita")
+
+**Paso 2: Identificar herramienta**
+- Revisa la lista de herramientas disponibles arriba
+- Identifica qué herramienta es apropiada para la solicitud
+
+**Paso 3: Revisar parámetros requeridos**
+- Lee la lista de parámetros requeridos de esa herramienta (ver lista arriba)
+- Anota qué datos necesitas del cliente
+
+**Paso 4: Preguntar por datos (UNO A LA VEZ)**
+- Pregunta al cliente por el primer parámetro requerido
+- Ejemplo: "¡Perfecto! Te ayudo con eso. ¿Cuál es el nombre de tu negocio?"
+- ESPERA la respuesta del cliente
+
+**Paso 5: Continuar preguntando**
+- Una vez que tengas la respuesta, pregunta por el siguiente parámetro requerido
+- Repite hasta tener TODOS los parámetros requeridos
+
+**Paso 6: Verificar datos completos**
+- Antes de ejecutar, verifica que tienes TODOS los parámetros requeridos
+- Verifica que todos son datos reales del cliente, NO valores por defecto
+
+**Paso 7: Ejecutar herramienta**
+- SOLO cuando tengas todos los datos reales, llama a la herramienta
+- Incorpora los resultados de manera natural en tu respuesta
+
+**EJEMPLO DE FLUJO CORRECTO:**
+Cliente: "Quiero crear una cuenta"
+Agente: "¡Perfecto! Te ayudo a crear tu cuenta. ¿Cuál es el nombre de tu negocio?"
+Cliente: "Mi negocio se llama Ewaffle"
+Agente: "Excelente. ¿Y cómo te llamas tú (dueño/responsable)?"
+Cliente: "Alvaro Villena"
+Agente: "Perfecto. ¿Cuál es tu email de contacto?"
+Cliente: "alvaro@ewaffle.cl"
+Agente: "¿Y tu teléfono? (con código de país, ej: +56912345678)"
+Cliente: "+56920115198"
+Agente: (AHORA SÍ ejecuta la herramienta con los datos reales)
+
+**INCORPORACIÓN NATURAL:**
+- Después de usar una herramienta, incorpora los resultados de manera natural en tu respuesta
+- **NO MENCIONES LA HERRAMIENTA**: No menciones que estás usando una herramienta técnica, simplemente proporciona la información obtenida o confirma la acción realizada
+
+**MANEJO DE ERRORES:**
+- Si una herramienta falla, continúa con la conversación de manera natural sin mencionar el error técnico
+- Ofrece una alternativa apropiada si la herramienta no puede completar la acción`;
       }
     } catch (error) {
       console.warn('⚠️ [MCP] Error loading MCP tools:', error);
     }
 
-    // Generate contextual instructions
+    // Generate contextual instructions (without custom instructions first)
     let contextualInstructions = generateContextualInstructions(
       conversationContext.conversationHistory,
       conversationContext.businessName,
-      config.customInstructions
+      undefined // Don't include custom instructions here, we'll add them after tools
     );
     
-    // Append tools information if available
+    // Append tools information FIRST if available (so it's prominent)
     if (toolsInfo) {
       contextualInstructions += toolsInfo;
+    }
+    
+    // THEN append custom instructions (system prompt) so it has context of available tools
+    if (config.customInstructions) {
+      contextualInstructions += `\n\nINSTRUCCIONES PERSONALIZADAS DEL AGENTE:\n${config.customInstructions}`;
     }
 
     // Analyze conversation for repetition patterns
@@ -543,7 +690,9 @@ ESCALA DE PUNTUACIÓN DE LEADS (1-7):
 6. Reminder Answered - Cliente responde al seguimiento
 7. Sales Done - Venta completada o trato cerrado
 
-RESPONDE SOLO CON JSON VÁLIDO:
+${functions.length > 0 ? `IMPORTANTE: Si necesitas usar alguna herramienta MCP (como registrar un lead), LLÁMALA PRIMERO antes de generar la respuesta final. Las herramientas están disponibles y debes usarlas cuando corresponda según las instrucciones del system prompt.` : ''}
+
+Después de usar herramientas si es necesario, responde con el siguiente JSON VÁLIDO:
 {
   "responseText": "string",
   "leadScore": number (1-7),
@@ -565,10 +714,16 @@ RESPONDE SOLO CON JSON VÁLIDO:
     // Use the functions already loaded above
     let functionCall: 'none' | 'auto' | { name: string } = functions.length > 0 ? 'auto' : 'none';
 
+    // Use a model that supports tools. Default to gpt-3.5-turbo-1106 or newer which has better tool support
+    const modelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo-1106';
+    const baseMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '200');
+    // Increase max_tokens when tools are available to allow for tool calls and responses
+    const maxTokens = functions.length > 0 ? Math.max(baseMaxTokens, 500) : baseMaxTokens;
+
     const requestConfig: any = {
-      model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+      model: modelName,
       messages,
-      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '200'),
+      max_tokens: maxTokens,
       temperature: 0.7,
       presence_penalty: 0.1,
       frequency_penalty: 0.1
@@ -581,6 +736,9 @@ RESPONDE SOLO CON JSON VÁLIDO:
         function: fn
       }));
       requestConfig.tool_choice = functionCall;
+      console.log(`🔧 [OpenAI] Added ${functions.length} tools to structured response request`);
+      console.log(`🔧 [OpenAI] Using model: ${modelName} (supports tools)`);
+      console.log(`🔧 [OpenAI] Increased max_tokens to ${maxTokens} to accommodate tool calls`);
     }
 
     let response = await openai.chat.completions.create(requestConfig);
@@ -621,10 +779,12 @@ RESPONDE SOLO CON JSON VÁLIDO:
       messages.push(...toolResults);
       
       // Get final response with tool results
+      const finalModelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      const finalMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '200');
       const finalRequestConfig: any = {
-        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        model: finalModelName,
         messages,
-        max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '200'),
+        max_tokens: finalMaxTokens,
         temperature: 0.7,
         presence_penalty: 0.1,
         frequency_penalty: 0.1
