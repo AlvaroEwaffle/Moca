@@ -508,9 +508,45 @@ export class InstagramWebhookService {
         return;
       }
 
+      // Determine which PSID to use for contact
+      // If the sender PSID belongs to one of our accounts, this means the message was sent FROM our account
+      // In this case, the contact should be the RECIPIENT, not the sender
+      let contactPSID = messageData.psid;
+      const senderIsOurAccount = messageData.psid === instagramAccount.pageScopedId;
+      
+      console.log(`🔍 [Contact Selection] Checking if sender is our account:`);
+      console.log(`🔍 [Contact Selection] Sender PSID: ${messageData.psid}`);
+      console.log(`🔍 [Contact Selection] Account pageScopedId: ${instagramAccount.pageScopedId}`);
+      console.log(`🔍 [Contact Selection] senderIsOurAccount: ${senderIsOurAccount}`);
+      console.log(`🔍 [Contact Selection] Recipient ID: ${messageData.recipient?.id || 'NOT PROVIDED'}`);
+      
+      if (senderIsOurAccount && messageData.recipient?.id) {
+        // Message sent FROM our account TO another account
+        // The contact should be the recipient, not the sender
+        console.log(`📤 [Contact Selection] Message sent FROM our account (${instagramAccount.accountName}). Using recipient as contact.`);
+        console.log(`📤 [Contact Selection] Sender PSID: ${messageData.psid}, Recipient ID: ${messageData.recipient.id}`);
+        
+        // Try to find existing contact by recipient ID first (in case it's already stored as a PSID)
+        const existingContactByRecipientId = await Contact.findOne({ psid: messageData.recipient.id });
+        
+        if (existingContactByRecipientId) {
+          console.log(`📤 [Contact Selection] Found existing contact by recipient ID: ${existingContactByRecipientId.id}`);
+          contactPSID = existingContactByRecipientId.psid;
+        } else {
+          // Use recipient ID as PSID (it might be a valid PSID or pageScopedId)
+          // The upsertContact function will try to fetch username, and if it fails, we'll still have a contact
+          contactPSID = messageData.recipient.id;
+          console.log(`📤 [Contact Selection] Using recipient ID as contact PSID: ${contactPSID}`);
+        }
+      } else {
+        // Normal case: message received from a lead
+        contactPSID = messageData.psid;
+        console.log(`📥 [Contact Selection] Message received from lead. Using sender PSID as contact: ${contactPSID}`);
+      }
+
       // Get or create contact
-      const contact = await this.upsertContact(messageData.psid, messageData, instagramAccount);
-      console.log(`🔍 [Message Processing] Using contact: ${contact.id} for PSID: ${messageData.psid}`);
+      const contact = await this.upsertContact(contactPSID, messageData, instagramAccount);
+      console.log(`🔍 [Message Processing] Using contact: ${contact.id} for PSID: ${contactPSID}`);
 
       // Get or create conversation
       const conversation = await this.getOrCreateConversation(contact.id, instagramAccount.accountId);
