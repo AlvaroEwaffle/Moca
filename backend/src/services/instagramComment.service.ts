@@ -29,7 +29,18 @@ export class InstagramCommentService {
         return;
       }
 
-      // Apply delay if configured
+      // RACE CONDITION PROTECTION: Check if comment is already being processed or completed
+      if (commentDoc.status !== 'pending') {
+        console.log(`⚠️ [Comment Service] Comment ${comment.id} is already ${commentDoc.status}, skipping duplicate processing`);
+        return;
+      }
+
+      // Mark comment as processing IMMEDIATELY to prevent duplicate processing by Comment Worker
+      commentDoc.status = 'processing';
+      await commentDoc.save();
+      console.log(`🔄 [Comment Service] Marked comment ${comment.id} as processing to prevent duplicate processing`);
+
+      // Apply delay if configured (AFTER marking as processing)
       if (account.commentSettings.replyDelay > 0) {
         console.log(`⏳ [Comment Service] Waiting ${account.commentSettings.replyDelay} seconds before processing`);
         await new Promise(resolve => setTimeout(resolve, account.commentSettings.replyDelay * 1000));
