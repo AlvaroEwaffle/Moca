@@ -461,7 +461,13 @@ export class InstagramWebhookService {
       
       const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, finalIsBotMessage);
       if (!accountResult) {
-        console.error('❌ No Instagram account found for PSID:', messageData.psid);
+        console.error('❌ [CRITICAL ERROR] Cannot process message - account identification failed');
+        console.error('❌ [CRITICAL ERROR] PSID:', messageData.psid);
+        console.error('❌ [CRITICAL ERROR] Recipient ID:', messageData.recipient?.id || 'NOT PROVIDED');
+        console.error('❌ [CRITICAL ERROR] Message MID:', messageData.mid);
+        console.error('❌ [CRITICAL ERROR] Message text:', messageData.text?.substring(0, 100) || 'NO TEXT');
+        console.error('❌ [CRITICAL ERROR] Message will be SKIPPED to prevent incorrect account assignment');
+        // TODO: Consider storing failed messages in a separate collection for manual review
         return;
       }
 
@@ -968,24 +974,56 @@ export class InstagramWebhookService {
           }
           
           // If not found, this means the pageScopedId wasn't set during OAuth
-          console.warn(`⚠️ [Account Identification] Page-Scoped ID ${recipientId} not found in any account. This should have been set during OAuth.`);
+          // OR the recipient is an external account not in our system
+          // In this case, try to match by SENDER PSID (the account that initiated the conversation)
+          console.warn(`⚠️ [Account Identification] Page-Scoped ID ${recipientId} not found in any account. Trying to match by sender PSID...`);
           console.warn(`⚠️ [Account Identification] Available pageScopedIds:`, allAccounts.map(acc => ({ accountName: acc.accountName, pageScopedId: acc.pageScopedId })));
+          
+          // Try to match by sender PSID (the account that initiated the conversation)
+          // This handles the case where a user sends a message FROM their account TO an external account
+          for (const account of allAccounts) {
+            if (psid === account.pageScopedId) {
+              console.log(`👤 [Account Identification] Matched by sender PSID: ${account.accountName} (${account.userEmail}) - conversation initiated from this account`);
+              return { account, isBotMessage: false };
+            }
+          }
+          
+          // CRITICAL ERROR: Cannot identify account - neither recipient nor sender match
+          console.error(`❌ [Account Identification] CRITICAL: Cannot identify account for message!`);
+          console.error(`❌ [Account Identification] Recipient ID: ${recipientId} - NOT FOUND`);
+          console.error(`❌ [Account Identification] Sender PSID: ${psid} - NOT FOUND`);
+          console.error(`❌ [Account Identification] Available accounts:`, allAccounts.map(acc => ({
+            accountName: acc.accountName,
+            pageScopedId: acc.pageScopedId,
+            accountId: acc.accountId
+          })));
+          console.error(`❌ [Account Identification] Message will NOT be processed to prevent incorrect account assignment`);
+          return null; // Do not process message - cannot safely assign to any account
         } else {
           console.warn(`⚠️ [PSID Matching] No recipient ID provided for user message`);
+          
+          // If no recipient ID, try to match by sender PSID
+          for (const account of allAccounts) {
+            if (psid === account.pageScopedId) {
+              console.log(`👤 [Account Identification] Matched by sender PSID (no recipient ID): ${account.accountName} (${account.userEmail})`);
+              return { account, isBotMessage: false };
+            }
+          }
+          
+          // CRITICAL ERROR: No recipient ID AND sender PSID doesn't match
+          console.error(`❌ [Account Identification] CRITICAL: Cannot identify account - no recipient ID and sender PSID ${psid} not found`);
+          console.error(`❌ [Account Identification] Available accounts:`, allAccounts.map(acc => ({
+            accountName: acc.accountName,
+            pageScopedId: acc.pageScopedId,
+            accountId: acc.accountId
+          })));
+          console.error(`❌ [Account Identification] Message will NOT be processed to prevent incorrect account assignment`);
+          return null; // Do not process message - cannot safely assign to any account
         }
       }
       
-      // Fallback to first active account if recipientId not found or not provided
-      // For comment-related DMs, prefer accounts with comment processing enabled
-      const accountWithComments = allAccounts.find(acc => acc.commentSettings?.enabled);
-      const account = accountWithComments || allAccounts[0];
-      
-      if (account) {
-        console.log(`👤 [PSID Matching] User message to fallback account: ${account.accountName} (${account.userEmail})`);
-        return { account, isBotMessage: false };
-      }
-      
-      console.error('❌ [PSID Matching] No active Instagram account found!');
+      // This should never be reached, but added as safety
+      console.error('❌ [PSID Matching] Unexpected code path - no account identification logic matched');
       return null;
     } catch (error) {
       console.error('❌ Error identifying Instagram account by PSID:', error);

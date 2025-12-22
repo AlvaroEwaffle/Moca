@@ -149,13 +149,16 @@ INSTRUCCIONES CRÍTICAS SOBRE EL USO DE HERRAMIENTAS:
 **⚠️ REGLAS FUNDAMENTALES - LEE CON ATENCIÓN:**
 1. **NUNCA uses valores por defecto, placeholders o datos inventados** 
    - ❌ NO uses: "sin especificar", "ejemplo.com", "Negocio sin especificar", "Dueño sin especificar", valores genéricos, etc.
+   - ❌ NO uses placeholders como: "[NOMBRE DEL CLIENTE]", "[EMAIL DEL CLIENTE]", "[NOMBRE DEL NEGOCIO]", "[TELÉFONO DE CONTACTO]"
    - ❌ NO inventes datos que el cliente no haya proporcionado
    - ❌ NO asumas información que no esté explícitamente en la conversación
    - ✅ SOLO usa datos que el cliente haya proporcionado explícitamente
+   - ⚠️ **CRÍTICO**: Si llamas a una herramienta con placeholders o datos inventados, la herramienta fallará y causará errores
 
 2. **SIEMPRE pregunta al cliente por cada parámetro requerido ANTES de llamar a la herramienta**
-   - NO llames a la herramienta hasta tener TODOS los parámetros requeridos
+   - NO llames a la herramienta hasta tener TODOS los parámetros requeridos con datos REALES del cliente
    - NO uses valores por defecto si faltan parámetros
+   - ⚠️ **CRÍTICO**: Si no tienes TODOS los datos requeridos con valores reales del cliente, NO llames a la herramienta. En su lugar, pregunta por los datos faltantes.
 
 3. **Pregunta UN dato a la vez** de forma natural y conversacional
    - Espera la respuesta del cliente antes de preguntar el siguiente dato
@@ -187,12 +190,15 @@ INSTRUCCIONES CRÍTICAS SOBRE EL USO DE HERRAMIENTAS:
 - Una vez que tengas la respuesta, pregunta por el siguiente parámetro requerido
 - Repite hasta tener TODOS los parámetros requeridos
 
-**Paso 6: Verificar datos completos**
+**Paso 6: Verificar datos completos ANTES de llamar**
 - Antes de ejecutar, verifica que tienes TODOS los parámetros requeridos
-- Verifica que todos son datos reales del cliente, NO valores por defecto
+- Verifica que todos son datos REALES del cliente (no placeholders, no valores genéricos)
+- ⚠️ **CRÍTICO**: Si encuentras CUALQUIER placeholder como "[NOMBRE DEL CLIENTE]" o "[EMAIL DEL CLIENTE]", NO llames a la herramienta
+- ⚠️ **CRÍTICO**: Si faltan datos o son placeholders, pregunta al cliente en lugar de llamar a la herramienta
 
-**Paso 7: Ejecutar herramienta**
-- SOLO cuando tengas todos los datos reales, llama a la herramienta
+**Paso 7: Ejecutar herramienta SOLO con datos reales**
+- SOLO cuando tengas todos los datos reales (sin placeholders), llama a la herramienta
+- Si tienes placeholders o datos faltantes, NO llames a la herramienta - pregunta primero
 - Incorpora los resultados de manera natural en tu respuesta
 
 **EJEMPLO DE FLUJO CORRECTO:**
@@ -305,8 +311,8 @@ Respuesta:`;
       { role: 'user', content: userPrompt }
     ];
 
-    // Use a model that supports tools. Default to gpt-3.5-turbo-1106 or newer which has better tool support
-    const modelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo-1106';
+    // Use a model that supports tools. Default to gpt-4o-mini which has excellent tool support
+    const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     const baseMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '150');
     // Increase max_tokens when tools are available to allow for tool calls and responses
     const maxTokens = functions.length > 0 ? Math.max(baseMaxTokens, 500) : baseMaxTokens;
@@ -411,7 +417,7 @@ Respuesta:`;
       console.log(`🔄 [OpenAI] Requesting final response with ${toolResults.length} tool result(s)`);
       
       // Get final response with tool results
-      const finalModelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo-1106';
+      const finalModelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
       const finalMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '150');
       const finalRequestConfig: any = {
         model: finalModelName,
@@ -553,13 +559,16 @@ INSTRUCCIONES CRÍTICAS SOBRE EL USO DE HERRAMIENTAS:
 **⚠️ REGLAS FUNDAMENTALES - LEE CON ATENCIÓN:**
 1. **NUNCA uses valores por defecto, placeholders o datos inventados** 
    - ❌ NO uses: "sin especificar", "ejemplo.com", "Negocio sin especificar", "Dueño sin especificar", valores genéricos, etc.
+   - ❌ NO uses placeholders como: "[NOMBRE DEL CLIENTE]", "[EMAIL DEL CLIENTE]", "[NOMBRE DEL NEGOCIO]", "[TELÉFONO DE CONTACTO]"
    - ❌ NO inventes datos que el cliente no haya proporcionado
    - ❌ NO asumas información que no esté explícitamente en la conversación
    - ✅ SOLO usa datos que el cliente haya proporcionado explícitamente
+   - ⚠️ **CRÍTICO**: Si llamas a una herramienta con placeholders o datos inventados, la herramienta fallará y causará errores
 
 2. **SIEMPRE pregunta al cliente por cada parámetro requerido ANTES de llamar a la herramienta**
-   - NO llames a la herramienta hasta tener TODOS los parámetros requeridos
+   - NO llames a la herramienta hasta tener TODOS los parámetros requeridos con datos REALES del cliente
    - NO uses valores por defecto si faltan parámetros
+   - ⚠️ **CRÍTICO**: Si no tienes TODOS los datos requeridos con valores reales del cliente, NO llames a la herramienta. En su lugar, pregunta por los datos faltantes.
 
 3. **Pregunta UN dato a la vez** de forma natural y conversacional
    - Espera la respuesta del cliente antes de preguntar el siguiente dato
@@ -591,12 +600,15 @@ INSTRUCCIONES CRÍTICAS SOBRE EL USO DE HERRAMIENTAS:
 - Una vez que tengas la respuesta, pregunta por el siguiente parámetro requerido
 - Repite hasta tener TODOS los parámetros requeridos
 
-**Paso 6: Verificar datos completos**
+**Paso 6: Verificar datos completos ANTES de llamar**
 - Antes de ejecutar, verifica que tienes TODOS los parámetros requeridos
-- Verifica que todos son datos reales del cliente, NO valores por defecto
+- Verifica que todos son datos REALES del cliente (no placeholders, no valores genéricos)
+- ⚠️ **CRÍTICO**: Si encuentras CUALQUIER placeholder como "[NOMBRE DEL CLIENTE]" o "[EMAIL DEL CLIENTE]", NO llames a la herramienta
+- ⚠️ **CRÍTICO**: Si faltan datos o son placeholders, pregunta al cliente en lugar de llamar a la herramienta
 
-**Paso 7: Ejecutar herramienta**
-- SOLO cuando tengas todos los datos reales, llama a la herramienta
+**Paso 7: Ejecutar herramienta SOLO con datos reales**
+- SOLO cuando tengas todos los datos reales (sin placeholders), llama a la herramienta
+- Si tienes placeholders o datos faltantes, NO llames a la herramienta - pregunta primero
 - Incorpora los resultados de manera natural en tu respuesta
 
 **EJEMPLO DE FLUJO CORRECTO:**
@@ -690,7 +702,31 @@ ESCALA DE PUNTUACIÓN DE LEADS (1-7):
 6. Reminder Answered - Cliente responde al seguimiento
 7. Sales Done - Venta completada o trato cerrado
 
-${functions.length > 0 ? `IMPORTANTE: Si necesitas usar alguna herramienta MCP (como registrar un lead), LLÁMALA PRIMERO antes de generar la respuesta final. Las herramientas están disponibles y debes usarlas cuando corresponda según las instrucciones del system prompt.` : ''}
+${functions.length > 0 ? `🚨 REGLA CRÍTICA SOBRE HERRAMIENTAS MCP - LEE ANTES DE LLAMAR CUALQUIER HERRAMIENTA:
+
+ANTES de llamar a cualquier herramienta MCP, VERIFICA que:
+1. ✅ Tienes TODOS los parámetros requeridos
+2. ✅ Cada parámetro tiene un valor REAL del cliente (no placeholders, no valores genéricos)
+3. ✅ NO hay ningún texto que contenga "[", "]" o palabras como "NOMBRE DEL CLIENTE", "EMAIL DEL CLIENTE", "NOMBRE DEL NEGOCIO", "TELÉFONO DE CONTACTO"
+
+❌ EJEMPLOS DE LO QUE NO DEBES HACER (causarán errores):
+- name: "[NOMBRE DEL CLIENTE]" ❌
+- email: "[EMAIL DEL CLIENTE]" ❌
+- businessName: "[NOMBRE DEL NEGOCIO]" ❌
+- phone: "[TELÉFONO DE CONTACTO]" ❌
+
+✅ EJEMPLOS DE LO QUE SÍ DEBES HACER:
+- name: "Juan Pérez" ✅
+- email: "juan@ejemplo.com" ✅
+- businessName: "Mi Negocio" ✅
+- phone: "+56912345678" ✅
+
+⚠️ SI DETECTAS CUALQUIER PLACEHOLDER O DATO FALTANTE:
+- NO llames a la herramienta
+- Pregunta al cliente por los datos faltantes
+- Solo cuando tengas TODOS los datos reales, llama a la herramienta
+
+Las herramientas están disponibles pero SOLO funcionarán con datos REALES del cliente.` : ''}
 
 Después de usar herramientas si es necesario, responde con el siguiente JSON VÁLIDO:
 {
@@ -714,8 +750,8 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
     // Use the functions already loaded above
     let functionCall: 'none' | 'auto' | { name: string } = functions.length > 0 ? 'auto' : 'none';
 
-    // Use a model that supports tools. Default to gpt-3.5-turbo-1106 or newer which has better tool support
-    const modelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo-1106';
+    // Use a model that supports tools. Default to gpt-4o-mini which has excellent tool support
+    const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     const baseMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '200');
     // Increase max_tokens when tools are available to allow for tool calls and responses
     const maxTokens = functions.length > 0 ? Math.max(baseMaxTokens, 500) : baseMaxTokens;
