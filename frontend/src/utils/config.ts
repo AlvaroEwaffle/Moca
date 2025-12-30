@@ -2,47 +2,5 @@
  * Configuration utilities for Moca Frontend
  */
 
-// Get backend URL with fallback
-export const getBackendUrl = (): string => {
-  // Check if we're in production (Cloudflare Pages)
-  const isProduction = window.location.hostname.includes('pages.dev') || 
-                      window.location.hostname.includes('moca.pages.dev');
-  
-  // Production backend URL - Railway deployment
-  const productionBackendUrl = 'https://moca-production.up.railway.app';
-  
-  // Development backend URL
-  const developmentBackendUrl = 'http://localhost:3002';
-  
-  // Use environment variable if set, otherwise use appropriate default
-  const envBackendUrl = import.meta.env.VITE_BACKEND_URL;
-  
-  // Debug logging
-  console.log('🔧 [Backend URL Debug]', {
-    hostname: window.location.hostname,
-    isProduction,
-    envBackendUrl,
-    productionBackendUrl,
-    developmentBackendUrl,
-    allEnvVars: import.meta.env
-  });
-  
-  // Force production URL if we're in production, regardless of env var
-  if (isProduction) {
-    console.log('✅ [Backend URL] Production detected, using production URL:', productionBackendUrl);
-    return productionBackendUrl;
-  }
-  
-  if (envBackendUrl) {
-    console.log('✅ [Backend URL] Using environment variable:', envBackendUrl);
-    return envBackendUrl;
-  }
-  
-  // Use development URL for local development
-  const finalUrl = isProduction ? productionBackendUrl : developmentBackendUrl;
-  console.log('✅ [Backend URL] Using fallback:', finalUrl);
-  return finalUrl;
-};
-
-// Export the backend URL
-export const BACKEND_URL = getBackendUrl();
+// Simplified backend URL resolution
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3002';

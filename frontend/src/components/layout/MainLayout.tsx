@@ -31,7 +31,8 @@ import {
   Instagram,
   BarChart3,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Mail
 } from "lucide-react";
 
 const MainLayout = () => {
@@ -76,10 +77,16 @@ const MainLayout = () => {
       current: location.pathname.startsWith('/app/analytics')
     },
     {
+      name: 'Gmail',
+      href: '/app/gmail',
+      icon: Mail,
+      current: location.pathname.startsWith('/app/gmail')
+    },
+    {
       name: 'Instagram',
-      href: '/app/accounts',
+      href: '/app/instagram',
       icon: Instagram,
-      current: location.pathname.startsWith('/app/accounts')
+      current: location.pathname.startsWith('/app/instagram')
     }
   ];
 

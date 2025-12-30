@@ -402,7 +402,7 @@ const Dashboard = () => {
                         variant="outline"
                         size="sm"
                         className="text-violet-600 border-violet-300 hover:bg-violet-50"
-                        onClick={() => navigate('/app/accounts')}
+                        onClick={() => navigate('/app/instagram')}
                       >
                         ⚙️ Configurar Cuenta
                       </Button>

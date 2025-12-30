@@ -47,6 +47,7 @@ const Login = () => {
       localStorage.setItem('accessToken', data.data.tokens.accessToken);
       localStorage.setItem('refreshToken', data.data.tokens.refreshToken);
       localStorage.setItem('userData', JSON.stringify(data.data.user));
+      window.dispatchEvent(new Event('moca-auth-updated'));
 
       // Clear any previous onboarding data (in case user was in middle of onboarding)
       localStorage.removeItem('businessInfo');
