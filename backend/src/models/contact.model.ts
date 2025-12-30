@@ -26,9 +26,10 @@ const BusinessInfoSchema = new Schema({
 
 export interface IContact extends Document {
   id: string;
-  psid: string; // Instagram PSID (unique identifier)
+  psid?: string; // Instagram PSID (unique identifier for Instagram contacts)
+  email?: string; // Contact email (unique identifier for Gmail contacts)
+  channel?: 'instagram' | 'gmail' | 'whatsapp'; // Channel source
   name?: string; // Display name
-  email?: string; // Contact email
   lastActivity: Date; // Last interaction timestamp
   metadata: {
     lastSeen: Date;
@@ -46,9 +47,14 @@ export interface IContact extends Document {
 }
 
 const ContactSchema = new Schema<IContact>({
-  psid: { type: String, required: true, unique: true },
+  psid: { type: String, required: false, sparse: true },
+  email: { type: String, required: false, sparse: true },
+  channel: { 
+    type: String, 
+    enum: ['instagram', 'gmail', 'whatsapp'], 
+    required: false 
+  },
   name: { type: String, required: false },
-  email: { type: String, required: false },
   metadata: { type: ContactMetadataSchema, default: () => ({}) },
   preferences: { type: ContactPreferencesSchema, default: () => ({}) },
   businessInfo: { type: BusinessInfoSchema, default: () => ({}) },
@@ -59,7 +65,11 @@ const ContactSchema = new Schema<IContact>({
   toObject: { virtuals: true }
 });
 
-// Indexes for performance
+// Compound unique indexes: psid is unique per channel (only for Instagram), email is unique per channel (only for Gmail)
+// This prevents duplicate key errors when psid is null for Gmail contacts
+ContactSchema.index({ psid: 1, channel: 1 }, { unique: true, sparse: true, partialFilterExpression: { psid: { $exists: true, $ne: null } } });
+ContactSchema.index({ email: 1, channel: 1 }, { unique: true, sparse: true, partialFilterExpression: { email: { $exists: true, $ne: null } } });
+ContactSchema.index({ channel: 1 });
 ContactSchema.index({ 'metadata.lastSeen': -1 });
 ContactSchema.index({ 'businessInfo.sector': 1 });
 

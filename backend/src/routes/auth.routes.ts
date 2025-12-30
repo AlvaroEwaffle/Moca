@@ -6,6 +6,33 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
+// Get current user
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user!.userId).lean();
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Remove sensitive fields
+    const { password, ...safeUser } = user as any;
+
+    res.json({
+      success: true,
+      data: safeUser
+    });
+  } catch (error) {
+    console.error('❌ Error fetching current user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch current user'
+    });
+  }
+});
+
 // Register endpoint
 router.post('/register', async (req, res) => {
   try {

@@ -15,12 +15,21 @@ import globalAgentConfigRoutes from './routes/globalAgentConfig.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import instagramCommentsRoutes from './routes/instagramComments.routes';
 import followUpRoutes from './routes/followUp.routes';
+import gmailAgentRoutes from './routes/gmailAgent.routes';
+import googleOAuthRoutes from './routes/googleOAuth.routes';
+import gmailRoutes from './routes/gmail.routes';
+import gmailFetchRuleRoutes from './routes/gmailFetchRule.routes';
+import emailDraftRoutes from './routes/emailDraft.routes';
+import integrationsRoutes from './routes/integrations.routes';
+import agentRoutes from './routes/agents.routes';
 
 // Import services
 import debounceWorker from './services/debounceWorker.service';
 import senderWorker from './services/senderWorker.service';
 import commentWorker from './services/commentWorker.service';
 import { followUpWorkerService } from './services/followUpWorker.service';
+import gmailFetchRuleWorker from './services/gmailFetchRuleWorker.service';
+import emailDraftWorker from './services/emailDraftWorker.service';
 
 console.log('🚀 Moca Instagram DM Agent: Starting application...');
 
@@ -90,6 +99,20 @@ app.use('/api/auth', authRoutes);
 app.use('/api/global-agent-config', globalAgentConfigRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/follow-up', followUpRoutes);
+// Gmail Agent + Gmail APIs (feature-flagged to avoid impacting Instagram)
+const enableGmailAgent = process.env.ENABLE_GMAIL_AGENT === 'true';
+if (enableGmailAgent) {
+  console.log('✅ Gmail Agent module enabled (ENABLE_GMAIL_AGENT=true)');
+  app.use('/api/internal/gmail-agent', gmailAgentRoutes);
+  app.use('/api/integrations/google', googleOAuthRoutes);
+  app.use('/api/integrations', integrationsRoutes);
+  app.use('/api/gmail', gmailRoutes);
+  app.use('/api/gmail/fetch-rules', gmailFetchRuleRoutes);
+  app.use('/api/gmail/drafts', emailDraftRoutes);
+  app.use('/api/agents', agentRoutes);
+} else {
+  console.log('⏸️ Gmail Agent module disabled (ENABLE_GMAIL_AGENT is not true)');
+}
 console.log('✅ API routes setup completed');
 
 // Error handling middleware
@@ -184,6 +207,18 @@ mongoose.connect(MONGODB_URI)
              scheduleFollowUpRuns();
              
              console.log('✅ Follow-up worker service started successfully');
+
+      if (enableGmailAgent) {
+        console.log('🔄 Starting Gmail fetch rule worker service (feature-flagged)...');
+        gmailFetchRuleWorker.start();
+        console.log('✅ Gmail fetch rule worker service started successfully');
+        
+        console.log('🔄 Starting email draft worker service (feature-flagged)...');
+        emailDraftWorker.start();
+        console.log('✅ Email draft worker service started successfully');
+      } else {
+        console.log('⏸️ Gmail workers not started (ENABLE_GMAIL_AGENT is not true)');
+      }
       
       console.log('✅ All background services started successfully');
     } catch (error) {
@@ -217,6 +252,10 @@ process.on('SIGTERM', async () => {
     await debounceWorker.stop();
     await senderWorker.stop();
     commentWorker.stop();
+    if (enableGmailAgent) {
+      gmailFetchRuleWorker.stop();
+      emailDraftWorker.stop();
+    }
     console.log('✅ Background services stopped');
     
     console.log('🛑 Closing MongoDB connection...');
@@ -239,6 +278,10 @@ process.on('SIGINT', async () => {
     await debounceWorker.stop();
     await senderWorker.stop();
     commentWorker.stop();
+    if (enableGmailAgent) {
+      gmailFetchRuleWorker.stop();
+      emailDraftWorker.stop();
+    }
     console.log('✅ Background services stopped');
     
     console.log('🛑 Closing MongoDB connection...');

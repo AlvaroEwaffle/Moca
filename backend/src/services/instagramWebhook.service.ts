@@ -527,7 +527,8 @@ export class InstagramWebhookService {
         console.log(`📤 [Contact Selection] Sender PSID: ${messageData.psid}, Recipient ID: ${messageData.recipient.id}`);
         
         // Try to find existing contact by recipient ID first (in case it's already stored as a PSID)
-        const existingContactByRecipientId = await Contact.findOne({ psid: messageData.recipient.id });
+        // Try to find by psid and channel first, then fallback to psid only for backward compatibility
+        const existingContactByRecipientId = await Contact.findOne({ psid: messageData.recipient.id, channel: 'instagram' }) || await Contact.findOne({ psid: messageData.recipient.id });
         
         if (existingContactByRecipientId) {
           console.log(`📤 [Contact Selection] Found existing contact by recipient ID: ${existingContactByRecipientId.id}`);
@@ -668,7 +669,8 @@ export class InstagramWebhookService {
   private async upsertContact(psid: string, messageData: InstagramMessage, instagramAccount?: any): Promise<IContact> {
     try {
       console.log(`🔍 [Contact Lookup] Looking for contact with PSID: ${psid}`);
-      let contact = await Contact.findOne({ psid });
+      // Try to find contact by psid and channel first (new format), then fallback to psid only (backward compatibility)
+      let contact = await Contact.findOne({ psid, channel: 'instagram' }) || await Contact.findOne({ psid });
       console.log(`🔍 [Contact Lookup] Found contact:`, contact ? contact.id : 'null');
 
       if (!contact) {
@@ -693,6 +695,7 @@ export class InstagramWebhookService {
         
         contact = new Contact({
           psid,
+          channel: 'instagram', // Set channel for new contacts
           metadata: {
             firstSeen: messageTimestamp,
             lastSeen: messageTimestamp,
@@ -716,6 +719,11 @@ export class InstagramWebhookService {
         console.log(`🔍 [Contact Creation] Saved contact metadata:`, contact.metadata);
       } else {
         console.log(`👤 Updating existing contact: ${contact.id}`);
+        
+        // Ensure channel is set for backward compatibility (migrate old contacts)
+        if (!contact.channel) {
+          contact.channel = 'instagram';
+        }
         
         // Update last seen and message count with validated timestamp
         const messageTimestamp = this.validateTimestamp(messageData.timestamp);
