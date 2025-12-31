@@ -36,11 +36,13 @@ import {
   Heart,
   Activity,
   Download,
-  CheckCircle2
+  CheckCircle2,
+  Power
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { useToast } from "@/hooks/use-toast";
 import ChatbotTest from "@/components/ChatbotTest";
+import { Switch } from "@/components/ui/switch";
 
 interface InstagramAccount {
   id: string;
@@ -48,6 +50,7 @@ interface InstagramAccount {
   accountName: string;
   isActive: boolean;
   settings?: {
+    aiEnabled?: boolean;
     systemPrompt?: string;
     defaultMilestone?: {
       target: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
@@ -241,6 +244,68 @@ const InstagramAccounts = () => {
       setError('Failed to load Instagram accounts');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleAgent = async (accountId: string, enabled: boolean) => {
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/accounts/${accountId}/ai-enabled`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({ aiEnabled: enabled })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update local state
+        setAccounts(prev => 
+          prev.map(account => 
+            account.accountId === accountId 
+              ? { 
+                  ...account, 
+                  settings: { 
+                    ...account.settings, 
+                    aiEnabled: enabled 
+                  } 
+                }
+              : account
+          )
+        );
+
+        toast({
+          title: enabled ? "Agente Activado" : "Agente Desactivado",
+          description: `El agente de Instagram ha sido ${enabled ? 'activado' : 'desactivado'} exitosamente`,
+        });
+      } else {
+        throw new Error(data.error || 'Failed to update agent status');
+      }
+    } catch (error: any) {
+      console.error('Error toggling agent:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar el estado del agente",
+        variant: "destructive"
+      });
+      
+      // Revert the toggle in UI
+      setAccounts(prev => 
+        prev.map(account => 
+          account.accountId === accountId 
+            ? { 
+                ...account, 
+                settings: { 
+                  ...account.settings, 
+                  aiEnabled: !enabled 
+                } 
+              }
+            : account
+        )
+      );
     }
   };
 
@@ -1308,10 +1373,28 @@ const InstagramAccounts = () => {
               Manage your Instagram accounts and customize AI system prompts
             </p>
           </div>
-          <Button onClick={fetchAccounts} variant="outline" size="sm" className="w-full sm:w-auto">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-white">
+              <Power className={`w-4 h-4 ${accounts.length > 0 && accounts[0].settings?.aiEnabled !== false ? 'text-green-600' : 'text-gray-400'}`} />
+              <Label htmlFor="agent-toggle" className="text-sm font-medium cursor-pointer">
+                Agente {accounts.length > 0 && accounts[0].settings?.aiEnabled !== false ? 'On' : 'Off'}
+              </Label>
+              <Switch
+                id="agent-toggle"
+                checked={accounts.length > 0 && accounts[0].settings?.aiEnabled !== false}
+                onCheckedChange={(checked) => {
+                  if (accounts.length > 0) {
+                    handleToggleAgent(accounts[0].accountId, checked);
+                  }
+                }}
+                disabled={loading || accounts.length === 0}
+              />
+            </div>
+            <Button onClick={fetchAccounts} variant="outline" size="sm" className="w-full sm:w-auto">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Connection Status */}

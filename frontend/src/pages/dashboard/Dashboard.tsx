@@ -315,20 +315,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              {instagramAccount ? (
-                <div className="space-y-1">
-                  <p className="text-gray-600">Bienvenido de vuelta a Moca</p>
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <span>📱 {instagramAccount.accountName}</span>
-                    <span>🆔 {instagramAccount.accountId}</span>
-                    <span className={`px-2 py-1 rounded-full text-xs ${instagramAccount.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {instagramAccount.isActive ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-gray-600">Bienvenido de vuelta a Moca</p>
-              )}
+              <p className="text-gray-600">Bienvenido de vuelta a Moca</p>
             </div>
             <div className="flex space-x-3">
               <Button variant="outline" onClick={() => navigate('/app/conversations')}>
@@ -341,88 +328,6 @@ const Dashboard = () => {
               </Button>
             </div>
           </div>
-
-          {/* Instagram Account Info Card */}
-          <Card className="border-violet-200 bg-violet-50">
-            <CardHeader>
-              <CardTitle className="text-violet-800 flex items-center">
-                📱 Información de Instagram
-              </CardTitle>
-              <CardDescription className="text-violet-600">
-                Tu cuenta de Instagram conectada y estado del sistema
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {instagramAccount ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-3 bg-white rounded-lg border border-violet-200">
-                      <div className="text-2xl font-bold text-violet-600">{instagramAccount.accountName}</div>
-                      <div className="text-sm text-violet-500">Cuenta de Instagram</div>
-                    </div>
-                    <div className="text-center p-3 bg-white rounded-lg border border-violet-200">
-                      <div className="text-lg font-semibold text-violet-600">{instagramAccount.accountId}</div>
-                      <div className="text-sm text-violet-500">Account ID</div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 text-violet-600 hover:text-violet-700"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(instagramAccount.accountId);
-                            toast({
-                              title: "¡Account ID copiado!",
-                              description: `${instagramAccount.accountId} ha sido copiado al portapapeles`,
-                            });
-                          } catch (error) {
-                            toast({
-                              title: "Error al copiar",
-                              description: "No se pudo copiar el Account ID al portapapeles",
-                              variant: "destructive"
-                            });
-                          }
-                        }}
-                      >
-                        📋 Copiar
-                      </Button>
-                    </div>
-                    <div className="text-center p-3 bg-white rounded-lg border border-violet-200">
-                      <div className="text-lg font-semibold text-violet-600">
-                        {formatDate(instagramAccount.lastSync)}
-                      </div>
-                      <div className="text-sm text-violet-500">Última sincronización</div>
-                    </div>
-                  </div>
-                  <div className="mt-4 text-center space-y-3">
-                    <Badge variant="outline" className="text-violet-600 border-violet-300">
-                      {instagramAccount.isActive ? '✅ Activo' : '❌ Inactivo'}
-                    </Badge>
-                    <div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-violet-600 border-violet-300 hover:bg-violet-50"
-                        onClick={() => navigate('/app/instagram')}
-                      >
-                        ⚙️ Configurar Cuenta
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-8 text-violet-600">
-                  <p>No hay cuenta de Instagram conectada</p>
-                  <p className="text-sm text-violet-500 mt-2">Configura tu cuenta de Instagram para comenzar</p>
-                  <Button 
-                    className="mt-4 bg-violet-600 hover:bg-violet-700"
-                    onClick={() => navigate('/app/instagram')}
-                  >
-                    Conectar Instagram
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

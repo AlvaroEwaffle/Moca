@@ -32,8 +32,15 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Mail
+  Mail,
+  Settings2
 } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const MainLayout = () => {
   const navigate = useNavigate();
@@ -65,28 +72,36 @@ const MainLayout = () => {
       current: location.pathname === '/app/dashboard'
     },
     {
-      name: 'Conversaciones',
-      href: '/app/conversations',
-      icon: MessageSquare,
-      current: location.pathname.startsWith('/app/conversations')
-    },
-    {
       name: 'Analytics',
       href: '/app/analytics',
       icon: BarChart3,
       current: location.pathname.startsWith('/app/analytics')
     },
     {
+      name: 'Instagram',
+      href: '/app/instagram',
+      icon: Instagram,
+      current: location.pathname.startsWith('/app/instagram') || location.pathname.startsWith('/app/conversations'),
+      subItems: [
+        {
+          name: 'Agent Config',
+          href: '/app/instagram',
+          icon: Settings2,
+          current: location.pathname === '/app/instagram'
+        },
+        {
+          name: 'Conversations',
+          href: '/app/conversations',
+          icon: MessageSquare,
+          current: location.pathname.startsWith('/app/conversations')
+        }
+      ]
+    },
+    {
       name: 'Gmail',
       href: '/app/gmail',
       icon: Mail,
       current: location.pathname.startsWith('/app/gmail')
-    },
-    {
-      name: 'Instagram',
-      href: '/app/instagram',
-      icon: Instagram,
-      current: location.pathname.startsWith('/app/instagram')
     }
   ];
 
@@ -120,19 +135,61 @@ const MainLayout = () => {
           
           <nav className="mt-8 space-y-2">
             {navigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  item.current
-                    ? 'bg-violet-100 text-violet-700'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span>{item.name}</span>
-              </Link>
+              <div key={item.name}>
+                {item.subItems ? (
+                  <Accordion 
+                    type="single" 
+                    collapsible 
+                    className="w-full"
+                    defaultValue={item.current ? item.name : undefined}
+                  >
+                    <AccordionItem value={item.name} className="border-0">
+                      <AccordionTrigger
+                        className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:no-underline ${
+                          item.current
+                            ? 'bg-violet-100 text-violet-700'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        <item.icon className="w-5 h-5" />
+                        <span className="flex-1 text-left">{item.name}</span>
+                      </AccordionTrigger>
+                      <AccordionContent className="pt-1 pb-0">
+                        <div className="ml-6 space-y-1">
+                          {item.subItems.map((subItem) => (
+                            <Link
+                              key={subItem.name}
+                              to={subItem.href}
+                              onClick={() => setIsMobileMenuOpen(false)}
+                              className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                subItem.current
+                                  ? 'bg-violet-100 text-violet-700'
+                                  : 'text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              <subItem.icon className="w-4 h-4" />
+                              <span>{subItem.name}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                ) : (
+                  <Link
+                    to={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      item.current
+                        ? 'bg-violet-100 text-violet-700'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <item.icon className="w-5 h-5" />
+                    <span>{item.name}</span>
+                  </Link>
+                )}
+              </div>
             ))}
           </nav>
         </SheetContent>
@@ -172,7 +229,48 @@ const MainLayout = () => {
                 <ul role="list" className="-mx-2 space-y-1">
                   {navigation.map((item) => (
                     <li key={item.name}>
-                      {isSidebarCollapsed ? (
+                      {item.subItems && !isSidebarCollapsed ? (
+                        <Accordion 
+                          type="single" 
+                          collapsible 
+                          className="w-full"
+                          defaultValue={item.current ? item.name : undefined}
+                        >
+                          <AccordionItem value={item.name} className="border-0">
+                            <AccordionTrigger
+                              className={`group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-medium transition-colors hover:no-underline ${
+                                item.current
+                                  ? 'bg-violet-50 text-violet-700'
+                                  : 'text-gray-700 hover:text-violet-700 hover:bg-violet-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-x-3 flex-1">
+                                <item.icon className="h-6 w-6 shrink-0" />
+                                {item.name}
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-1 pb-0">
+                              <ul className="ml-8 space-y-1">
+                                {item.subItems.map((subItem) => (
+                                  <li key={subItem.name}>
+                                    <Link
+                                      to={subItem.href}
+                                      className={`group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-medium transition-colors ${
+                                        subItem.current
+                                          ? 'bg-violet-50 text-violet-700'
+                                          : 'text-gray-700 hover:text-violet-700 hover:bg-violet-50'
+                                      }`}
+                                    >
+                                      <subItem.icon className="h-5 w-5 shrink-0" />
+                                      {subItem.name}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                      ) : isSidebarCollapsed ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Link
