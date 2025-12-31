@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { getRulesDueToRun, executeFetchRule } from './gmailFetchRule.service';
 import mongoose from 'mongoose';
+import { logger } from '../utils/logger';
 
 /**
  * Worker service to automatically execute scheduled Gmail fetch rules
@@ -15,11 +16,11 @@ class GmailFetchRuleWorker {
    */
   start() {
     if (this.intervalId) {
-      console.log('⚠️ [Gmail Fetch Rule Worker] Worker is already running');
+      logger.warn('gmail-fetch-rule-worker', 'Worker is already running');
       return;
     }
 
-    console.log('🔄 [Gmail Fetch Rule Worker] Starting worker...');
+    logger.info('gmail-fetch-rule-worker', 'Starting worker', { checkIntervalMinutes: this.checkInterval / 1000 / 60 });
     
     // Run immediately on start
     this.processScheduledRules();
@@ -29,7 +30,7 @@ class GmailFetchRuleWorker {
       this.processScheduledRules();
     }, this.checkInterval);
 
-    console.log(`✅ [Gmail Fetch Rule Worker] Worker started (checking every ${this.checkInterval / 1000 / 60} minutes)`);
+    logger.info('gmail-fetch-rule-worker', 'Worker started successfully', { checkIntervalMinutes: this.checkInterval / 1000 / 60 });
   }
 
   /**
@@ -40,7 +41,7 @@ class GmailFetchRuleWorker {
       clearInterval(this.intervalId);
       this.intervalId = null;
       this.isRunning = false;
-      console.log('🛑 [Gmail Fetch Rule Worker] Worker stopped');
+      logger.info('gmail-fetch-rule-worker', 'Worker stopped');
     }
   }
 
@@ -49,11 +50,12 @@ class GmailFetchRuleWorker {
    */
   private async processScheduledRules() {
     if (this.isRunning) {
-      console.log('⏸️  [Gmail Fetch Rule Worker] Already processing, skipping...');
+      logger.debug('gmail-fetch-rule-worker', 'Already processing, skipping cycle');
       return;
     }
 
     this.isRunning = true;
+    const startTime = new Date();
 
     try {
       const rules = await getRulesDueToRun();
@@ -63,7 +65,7 @@ class GmailFetchRuleWorker {
         return;
       }
 
-      console.log(`📋 [Gmail Fetch Rule Worker] Found ${rules.length} rule(s) due to run`);
+      logger.info('gmail-fetch-rule-worker', `Found ${rules.length} rule(s) due to run`, { ruleCount: rules.length, ruleIds: rules.map(r => r.id) });
 
       // Process rules in parallel (but with some rate limiting)
       const batchSize = 3; // Process 3 rules at a time
@@ -73,7 +75,7 @@ class GmailFetchRuleWorker {
         await Promise.all(
           batch.map(async (rule) => {
             try {
-              console.log(`🔄 [Gmail Fetch Rule Worker] Executing rule: ${rule.name} (${rule.id})`);
+              logger.info('gmail-fetch-rule-worker', `Executing rule: ${rule.name}`, { ruleId: rule.id, ruleName: rule.name });
               
               // Extract userId safely - handle all possible formats
               let userId: string;
@@ -119,25 +121,27 @@ class GmailFetchRuleWorker {
                   let match = userId.match(/ObjectId\(['"]([0-9a-fA-F]{24})['"]\)/);
                   if (match && match[1]) {
                     userId = match[1];
-                    console.log(`🔧 [Gmail Fetch Rule Worker] Extracted userId from ObjectId pattern: ${userId}`);
+                    logger.debug('gmail-fetch-rule-worker', 'Extracted userId from ObjectId pattern', { ruleId: rule.id, userId });
                   } else {
                     // Pattern 2: Just look for a 24-character hex string (most reliable)
                     match = userId.match(/([0-9a-fA-F]{24})/);
                     if (match && match[1]) {
                       userId = match[1];
-                      console.log(`🔧 [Gmail Fetch Rule Worker] Extracted userId from hex pattern: ${userId}`);
+                      logger.debug('gmail-fetch-rule-worker', 'Extracted userId from hex pattern', { ruleId: rule.id, userId });
                     } else {
-                      console.error(`❌ [Gmail Fetch Rule Worker] Could not extract ObjectId from: ${userId.substring(0, 200)}`);
+                      logger.error('gmail-fetch-rule-worker', 'Could not extract ObjectId from userId', { ruleId: rule.id, userIdPreview: userId.substring(0, 200) });
                     }
                   }
                 } catch (parseError: any) {
-                  console.error(`❌ [Gmail Fetch Rule Worker] Failed to parse userId: ${userId.substring(0, 200)}`, parseError.message);
+                  logger.error('gmail-fetch-rule-worker', 'Failed to parse userId', { ruleId: rule.id, userIdPreview: userId.substring(0, 200), error: parseError.message });
                 }
               }
               
               // Validate userId is a valid ObjectId string (24 hex characters)
               if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-                console.error(`❌ [Gmail Fetch Rule Worker] Invalid userId format for rule ${rule.id}:`, {
+                logger.error('gmail-fetch-rule-worker', 'Invalid userId format for rule', {
+                  ruleId: rule.id,
+                  ruleName: rule.name,
                   userId: userId?.substring(0, 200),
                   userIdType: typeof rawUserId,
                   rawUserIdValue: typeof rawUserId === 'string' ? rawUserId.substring(0, 200) : JSON.stringify(rawUserId).substring(0, 200)
@@ -145,16 +149,32 @@ class GmailFetchRuleWorker {
                 throw new Error(`Invalid userId format in rule ${rule.id}: expected ObjectId string, got: ${userId?.substring(0, 100) || 'undefined'}`);
               }
               
-              console.log(`📋 [Gmail Fetch Rule Worker] Executing rule "${rule.name}" with userId: ${userId}`);
+              logger.info('gmail-fetch-rule-worker', `Executing rule "${rule.name}"`, { ruleId: rule.id, ruleName: rule.name, userId });
               const result = await executeFetchRule(rule.id, userId);
               
               if (result.success) {
-                console.log(`✅ [Gmail Fetch Rule Worker] Rule "${rule.name}" executed: ${result.emailsFetched} emails processed`);
+                logger.info('gmail-fetch-rule-worker', `Rule "${rule.name}" executed successfully`, {
+                  ruleId: rule.id,
+                  ruleName: rule.name,
+                  emailsFetched: result.emailsFetched,
+                  contacts: result.contacts,
+                  conversations: result.conversations,
+                  messages: result.messages
+                });
               } else {
-                console.error(`❌ [Gmail Fetch Rule Worker] Rule "${rule.name}" failed: ${result.error}`);
+                logger.error('gmail-fetch-rule-worker', `Rule "${rule.name}" failed`, {
+                  ruleId: rule.id,
+                  ruleName: rule.name,
+                  error: result.error
+                });
               }
             } catch (error: any) {
-              console.error(`❌ [Gmail Fetch Rule Worker] Error executing rule ${rule.id}:`, error.message);
+              logger.error('gmail-fetch-rule-worker', `Error executing rule`, {
+                ruleId: rule.id,
+                ruleName: rule.name,
+                error: error.message,
+                stack: error.stack
+              });
             }
           })
         );
@@ -165,9 +185,18 @@ class GmailFetchRuleWorker {
         }
       }
 
-      console.log(`✅ [Gmail Fetch Rule Worker] Finished processing ${rules.length} rule(s)`);
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+      logger.info('gmail-fetch-rule-worker', `Finished processing ${rules.length} rule(s)`, {
+        ruleCount: rules.length,
+        durationMs: duration,
+        durationSeconds: Math.round(duration / 1000)
+      });
     } catch (error: any) {
-      console.error(`❌ [Gmail Fetch Rule Worker] Error processing scheduled rules:`, error.message);
+      logger.error('gmail-fetch-rule-worker', 'Error processing scheduled rules', {
+        error: error.message,
+        stack: error.stack
+      });
     } finally {
       this.isRunning = false;
     }

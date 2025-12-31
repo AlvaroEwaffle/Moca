@@ -29,7 +29,7 @@ class Logger {
 
   private updateLogFile(): void {
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    this.currentLogFile = path.join(this.logDir, `gmail-draft-${today}.log`);
+    this.currentLogFile = path.join(this.logDir, `gmail-agent-${today}.log`);
   }
 
   private ensureLogFile(): void {
@@ -121,7 +121,7 @@ class Logger {
    */
   getLogFilePath(date?: string): string {
     const targetDate = date || new Date().toISOString().split('T')[0];
-    return path.join(this.logDir, `gmail-draft-${targetDate}.log`);
+    return path.join(this.logDir, `gmail-agent-${targetDate}.log`);
   }
 
   /**

@@ -3,6 +3,7 @@ import {
   processDraftQueueItem,
   resetStuckDrafts
 } from './emailDraftQueue.service';
+import { logger } from '../utils/logger';
 
 /**
  * Worker service to automatically process email draft queue
@@ -18,11 +19,11 @@ class EmailDraftWorker {
    */
   start() {
     if (this.intervalId) {
-      console.log('⚠️ [Email Draft Worker] Worker is already running');
+      logger.warn('email-draft-worker', 'Worker is already running');
       return;
     }
 
-    console.log('🔄 [Email Draft Worker] Starting worker...');
+    logger.info('email-draft-worker', 'Starting worker', { checkIntervalSeconds: this.checkInterval / 1000 });
     
     // Run immediately on start
     this.processQueue();
@@ -32,7 +33,7 @@ class EmailDraftWorker {
       this.processQueue();
     }, this.checkInterval);
 
-    console.log(`✅ [Email Draft Worker] Worker started (checking every ${this.checkInterval / 1000} seconds)`);
+    logger.info('email-draft-worker', 'Worker started successfully', { checkIntervalSeconds: this.checkInterval / 1000 });
   }
 
   /**
@@ -43,7 +44,7 @@ class EmailDraftWorker {
       clearInterval(this.intervalId);
       this.intervalId = null;
       this.isRunning = false;
-      console.log('🛑 [Email Draft Worker] Worker stopped');
+      logger.info('email-draft-worker', 'Worker stopped');
     }
   }
 
@@ -52,11 +53,12 @@ class EmailDraftWorker {
    */
   private async processQueue() {
     if (this.isRunning) {
-      console.log('⏸️  [Email Draft Worker] Already processing, skipping...');
+      logger.debug('email-draft-worker', 'Already processing, skipping cycle');
       return;
     }
 
     this.isRunning = true;
+    const startTime = new Date();
 
     try {
       // First, check for and reset stuck drafts (drafts stuck in 'generating' status)
@@ -64,7 +66,7 @@ class EmailDraftWorker {
       const stuckThresholdMinutes = 30; // Consider drafts stuck if in generating status for 30+ minutes
       const resetCount = await resetStuckDrafts(stuckThresholdMinutes);
       if (resetCount > 0) {
-        console.log(`🔧 [Email Draft Worker] Reset ${resetCount} stuck draft(s) before processing queue`);
+        logger.warn('email-draft-worker', `Reset ${resetCount} stuck draft(s) before processing queue`, { resetCount });
       }
 
       const pendingItems = await getPendingDraftQueueItems(this.batchSize);
@@ -74,30 +76,60 @@ class EmailDraftWorker {
         return;
       }
 
-      console.log(`📋 [Email Draft Worker] Found ${pendingItems.length} pending draft(s) to process`);
+      logger.info('email-draft-worker', `Found ${pendingItems.length} pending draft(s) to process`, {
+        pendingCount: pendingItems.length,
+        itemIds: pendingItems.map(i => i.id)
+      });
 
       // Process drafts sequentially to avoid overwhelming the system
       for (const item of pendingItems) {
         try {
-          console.log(`🔄 [Email Draft Worker] Processing draft for email ${item.emailId} (${item.id})`);
+          logger.info('email-draft-worker', `Processing draft for email`, {
+            draftQueueItemId: item.id,
+            emailId: item.emailId,
+            conversationId: item.conversationId,
+            contactId: item.contactId
+          });
           const result = await processDraftQueueItem(item.id);
           
           if (result.success) {
-            console.log(`✅ [Email Draft Worker] Draft created successfully: ${result.draftId}`);
+            logger.info('email-draft-worker', 'Draft created successfully', {
+              draftQueueItemId: item.id,
+              draftId: result.draftId,
+              emailId: item.emailId
+            });
           } else {
-            console.error(`❌ [Email Draft Worker] Draft generation failed: ${result.error}`);
+            logger.error('email-draft-worker', 'Draft generation failed', {
+              draftQueueItemId: item.id,
+              emailId: item.emailId,
+              error: result.error
+            });
           }
           
           // Small delay between items
           await new Promise((resolve) => setTimeout(resolve, 1000));
         } catch (error: any) {
-          console.error(`❌ [Email Draft Worker] Error processing draft ${item.id}:`, error.message);
+          logger.error('email-draft-worker', 'Error processing draft', {
+            draftQueueItemId: item.id,
+            emailId: item.emailId,
+            error: error.message,
+            stack: error.stack
+          });
         }
       }
 
-      console.log(`✅ [Email Draft Worker] Finished processing ${pendingItems.length} draft(s)`);
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+      logger.info('email-draft-worker', `Finished processing ${pendingItems.length} draft(s)`, {
+        processedCount: pendingItems.length,
+        durationMs: duration,
+        durationSeconds: Math.round(duration / 1000)
+      });
     } catch (error: any) {
-      console.error(`❌ [Email Draft Worker] Error processing queue:`, error.message);
+      logger.error('email-draft-worker', 'Error processing queue', {
+        error: error.message,
+        stack: error.stack
+      });
     } finally {
       this.isRunning = false;
     }

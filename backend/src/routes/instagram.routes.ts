@@ -545,6 +545,55 @@ router.get('/accounts/:accountId', authenticateToken, async (req, res) => {
 });
 
 // Update Instagram account
+// Toggle AI enabled status for an account
+router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { aiEnabled } = req.body;
+
+    if (typeof aiEnabled !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'aiEnabled field must be a boolean'
+      });
+    }
+
+    const account = await InstagramAccount.findOne({ accountId });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    // Ensure settings object exists
+    if (!account.settings) {
+      account.settings = {
+        autoRespond: true,
+        aiEnabled: true
+      };
+    }
+
+    account.settings.aiEnabled = aiEnabled;
+    await account.save();
+
+    res.json({
+      success: true,
+      data: {
+        accountId: account.accountId,
+        accountName: account.accountName,
+        aiEnabled: account.settings.aiEnabled
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error updating AI enabled status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update AI enabled status'
+    });
+  }
+});
+
 router.put('/accounts/:accountId', async (req, res) => {
   try {
     const { accountId } = req.params;
