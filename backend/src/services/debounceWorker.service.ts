@@ -153,10 +153,80 @@ class DebounceWorkerService {
    */
   private async processConversationBatch(conversation: IConversation, preCollectedMessages?: IMessage[]): Promise<boolean> {
     try {
+      console.log(`🔍 [AI Check] Starting processConversationBatch for conversation ${conversation.id}, accountId: ${conversation.accountId}`);
+      
       // Check if AI is enabled for this conversation
+      console.log(`🔍 [AI Check] Conversation settings:`, JSON.stringify(conversation.settings, null, 2));
       if (conversation.settings?.aiEnabled === false) {
+        console.log(`🚫 DebounceWorkerService: AI disabled for conversation ${conversation.id} (conversation-level)`);
         return false;
       }
+
+      // Check if AI is enabled at account level (global toggle)
+      // IMPORTANT: We need to check this FIRST before processing any messages
+      // We check without isActive filter first to ensure we get the account regardless
+      console.log(`🔍 [AI Check] Fetching account for accountId: ${conversation.accountId}`);
+      
+      // First try to find account without isActive filter to ensure we can check aiEnabled
+      let account = await InstagramAccount.findOne({ 
+        accountId: conversation.accountId
+      }).lean();
+      
+      if (!account) {
+        console.log(`⚠️ DebounceWorkerService: Account ${conversation.accountId} not found`);
+        return false;
+      }
+      
+      // Check if account is active
+      if (!account.isActive) {
+        console.log(`⚠️ DebounceWorkerService: Account ${conversation.accountId} is not active (isActive: ${account.isActive})`);
+        return false;
+      }
+      
+      console.log(`🔍 [AI Check] Account found:`, {
+        accountId: account.accountId,
+        accountName: account.accountName,
+        isActive: account.isActive,
+        hasSettings: !!account.settings,
+        aiEnabled: account.settings?.aiEnabled,
+        settingsFull: JSON.stringify(account.settings, null, 2)
+      });
+      
+      // Check if AI is explicitly disabled at account level
+      // CRITICAL: Check for false explicitly - account.settings.aiEnabled === false
+      // Use strict equality to catch false, but not null/undefined
+      const aiEnabledValue = account.settings?.aiEnabled;
+      const aiEnabledType = typeof aiEnabledValue;
+      const aiEnabledStrictFalse = aiEnabledValue === false;
+      
+      console.log(`🔍 [AI Check] aiEnabled analysis:`, {
+        value: aiEnabledValue,
+        type: aiEnabledType,
+        strictFalse: aiEnabledStrictFalse,
+        truthy: !!aiEnabledValue,
+        falsy: !aiEnabledValue,
+        nullCheck: aiEnabledValue === null,
+        undefinedCheck: aiEnabledValue === undefined
+      });
+      
+      // If settings exists and aiEnabled is explicitly false, disable AI
+      if (account.settings && aiEnabledStrictFalse) {
+        console.log(`🚫 DebounceWorkerService: AI DISABLED for account ${conversation.accountId} (account-level toggle OFF)`);
+        console.log(`🔍 [Debug] Account details:`, {
+          isActive: account.isActive,
+          aiEnabled: account.settings.aiEnabled,
+          accountName: account.accountName
+        });
+        return false;
+      }
+      
+      // If aiEnabled is not set (undefined/null) or is true, continue processing
+      // Note: Default in schema is true, so undefined/null should be treated as true
+      console.log(`✅ DebounceWorkerService: AI ENABLED for account ${conversation.accountId}`, {
+        isActive: account.isActive,
+        aiEnabled: account.settings?.aiEnabled ?? 'default (true)',
+        accountName: account.accountName
+      });
 
       // Check global agent rules (response limits, lead score, milestones)
       const globalConfig = await GlobalAgentRulesService.getGlobalConfig();

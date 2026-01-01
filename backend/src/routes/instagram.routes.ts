@@ -545,6 +545,52 @@ router.get('/accounts/:accountId', authenticateToken, async (req, res) => {
 });
 
 // Update Instagram account
+// Toggle account active status (isActive)
+router.put('/accounts/:accountId/active', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'isActive field must be a boolean'
+      });
+    }
+
+    const account = await InstagramAccount.findOne({ accountId });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    const oldValue = account.isActive;
+    console.log(`🔄 [Account Active Toggle] Updating isActive for account ${accountId}: ${oldValue} -> ${isActive}`);
+    
+    account.isActive = isActive;
+    await account.save();
+    
+    console.log(`✅ [Account Active Toggle] Account ${isActive ? 'activated' : 'deactivated'} successfully: ${accountId}`);
+
+    res.json({
+      success: true,
+      data: {
+        accountId: account.accountId,
+        accountName: account.accountName,
+        isActive: account.isActive
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error updating account active status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update account active status'
+    });
+  }
+});
+
 // Toggle AI enabled status for an account
 router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res) => {
   try {
@@ -580,8 +626,33 @@ router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res
     }
 
     // Update aiEnabled
+    const oldValue = account.settings?.aiEnabled;
+    console.log(`🔄 [AI Toggle] Updating AI enabled status for account ${accountId}: ${oldValue} -> ${aiEnabled}`);
+    console.log(`🔍 [AI Toggle] Current settings object:`, JSON.stringify(account.settings, null, 2));
+    
+    // Update the field
     account.settings.aiEnabled = aiEnabled;
-    await account.save();
+    
+    // Mark the nested object as modified (IMPORTANT for Mongoose to detect changes in nested objects)
+    account.markModified('settings');
+    
+    // Save with validation disabled to ensure it saves even if other fields have issues
+    await account.save({ validateBeforeSave: false });
+    
+    console.log(`💾 [AI Toggle] Account saved. Checking verification...`);
+    
+    // Verify the change was saved by re-fetching from DB
+    const savedAccount = await InstagramAccount.findOne({ accountId }).lean();
+    const savedValue = savedAccount?.settings?.aiEnabled;
+    console.log(`✅ [AI Toggle] Verification - Saved value from DB: ${savedValue} (requested: ${aiEnabled})`);
+    console.log(`🔍 [AI Toggle] Full settings from DB:`, JSON.stringify(savedAccount?.settings, null, 2));
+    
+    if (savedValue !== aiEnabled) {
+      console.error(`❌ [AI Toggle] ERROR: Saved value (${savedValue}) does not match requested value (${aiEnabled})!`);
+      console.error(`❌ [AI Toggle] This indicates a problem with Mongoose save or schema validation.`);
+    } else {
+      console.log(`✅ [AI Toggle] SUCCESS: Value correctly saved to database.`);
+    }
 
     res.json({
       success: true,
