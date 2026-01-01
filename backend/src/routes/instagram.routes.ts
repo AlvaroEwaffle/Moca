@@ -566,14 +566,20 @@ router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res
       });
     }
 
-    // Ensure settings object exists
+    // Ensure settings object exists with defaults if needed
     if (!account.settings) {
       account.settings = {
+        systemPrompt: "You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.",
+        toneOfVoice: 'professional',
+        keyInformation: '',
+        fallbackRules: [],
+        defaultResponse: "Thanks for your message! I'll get back to you soon.",
         autoRespond: true,
         aiEnabled: true
       };
     }
 
+    // Update aiEnabled
     account.settings.aiEnabled = aiEnabled;
     await account.save();
 
@@ -1066,14 +1072,13 @@ router.put('/accounts/:accountId/milestone', authenticateToken, async (req, res)
     console.log('🎯 [Account Milestone] Updating default milestone for account:', accountId);
     if (!account.settings) {
       account.settings = {
-        // autoRespond removed from simplified model
-        // aiEnabled not part of InstagramAccount settings
+        autoRespond: true,
+        aiEnabled: true,
         fallbackRules: [],
         defaultResponse: "Thanks for your message! I'll get back to you soon.",
         systemPrompt: "You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.",
         toneOfVoice: 'professional',
         keyInformation: '',
-        // businessHours removed from simplified model
         defaultMilestone: defaultMilestone
       };
     } else {

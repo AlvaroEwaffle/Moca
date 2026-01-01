@@ -101,11 +101,19 @@ export interface IInstagramAccount extends Document {
   refreshToken?: string; // For token refresh
   tokenExpiry: Date; // Token expiration
   settings: {
+    autoRespond?: boolean;
+    aiEnabled?: boolean;
     systemPrompt: string;
     toneOfVoice: 'professional' | 'friendly' | 'casual';
     keyInformation: string;
     fallbackRules: string[];
     defaultResponse: string;
+    businessHours?: {
+      enabled: boolean;
+      startTime: string;
+      endTime: string;
+      timezone: string;
+    };
     defaultMilestone?: {
       target?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
       customTarget?: string;
