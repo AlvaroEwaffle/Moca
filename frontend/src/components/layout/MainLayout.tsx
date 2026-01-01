@@ -33,7 +33,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Mail,
-  Settings2
+  Settings2,
+  Activity
 } from "lucide-react";
 import {
   Accordion,
@@ -41,21 +42,88 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { BACKEND_URL } from "@/utils/config";
+import { useToast } from "@/hooks/use-toast";
 
 const MainLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [notifications, setNotifications] = useState(3);
+  const [instagramAccount, setInstagramAccount] = useState<any>(null);
+  const [isActiveLoading, setIsActiveLoading] = useState(false);
 
   useEffect(() => {
     const user = localStorage.getItem('userData');
     if (user) {
       setUserData(JSON.parse(user));
     }
+    fetchInstagramAccount();
   }, []);
+
+  const fetchInstagramAccount = async () => {
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/accounts`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data?.accounts && data.data.accounts.length > 0) {
+          setInstagramAccount(data.data.accounts[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching Instagram account:', error);
+    }
+  };
+
+  const handleToggleAccountActive = async (accountId: string, isActive: boolean) => {
+    setIsActiveLoading(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/accounts/${accountId}/active`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({ isActive })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setInstagramAccount((prev: any) => prev ? { ...prev, isActive } : null);
+        toast({
+          title: isActive ? "Cuenta Activada" : "Cuenta Desactivada",
+          description: `La cuenta de Instagram ha sido ${isActive ? 'activada' : 'desactivada'} exitosamente`,
+        });
+      } else {
+        throw new Error(data.error || 'Failed to update account status');
+      }
+    } catch (error: any) {
+      console.error('Error toggling account active:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar el estado de la cuenta",
+        variant: "destructive"
+      });
+      
+      // Revert the toggle in UI
+      setInstagramAccount((prev: any) => prev ? { ...prev, isActive: !isActive } : null);
+    } finally {
+      setIsActiveLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -322,9 +390,11 @@ const MainLayout = () => {
                         <p className="text-sm font-medium text-gray-900 truncate">
                           {userData.name}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {userData.specialization || 'Doctor'}
-                        </p>
+                        {userData.specialization && (
+                          <p className="text-xs text-gray-500 truncate">
+                            {userData.specialization}
+                          </p>
+                        )}
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -332,9 +402,41 @@ const MainLayout = () => {
                             <ChevronDown className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuContent align="end" className="w-56">
                           <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
                           <DropdownMenuSeparator />
+                          {instagramAccount && (
+                            <>
+                              <div className="px-2 py-1.5">
+                                <div className="flex items-center justify-between space-x-2">
+                                  <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                    <Activity className="h-4 w-4 text-violet-600 flex-shrink-0" />
+                                    <Label 
+                                      htmlFor="account-active-toggle" 
+                                      className="text-sm font-medium cursor-pointer flex-1 truncate"
+                                    >
+                                      {instagramAccount.accountName || 'Instagram'}
+                                    </Label>
+                                  </div>
+                                  <Switch
+                                    id="account-active-toggle"
+                                    checked={instagramAccount.isActive}
+                                    onCheckedChange={(checked) => {
+                                      if (instagramAccount.accountId) {
+                                        handleToggleAccountActive(instagramAccount.accountId, checked);
+                                      }
+                                    }}
+                                    disabled={isActiveLoading}
+                                    className="flex-shrink-0"
+                                  />
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 ml-6">
+                                  {instagramAccount.isActive ? 'Cuenta activa' : 'Cuenta inactiva'}
+                                </p>
+                              </div>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           <DropdownMenuItem onClick={() => navigate('/configuracion')}>
                             <Settings className="mr-2 h-4 w-4" />
                             Configuración

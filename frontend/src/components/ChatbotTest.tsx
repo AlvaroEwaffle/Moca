@@ -18,6 +18,7 @@ const ChatbotTest = () => {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isOpen, setIsOpen] = useState(false); // Start hidden
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -101,6 +102,26 @@ const ChatbotTest = () => {
     setMessages([]);
   };
 
+  // If not open, show only the floating button
+  if (!isOpen) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50">
+        <Button
+          onClick={() => {
+            setIsOpen(true);
+            setIsMinimized(false);
+          }}
+          className="rounded-full shadow-lg"
+          size="lg"
+        >
+          <Bot className="w-5 h-5 mr-2" />
+          Chat Test
+        </Button>
+      </div>
+    );
+  }
+
+  // If minimized, show smaller button
   if (isMinimized) {
     return (
       <div className="fixed bottom-4 right-4 z-50">
@@ -128,18 +149,23 @@ const ChatbotTest = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={clearChat}
+              onClick={() => setIsMinimized(true)}
               className="h-8 w-8 p-0"
+              title="Minimize"
             >
-              <X className="w-4 h-4" />
+              <Minimize2 className="w-4 h-4" />
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setIsMinimized(true)}
+              onClick={() => {
+                setIsOpen(false);
+                setIsMinimized(false);
+              }}
               className="h-8 w-8 p-0"
+              title="Close"
             >
-              <Minimize2 className="w-4 h-4" />
+              <X className="w-4 h-4" />
             </Button>
           </div>
         </div>
