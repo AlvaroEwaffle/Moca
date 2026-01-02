@@ -43,6 +43,7 @@ import { Helmet } from "react-helmet";
 import { useToast } from "@/hooks/use-toast";
 import ChatbotTest from "@/components/ChatbotTest";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface InstagramAccount {
   id: string;
@@ -50,7 +51,7 @@ interface InstagramAccount {
   accountName: string;
   isActive: boolean;
   settings?: {
-    aiEnabled?: boolean;
+    aiEnabled?: 'off' | 'test' | 'on' | boolean; // Support both new string format and old boolean for migration
     systemPrompt?: string;
     defaultMilestone?: {
       target: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
@@ -247,7 +248,7 @@ const InstagramAccounts = () => {
     }
   };
 
-  const handleToggleAgent = async (accountId: string, enabled: boolean) => {
+  const handleChangeAgentMode = async (accountId: string, mode: 'off' | 'test' | 'on') => {
     try {
       const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/accounts/${accountId}/ai-enabled`, {
@@ -256,7 +257,7 @@ const InstagramAccounts = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         },
-        body: JSON.stringify({ aiEnabled: enabled })
+        body: JSON.stringify({ aiEnabled: mode })
       });
 
       const data = await response.json();
@@ -270,43 +271,49 @@ const InstagramAccounts = () => {
                   ...account, 
                   settings: { 
                     ...account.settings, 
-                    aiEnabled: enabled 
+                    aiEnabled: mode 
                   } 
                 }
               : account
           )
         );
 
+        const modeLabels: Record<string, string> = {
+          'off': 'Desactivado',
+          'test': 'Modo Test',
+          'on': 'Activado'
+        };
+
         toast({
-          title: enabled ? "Agente Activado" : "Agente Desactivado",
-          description: `El agente de Instagram ha sido ${enabled ? 'activado' : 'desactivado'} exitosamente`,
+          title: `Agente ${modeLabels[mode]}`,
+          description: `El agente de Instagram ha sido configurado en modo "${modeLabels[mode]}"`,
         });
       } else {
-        throw new Error(data.error || 'Failed to update agent status');
+        throw new Error(data.error || 'Failed to update agent mode');
       }
     } catch (error: any) {
-      console.error('Error toggling agent:', error);
+      console.error('Error updating agent mode:', error);
       toast({
         title: "Error",
-        description: error.message || "No se pudo actualizar el estado del agente",
+        description: error.message || "No se pudo actualizar el modo del agente",
         variant: "destructive"
       });
       
-      // Revert the toggle in UI
-      setAccounts(prev => 
-        prev.map(account => 
-          account.accountId === accountId 
-            ? { 
-                ...account, 
-                settings: { 
-                  ...account.settings, 
-                  aiEnabled: !enabled 
-                } 
-              }
-            : account
-        )
-      );
+      // Refresh accounts to revert UI state
+      fetchAccounts();
     }
+  };
+
+  // Helper to get current agent mode (migrate from boolean if needed)
+  const getCurrentAgentMode = (account: InstagramAccount): 'off' | 'test' | 'on' => {
+    if (!account.settings?.aiEnabled) return 'on'; // Default
+    
+    // Handle migration from boolean to string
+    if (typeof account.settings.aiEnabled === 'boolean') {
+      return account.settings.aiEnabled ? 'on' : 'off';
+    }
+    
+    return account.settings.aiEnabled as 'off' | 'test' | 'on';
   };
 
   const fetchGlobalConfig = async () => {
@@ -1374,26 +1381,58 @@ const InstagramAccounts = () => {
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-white">
-              <Power className={`w-4 h-4 ${accounts.length > 0 && accounts[0].settings?.aiEnabled !== false ? 'text-green-600' : 'text-gray-400'}`} />
-              <Label htmlFor="agent-toggle" className="text-sm font-medium cursor-pointer">
-                Agente {accounts.length > 0 && accounts[0].settings?.aiEnabled !== false ? 'On' : 'Off'}
-              </Label>
-              <Switch
-                id="agent-toggle"
-                checked={accounts.length > 0 && accounts[0].settings?.aiEnabled !== false}
-                onCheckedChange={(checked) => {
+            <div className="flex items-center gap-2">
+              <Power className={`w-3.5 h-3.5 ${accounts.length > 0 && getCurrentAgentMode(accounts[0]) !== 'off' ? 'text-green-600' : 'text-gray-400'}`} />
+              <Select
+                value={accounts.length > 0 ? getCurrentAgentMode(accounts[0]) : 'off'}
+                onValueChange={(value: 'off' | 'test' | 'on') => {
                   if (accounts.length > 0) {
-                    handleToggleAgent(accounts[0].accountId, checked);
+                    handleChangeAgentMode(accounts[0].accountId, value);
                   }
                 }}
                 disabled={loading || accounts.length === 0}
-              />
+              >
+                <SelectTrigger id="agent-mode-select" className="w-28 h-8 text-sm border-gray-300">
+                  <SelectValue>
+                    {(() => {
+                      const currentMode = accounts.length > 0 ? getCurrentAgentMode(accounts[0]) : 'off';
+                      const modeConfig: Record<'off' | 'test' | 'on', { color: string; label: string }> = {
+                        off: { color: 'bg-gray-400', label: 'Off' },
+                        test: { color: 'bg-yellow-500', label: 'Test' },
+                        on: { color: 'bg-green-500', label: 'On' }
+                      };
+                      const config = modeConfig[currentMode] || modeConfig.off;
+                      return (
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${config.color}`}></div>
+                          <span>{config.label}</span>
+                        </div>
+                      );
+                    })()}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="off">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
+                      <span>Off</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="test">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
+                      <span>Test Mode</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="on">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                      <span>On</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Button onClick={fetchAccounts} variant="outline" size="sm" className="w-full sm:w-auto">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
           </div>
         </div>
 
