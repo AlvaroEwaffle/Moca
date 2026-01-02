@@ -12,7 +12,7 @@ const RateLimitsSchema = new Schema({
 // Instagram API settings sub-schema
 const InstagramSettingsSchema = new Schema({
   autoRespond: { type: Boolean, default: true }, // Enable/disable auto-responses
-  aiEnabled: { type: Boolean, default: true }, // Use AI for responses
+  aiEnabled: { type: String, enum: ['off', 'test', 'on'], default: 'on' }, // Agent mode: 'off' (no response), 'test' (generate but don't send), 'on' (generate and send)
   fallbackRules: [{ type: String }], // Simple response rules when AI unavailable
   defaultResponse: { type: String, default: "Thanks for your message! I'll get back to you soon." },
   systemPrompt: { type: String, default: "You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully." },
@@ -102,7 +102,7 @@ export interface IInstagramAccount extends Document {
   tokenExpiry: Date; // Token expiration
   settings: {
     autoRespond?: boolean;
-    aiEnabled?: boolean;
+    aiEnabled?: 'off' | 'test' | 'on';
     systemPrompt: string;
     toneOfVoice: 'professional' | 'friendly' | 'casual';
     keyInformation: string;

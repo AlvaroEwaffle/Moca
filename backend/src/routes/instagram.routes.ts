@@ -591,16 +591,17 @@ router.put('/accounts/:accountId/active', authenticateToken, async (req, res) =>
   }
 });
 
-// Toggle AI enabled status for an account
+// Update AI agent mode for an account (off | test | on)
 router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const { aiEnabled } = req.body;
 
-    if (typeof aiEnabled !== 'boolean') {
+    // Validate that aiEnabled is one of the allowed values
+    if (!['off', 'test', 'on'].includes(aiEnabled)) {
       return res.status(400).json({
         success: false,
-        error: 'aiEnabled field must be a boolean'
+        error: 'aiEnabled field must be one of: "off", "test", or "on"'
       });
     }
 
@@ -621,17 +622,22 @@ router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res
         fallbackRules: [],
         defaultResponse: "Thanks for your message! I'll get back to you soon.",
         autoRespond: true,
-        aiEnabled: true
+        aiEnabled: 'on' // Default to 'on' for new accounts
       };
     }
 
-    // Update aiEnabled
+    // Handle migration: if old boolean value exists, convert it
     const oldValue = account.settings?.aiEnabled;
-    console.log(`🔄 [AI Toggle] Updating AI enabled status for account ${accountId}: ${oldValue} -> ${aiEnabled}`);
-    console.log(`🔍 [AI Toggle] Current settings object:`, JSON.stringify(account.settings, null, 2));
+    if (typeof oldValue === 'boolean') {
+      // Migrate: true -> 'on', false -> 'off'
+      account.settings.aiEnabled = oldValue ? 'on' : 'off';
+      console.log(`🔄 [AI Mode] Migrating boolean value: ${oldValue} -> ${account.settings.aiEnabled}`);
+    }
+
+    console.log(`🔄 [AI Mode] Updating agent mode for account ${accountId}: ${account.settings.aiEnabled} -> ${aiEnabled}`);
     
     // Update the field
-    account.settings.aiEnabled = aiEnabled;
+    account.settings.aiEnabled = aiEnabled as 'off' | 'test' | 'on';
     
     // Mark the nested object as modified (IMPORTANT for Mongoose to detect changes in nested objects)
     account.markModified('settings');
@@ -639,19 +645,13 @@ router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res
     // Save with validation disabled to ensure it saves even if other fields have issues
     await account.save({ validateBeforeSave: false });
     
-    console.log(`💾 [AI Toggle] Account saved. Checking verification...`);
-    
     // Verify the change was saved by re-fetching from DB
     const savedAccount = await InstagramAccount.findOne({ accountId }).lean();
     const savedValue = savedAccount?.settings?.aiEnabled;
-    console.log(`✅ [AI Toggle] Verification - Saved value from DB: ${savedValue} (requested: ${aiEnabled})`);
-    console.log(`🔍 [AI Toggle] Full settings from DB:`, JSON.stringify(savedAccount?.settings, null, 2));
+    console.log(`✅ [AI Mode] Saved value from DB: ${savedValue} (requested: ${aiEnabled})`);
     
     if (savedValue !== aiEnabled) {
-      console.error(`❌ [AI Toggle] ERROR: Saved value (${savedValue}) does not match requested value (${aiEnabled})!`);
-      console.error(`❌ [AI Toggle] This indicates a problem with Mongoose save or schema validation.`);
-    } else {
-      console.log(`✅ [AI Toggle] SUCCESS: Value correctly saved to database.`);
+      console.error(`❌ [AI Mode] ERROR: Saved value (${savedValue}) does not match requested value (${aiEnabled})!`);
     }
 
     res.json({
@@ -663,10 +663,10 @@ router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res
       }
     });
   } catch (error: any) {
-    console.error('❌ Error updating AI enabled status:', error);
+    console.error('❌ Error updating AI agent mode:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to update AI enabled status'
+      error: error.message || 'Failed to update AI agent mode'
     });
   }
 });

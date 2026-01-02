@@ -153,8 +153,8 @@ class DebounceWorkerService {
    */
   private async processConversationBatch(conversation: IConversation, preCollectedMessages?: IMessage[]): Promise<boolean> {
     try {
-      // Check if AI is enabled for this conversation
-      if (conversation.settings?.aiEnabled === false) {
+      // Check if AI is enabled for this conversation (support old boolean format for migration)
+      if (conversation.settings?.aiEnabled === false || conversation.settings?.aiEnabled === 'off') {
         console.log(`🚫 AI disabled for conversation ${conversation.id} (conversation-level)`);
         return false;
       }
@@ -175,11 +175,22 @@ class DebounceWorkerService {
         return false;
       }
       
-      // Check if AI is explicitly disabled at account level
-      if (account.settings && account.settings.aiEnabled === false) {
+      // Handle migration: convert old boolean values
+      let agentMode: 'off' | 'test' | 'on' = 'on';
+      if (typeof account.settings?.aiEnabled === 'boolean') {
+        agentMode = account.settings.aiEnabled ? 'on' : 'off';
+      } else if (account.settings?.aiEnabled) {
+        agentMode = account.settings.aiEnabled as 'off' | 'test' | 'on';
+      }
+      
+      // Check agent mode
+      if (agentMode === 'off') {
         console.log(`🚫 AI disabled for account ${account.accountName} (${conversation.accountId})`);
         return false;
       }
+      
+      // Determine if we're in test mode
+      const isTestMode = agentMode === 'test';
 
       // Check global agent rules (response limits, lead score, milestones)
       const globalConfig = await GlobalAgentRulesService.getGlobalConfig();
@@ -248,10 +259,14 @@ class DebounceWorkerService {
       await GlobalAgentRulesService.incrementResponseCounter(conversation);
       await conversation.save();
 
-      // Queue response
-      await this.queueResponse(conversation, response, unprocessedMessages.map(msg => msg.mid));
+      // Queue response (or create test response if in test mode)
+      await this.queueResponse(conversation, response, unprocessedMessages.map(msg => msg.mid), isTestMode);
       
-      console.log(`✅ DebounceWorkerService: Successfully processed conversation ${conversation.id}`);
+      if (isTestMode) {
+        console.log(`🧪 Test Mode: Response generated for conversation ${conversation.id} (not queued for sending)`);
+      } else {
+        console.log(`✅ DebounceWorkerService: Successfully processed conversation ${conversation.id}`);
+      }
       return true;
 
     } catch (error) {
@@ -686,53 +701,50 @@ class DebounceWorkerService {
 
 
   /**
-   * Queue a response for sending
+   * Queue a response for sending (or create test response if testMode is true)
    */
-  private async queueResponse(conversation: IConversation, responseText: string, originalMids?: string[]): Promise<void> {
-    console.log(`📬 DebounceWorkerService: Queuing response for conversation: ${conversation.id}`);
+  private async queueResponse(conversation: IConversation, responseText: string, originalMids?: string[], testMode: boolean = false): Promise<void> {
+    if (testMode) {
+      console.log(`🧪 DebounceWorkerService: Creating TEST response for conversation: ${conversation.id} (will not be sent)`);
+    } else {
+      console.log(`📬 DebounceWorkerService: Queuing response for conversation: ${conversation.id}`);
+    }
     
     try {
-      // Check if we already have a pending queue item for this conversation
-      const existingQueueItem = await OutboundQueue.findOne({
-        conversationId: conversation.id,
-        status: { $in: ['pending', 'processing'] }
-      });
+      // Check if we already have a pending queue item for this conversation (only in non-test mode)
+      if (!testMode) {
+        const existingQueueItem = await OutboundQueue.findOne({
+          conversationId: conversation.id,
+          status: { $in: ['pending', 'processing'] }
+        });
 
-      if (existingQueueItem) {
-        console.log(`⚠️ DebounceWorkerService: Queue item already exists for conversation ${conversation.id}, skipping`);
-        return;
+        if (existingQueueItem) {
+          console.log(`⚠️ DebounceWorkerService: Queue item already exists for conversation ${conversation.id}, skipping`);
+          return;
+        }
+
+        // Additional check: Look for recent queue items with same content and contact
+        const recentQueueItem = await OutboundQueue.findOne({
+          contactId: conversation.contactId,
+          'content.text': responseText,
+          status: { $in: ['pending', 'processing', 'sent'] },
+          createdAt: { $gte: new Date(Date.now() - 60000) } // Within last minute
+        });
+
+        if (recentQueueItem) {
+          console.log(`⚠️ DebounceWorkerService: Recent queue item with same content exists for contact ${conversation.contactId}, skipping`);
+          return;
+        }
       }
-
-      // Additional check: Look for recent queue items with same content and contact
-      const recentQueueItem = await OutboundQueue.findOne({
-        contactId: conversation.contactId,
-        'content.text': responseText,
-        status: { $in: ['pending', 'processing', 'sent'] },
-        createdAt: { $gte: new Date(Date.now() - 60000) } // Within last minute
-      });
-
-      if (recentQueueItem) {
-        console.log(`⚠️ DebounceWorkerService: Recent queue item with same content exists for contact ${conversation.contactId}, skipping`);
-        console.log(`🔍 Existing queue item details: ID=${recentQueueItem.id}, AccountId=${recentQueueItem.accountId}, Status=${recentQueueItem.status}`);
-        return;
-      }
-
-      // Check for existing queue items
-      const allQueueItems = await OutboundQueue.find({
-        conversationId: conversation.id
-      }).sort({ createdAt: -1 });
-      
-      console.log(`🔍 All queue items for conversation ${conversation.id}: [${allQueueItems.length} items]`);
 
       // Create bot message record
-      console.log(`🔍 Creating bot message for conversation ${conversation.id} with accountId: ${conversation.accountId}`);
-      
       const botMessage = new Message({
         mid: `bot_${Date.now()}`,
         conversationId: conversation.id,
         contactId: conversation.contactId,
         accountId: conversation.accountId,
         role: 'assistant',
+        status: testMode ? 'test' : 'queued',
         content: {
           text: responseText,
           type: 'text'
@@ -740,34 +752,42 @@ class DebounceWorkerService {
         metadata: {
           timestamp: new Date(),
           aiGenerated: true,
-          processed: false,
+          processed: true,
+          testMode: testMode, // Flag to identify test messages
           originalMids: originalMids || []
         }
       });
 
       await botMessage.save();
-      console.log(`✅ DebounceWorkerService: Created bot message: ${botMessage.id}`);
+      
+      if (testMode) {
+        console.log(`🧪 DebounceWorkerService: Created TEST bot message: ${botMessage.id} (status: test, not queued for sending)`);
+      } else {
+        console.log(`✅ DebounceWorkerService: Created bot message: ${botMessage.id}`);
+      }
 
-      // Add to outbound queue
-      const queueItem = new OutboundQueue({
-        messageId: botMessage.id,
-        conversationId: conversation.id,
-        contactId: conversation.contactId,
-        accountId: conversation.accountId,
-        priority: 'normal',
-        content: {
-          type: 'text',
-          text: responseText
-        },
-        metadata: {
-          scheduledFor: new Date(),
-          attempts: 0,
-          maxAttempts: 3
-        }
-      });
+      // Only add to outbound queue if NOT in test mode
+      if (!testMode) {
+        const queueItem = new OutboundQueue({
+          messageId: botMessage.id,
+          conversationId: conversation.id,
+          contactId: conversation.contactId,
+          accountId: conversation.accountId,
+          priority: 'normal',
+          content: {
+            type: 'text',
+            text: responseText
+          },
+          metadata: {
+            scheduledFor: new Date(),
+            attempts: 0,
+            maxAttempts: 3
+          }
+        });
 
-      await queueItem.save();
-      console.log(`✅ DebounceWorkerService: Added message to outbound queue: ${queueItem.id}`);
+        await queueItem.save();
+        console.log(`✅ DebounceWorkerService: Added message to outbound queue: ${queueItem.id}`);
+      }
 
       // Update conversation cooldown
       const cooldownEnd = new Date(Date.now() + 3000); // 3 second cooldown
@@ -779,7 +799,7 @@ class DebounceWorkerService {
       console.log(`⏰ DebounceWorkerService: Updated cooldown for conversation: ${conversation.id} until ${cooldownEnd.toISOString()}`);
 
     } catch (error) {
-      console.error(`❌ DebounceWorkerService: Error queuing response for conversation ${conversation.id}:`, error);
+      console.error(`❌ DebounceWorkerService: Error ${testMode ? 'creating test response' : 'queuing response'} for conversation ${conversation.id}:`, error);
     }
   }
 
