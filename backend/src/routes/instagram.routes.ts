@@ -448,7 +448,14 @@ router.post('/accounts', authenticateToken, async (req, res) => {
       },
       settings: {
         autoRespond: settings?.autoRespond !== false, // Default to true
-        aiEnabled: settings?.aiEnabled !== false, // Default to true
+        // Handle aiEnabled: support both string ('off'|'test'|'on') and boolean (for migration)
+        aiEnabled: (() => {
+          if (!settings?.aiEnabled) return 'on'; // Default to 'on'
+          if (typeof settings.aiEnabled === 'boolean') {
+            return settings.aiEnabled ? 'on' : 'off'; // Convert boolean to string
+          }
+          return settings.aiEnabled as 'off' | 'test' | 'on'; // Already a string
+        })(),
         fallbackRules: settings?.fallbackRules || [
           'Thank you for your message! We\'ll get back to you soon.',
           'Thanks for reaching out! Our team will respond shortly.'
@@ -750,16 +757,44 @@ router.delete('/accounts/:accountId', async (req, res) => {
 });
 
 // Test Instagram API connection
-router.get('/test-connection', async (req, res) => {
+router.get('/test-connection', authenticateToken, async (req, res) => {
   try {
-    const account = await Conversation.findOne().select('accountId');
-    if (!account) {
-      return res.status(404).json({
+    const userId = req.user?.userId;
+    
+    if (!userId) {
+      return res.status(401).json({
         success: false,
-        error: 'No Instagram account found'
+        error: 'Unauthorized'
       });
     }
 
+    // Find the user's Instagram account
+    const account = await InstagramAccount.findOne({ 
+      userId: userId,
+      isActive: true 
+    });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'No active Instagram account found for this user'
+      });
+    }
+
+    // Initialize the service with the account's access token
+    const initialized = await instagramApiService.initialize(account.accountId);
+    
+    if (!initialized) {
+      return res.json({
+        success: true,
+        data: {
+          connected: false,
+          message: 'Failed to initialize Instagram API service'
+        }
+      });
+    }
+
+    // Test the connection
     const isValid = await instagramApiService.testConnection();
 
     res.json({
@@ -1144,7 +1179,7 @@ router.put('/accounts/:accountId/milestone', authenticateToken, async (req, res)
     if (!account.settings) {
       account.settings = {
         autoRespond: true,
-        aiEnabled: true,
+        aiEnabled: 'on',
         fallbackRules: [],
         defaultResponse: "Thanks for your message! I'll get back to you soon.",
         systemPrompt: "You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.",

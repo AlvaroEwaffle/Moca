@@ -153,8 +153,9 @@ class DebounceWorkerService {
    */
   private async processConversationBatch(conversation: IConversation, preCollectedMessages?: IMessage[]): Promise<boolean> {
     try {
-      // Check if AI is enabled for this conversation (support old boolean format for migration)
-      if (conversation.settings?.aiEnabled === false || conversation.settings?.aiEnabled === 'off') {
+      // Check if AI is enabled for this conversation
+      // Note: conversation.settings.aiEnabled is boolean (Conversation model uses boolean, not string enum)
+      if (conversation.settings?.aiEnabled === false) {
         console.log(`🚫 AI disabled for conversation ${conversation.id} (conversation-level)`);
         return false;
       }
