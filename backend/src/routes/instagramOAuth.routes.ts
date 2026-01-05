@@ -224,7 +224,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       },
       settings: {
         autoRespond: true,
-        aiEnabled: true,
+        aiEnabled: 'on', // Use string enum: 'off' | 'test' | 'on'
         systemPrompt: agentBehavior?.systemPrompt || user?.agentSettings?.systemPrompt || 'You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.',
         toneOfVoice: agentBehavior?.toneOfVoice || user?.agentSettings?.toneOfVoice || 'professional',
         keyInformation: agentBehavior?.keyInformation || user?.agentSettings?.keyInformation || '',
