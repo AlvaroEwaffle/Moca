@@ -211,8 +211,16 @@ const InstagramAccounts = () => {
     fetchAccounts();
     fetchGlobalConfig();
     fetchMcpConfig();
-    testConnection();
   }, []);
+
+  // Test connection after accounts are loaded
+  useEffect(() => {
+    if (accounts.length > 0 && !loading) {
+      testConnection();
+    } else if (accounts.length === 0 && !loading) {
+      setConnectionStatus('disconnected');
+    }
+  }, [accounts.length, loading]);
 
   useEffect(() => {
     if (mcpConfig.enabled) {
@@ -238,11 +246,23 @@ const InstagramAccounts = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setAccounts(data.data?.accounts || []);
+        const fetchedAccounts = data.data?.accounts || [];
+        setAccounts(fetchedAccounts);
+        
+        // If we have accounts, set connection status to connected by default
+        // The useEffect will call testConnection to verify the actual connection status
+        if (fetchedAccounts.length > 0) {
+          setConnectionStatus('connected');
+        } else {
+          setConnectionStatus('disconnected');
+        }
+      } else {
+        setConnectionStatus('disconnected');
       }
     } catch (error) {
       console.error('Error fetching accounts:', error);
       setError('Failed to load Instagram accounts');
+      setConnectionStatus('disconnected');
     } finally {
       setLoading(false);
     }
@@ -808,7 +828,15 @@ const InstagramAccounts = () => {
       const backendUrl = BACKEND_URL;
       const accessToken = localStorage.getItem('accessToken');
       
-      if (!backendUrl) return;
+      if (!backendUrl) {
+        setConnectionStatus('error');
+        return;
+      }
+
+      if (!accessToken) {
+        setConnectionStatus('disconnected');
+        return;
+      }
 
       const response = await fetch(`${backendUrl}/api/instagram/test-connection`, {
         headers: {
@@ -818,13 +846,27 @@ const InstagramAccounts = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setConnectionStatus(data.data.connected ? 'connected' : 'error');
+        // Check if data structure is valid
+        if (data.success && data.data && typeof data.data.connected === 'boolean') {
+          setConnectionStatus(data.data.connected ? 'connected' : 'error');
+        } else {
+          // If structure is invalid, check if we have accounts
+          const hasAccounts = accounts.length > 0;
+          setConnectionStatus(hasAccounts ? 'connected' : 'disconnected');
+        }
+      } else if (response.status === 404) {
+        // No account found - this is disconnected, not an error
+        setConnectionStatus('disconnected');
       } else {
+        // Other errors
         setConnectionStatus('error');
       }
     } catch (error) {
       console.error('Error testing connection:', error);
-      setConnectionStatus('error');
+      // On network error, if we have accounts, assume connected
+      // Otherwise, set to disconnected
+      const hasAccounts = accounts.length > 0;
+      setConnectionStatus(hasAccounts ? 'connected' : 'disconnected');
     } finally {
       setTesting(false);
     }
