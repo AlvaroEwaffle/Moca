@@ -702,6 +702,37 @@ ESCALA DE PUNTUACIÓN DE LEADS (1-7):
 6. Reminder Answered - Cliente responde al seguimiento
 7. Sales Done - Venta completada o trato cerrado
 
+🚨 REGLAS CRÍTICAS PARA ASIGNAR LEAD SCORE - LEE CON MUCHA ATENCIÓN:
+
+1. **EL SCORE DEBE REFLEJAR EL PROGRESO REAL DE LA CONVERSACIÓN, NO SOLO PALABRAS CLAVE**
+
+2. **REGLA DE PRIMER MENSAJE:**
+   - Si es el PRIMER mensaje del cliente en esta conversación (conversaciónHistory solo tiene 1 mensaje del usuario), el leadScore DEBE ser 1 (Contact Received)
+   - NO asignes scores 2, 3, 4, 5, 6 o 7 en el primer mensaje, sin importar qué palabras contenga
+
+3. **PROGRESIÓN GRADUAL DEL SCORE:**
+   - Score 1: Primer mensaje del cliente (contacto inicial)
+   - Score 2: Solo si el cliente ya respondió a al menos UNA pregunta del asistente anteriormente
+   - Score 3: Solo si el cliente ha mostrado interés explícito Y ya ha intercambiado múltiples mensajes
+   - Score 4: Solo si se alcanzó un milestone específico (link compartido, reunión agendada, demo reservada)
+   - Score 5: SOLO si se envió un recordatorio de seguimiento al cliente en esta conversación
+   - Score 6: SOLO si el cliente respondió a un recordatorio de seguimiento
+   - Score 7: SOLO si se completó una venta o trato
+
+4. **REGLAS ESPECÍFICAS:**
+   - Cuenta el número de mensajes del usuario en conversationHistory para determinar el progreso
+   - NO bases el score solo en palabras clave como "información", "quiero más", etc.
+   - El score debe aumentar GRADUALMENTE según el número de intercambios
+   - Si es el primer mensaje: SIEMPRE score 1
+   - Si es el segundo mensaje: máximo score 2
+   - Si es el tercer mensaje o más: máximo score 3, a menos que se haya alcanzado un milestone
+
+5. **CONTEO DE MENSAJES:**
+   - Mensajes del usuario en conversationHistory: ${conversationContext.conversationHistory.filter(msg => msg.role === 'user').length}
+   - Si este número es 1, el leadScore DEBE ser 1
+   - Si este número es 2, el leadScore máximo es 2
+   - Si este número es 3 o más, el leadScore máximo es 3 (a menos que se haya alcanzado un milestone)
+
 ${conversationContext.milestoneTarget ? `🎯 MILESTONE OBJETIVO DE ESTA CONVERSACIÓN:
 - Target: ${conversationContext.milestoneTarget === 'link_shared' ? 'Link Shared (compartir enlace)' : 
   conversationContext.milestoneTarget === 'meeting_scheduled' ? 'Meeting Scheduled (agendar reunión)' :
@@ -881,17 +912,37 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
     structuredResponse.metadata.leadProgression = leadScoringData.progression;
     structuredResponse.metadata.repetitionDetected = repetitionPatterns.length > 0;
 
+    // CRITICAL: Validate lead score based on conversation progress (number of user messages)
+    const userMessagesCount = conversationContext.conversationHistory.filter(msg => msg.role === 'user').length;
+    
+    // Determine maximum allowed score based on conversation progress
+    let maxAllowedScoreByProgress = 1;
+    if (userMessagesCount === 1) {
+      maxAllowedScoreByProgress = 1; // First message: always score 1
+    } else if (userMessagesCount === 2) {
+      maxAllowedScoreByProgress = 2; // Second message: maximum score 2
+    } else if (userMessagesCount >= 3) {
+      maxAllowedScoreByProgress = 3; // Third or more messages: maximum score 3 (unless milestone reached)
+    }
+    
     // CRITICAL: Validate and limit lead score based on milestone objective
     // This ensures the AI's assigned score respects the milestone constraints
-    const maxAllowedScore = LeadScoringService.getMaxAllowedLeadScore(
+    const maxAllowedScoreByMilestone = LeadScoringService.getMaxAllowedLeadScore(
       conversationContext.milestoneTarget,
       conversationContext.milestoneStatus
     );
     
+    // Use the more restrictive limit (conversation progress OR milestone)
+    const maxAllowedScore = Math.min(maxAllowedScoreByProgress, maxAllowedScoreByMilestone);
+    
     if (structuredResponse.leadScore > maxAllowedScore) {
-      console.log(`⚠️ [OpenAI Service] AI assigned score ${structuredResponse.leadScore} exceeds maximum allowed (${maxAllowedScore}) based on milestone. Adjusting.`, {
+      console.log(`⚠️ [OpenAI Service] AI assigned score ${structuredResponse.leadScore} exceeds maximum allowed (${maxAllowedScore}). Adjusting.`, {
+        userMessagesCount,
+        maxAllowedScoreByProgress,
         milestoneTarget: conversationContext.milestoneTarget,
         milestoneStatus: conversationContext.milestoneStatus,
+        maxAllowedScoreByMilestone,
+        maxAllowedScore,
         originalScore: structuredResponse.leadScore,
         adjustedScore: maxAllowedScore
       });
@@ -900,12 +951,34 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
     
     // SPECIAL RULE: Score 5 (Reminder Sent) validation
     // Score 5 should only be assigned when a reminder is actually sent
-    if (structuredResponse.leadScore === 5 && conversationContext.milestoneStatus === 'pending') {
-      // Check if milestone allows score 5 (it shouldn't if milestone is pending)
-      if (maxAllowedScore <= 4) {
-        console.log(`⚠️ [OpenAI Service] AI assigned score 5 (Reminder Sent) but milestone is pending. Adjusting to 4.`);
-        structuredResponse.leadScore = 4;
+    if (structuredResponse.leadScore === 5) {
+      // Check conversation history for actual reminder sent
+      const assistantMessages = conversationContext.conversationHistory.filter(msg => msg.role === 'assistant');
+      const hasReminderSent = assistantMessages.some(msg => 
+        msg.content.toLowerCase().includes('recordatorio') || 
+        msg.content.toLowerCase().includes('reminder') ||
+        msg.content.toLowerCase().includes('seguimiento')
+      );
+      
+      if (!hasReminderSent || userMessagesCount < 3) {
+        console.log(`⚠️ [OpenAI Service] AI assigned score 5 (Reminder Sent) but no reminder was actually sent or conversation is too early. Adjusting to ${maxAllowedScore}.`, {
+          userMessagesCount,
+          hasReminderSent,
+          originalScore: 5,
+          adjustedScore: maxAllowedScore
+        });
+        structuredResponse.leadScore = Math.min(4, maxAllowedScore);
       }
+    }
+    
+    // SPECIAL RULE: First message must always be score 1
+    if (userMessagesCount === 1 && structuredResponse.leadScore !== 1) {
+      console.log(`⚠️ [OpenAI Service] First user message detected but AI assigned score ${structuredResponse.leadScore}. Forcing to 1.`, {
+        userMessagesCount,
+        originalScore: structuredResponse.leadScore,
+        adjustedScore: 1
+      });
+      structuredResponse.leadScore = 1;
     }
 
     console.log('✅ Structured response generated successfully:', {
