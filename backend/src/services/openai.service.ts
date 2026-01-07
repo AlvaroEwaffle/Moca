@@ -672,11 +672,41 @@ Agente: (AHORA SÍ ejecuta la herramienta con los datos reales)
       intent,
       conversationContext
     );
+    
+    // Log conversation context for scoring
+    const userMessagesCount = conversationContext.conversationHistory.filter(msg => msg.role === 'user').length;
+    const assistantMessagesCount = conversationContext.conversationHistory.filter(msg => msg.role === 'assistant').length;
+    
+    console.log('📊 [Lead Scoring] Starting score calculation:', {
+      userMessagesCount,
+      assistantMessagesCount,
+      totalMessages: conversationContext.conversationHistory.length,
+      lastMessage: conversationContext.lastMessage.substring(0, 100) + (conversationContext.lastMessage.length > 100 ? '...' : ''),
+      milestoneTarget: conversationContext.milestoneTarget,
+      milestoneStatus: conversationContext.milestoneStatus,
+      leadHistory: conversationContext.leadHistory,
+      calculatedScore: leadScoringData.currentScore,
+      calculatedScoreReasons: leadScoringData.reasons,
+      intent,
+      nextAction
+    });
 
     // Build conversation context for AI
     const conversationText = conversationContext.conversationHistory
       .map(msg => `${msg.role === 'user' ? '👤 Cliente' : '🤖 Asistente'}: ${msg.content}`)
       .join('\n');
+
+    const userMessagesCountForPrompt = conversationContext.conversationHistory.filter(msg => msg.role === 'user').length;
+    
+    console.log('📤 [Lead Scoring] Building prompt for AI with scoring rules:', {
+      userMessagesCount: userMessagesCountForPrompt,
+      willEnforceScore1Rule: userMessagesCountForPrompt === 1,
+      maxAllowedScoreHint: userMessagesCountForPrompt === 1 ? 1 :
+                          userMessagesCountForPrompt === 2 ? 2 :
+                          userMessagesCountForPrompt >= 3 ? 3 : 1,
+      milestoneTarget: conversationContext.milestoneTarget,
+      milestoneStatus: conversationContext.milestoneStatus
+    });
 
     const userPrompt = `Analiza esta conversación y genera una respuesta estructurada:
 
@@ -693,14 +723,6 @@ CONTEXTO:
 INSTRUCCIONES:
 ${contextualInstructions}
 
-ESCALA DE PUNTUACIÓN DE LEADS (1-7):
-1. Contact Received - Contacto inicial del cliente
-2. Answers 1 Question - Cliente responde a la primera pregunta
-3. Confirms Interest - Cliente muestra interés en el servicio/producto
-4. Milestone Met - Hito específico del negocio alcanzado
-5. Reminder Sent - Recordatorio de seguimiento enviado al cliente
-6. Reminder Answered - Cliente responde al seguimiento
-7. Sales Done - Venta completada o trato cerrado
 
 🚨 REGLAS CRÍTICAS PARA ASIGNAR LEAD SCORE - LEE CON MUCHA ATENCIÓN:
 
@@ -899,6 +921,12 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
       
       if (validateStructuredResponse(parsedResponse)) {
         structuredResponse = parsedResponse;
+        console.log('📝 [Lead Scoring] AI assigned initial score:', {
+          aiAssignedScore: structuredResponse.leadScore,
+          intent: structuredResponse.intent,
+          nextAction: structuredResponse.nextAction,
+          confidence: structuredResponse.confidence
+        });
       } else {
         console.warn('⚠️ Invalid structured response format, using fallback');
         structuredResponse = createFallbackStructuredResponse(conversationContext, leadScoringData);
@@ -913,7 +941,18 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
     structuredResponse.metadata.repetitionDetected = repetitionPatterns.length > 0;
 
     // CRITICAL: Validate lead score based on conversation progress (number of user messages)
-    const userMessagesCount = conversationContext.conversationHistory.filter(msg => msg.role === 'user').length;
+    // Note: userMessagesCount was already declared above in the logging section
+    
+    // Store original AI-assigned score before any validations
+    const originalAiAssignedScore = structuredResponse.leadScore;
+    
+    console.log('🔍 [Lead Scoring] Starting validation process:', {
+      aiAssignedScore: originalAiAssignedScore,
+      userMessagesCount,
+      conversationLength: conversationContext.conversationHistory.length,
+      calculatedScore: leadScoringData.currentScore,
+      calculatedScoreReasons: leadScoringData.reasons
+    });
     
     // Determine maximum allowed score based on conversation progress
     let maxAllowedScoreByProgress = 1;
@@ -925,6 +964,14 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
       maxAllowedScoreByProgress = 3; // Third or more messages: maximum score 3 (unless milestone reached)
     }
     
+    console.log('📊 [Lead Scoring] Progress-based limit calculated:', {
+      userMessagesCount,
+      maxAllowedScoreByProgress,
+      reason: userMessagesCount === 1 ? 'First message - must be 1' :
+              userMessagesCount === 2 ? 'Second message - max 2' :
+              'Third+ message - max 3'
+    });
+    
     // CRITICAL: Validate and limit lead score based on milestone objective
     // This ensures the AI's assigned score respects the milestone constraints
     const maxAllowedScoreByMilestone = LeadScoringService.getMaxAllowedLeadScore(
@@ -932,11 +979,28 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
       conversationContext.milestoneStatus
     );
     
+    console.log('🎯 [Lead Scoring] Milestone-based limit calculated:', {
+      milestoneTarget: conversationContext.milestoneTarget,
+      milestoneStatus: conversationContext.milestoneStatus,
+      maxAllowedScoreByMilestone,
+      reason: !conversationContext.milestoneTarget ? 'No milestone set - max 7' :
+              conversationContext.milestoneStatus === 'pending' ? 'Milestone pending - max 4' :
+              conversationContext.milestoneStatus === 'achieved' ? 'Milestone achieved - max 7' :
+              'Milestone failed - max 7'
+    });
+    
     // Use the more restrictive limit (conversation progress OR milestone)
     const maxAllowedScore = Math.min(maxAllowedScoreByProgress, maxAllowedScoreByMilestone);
     
+    console.log('⚖️ [Lead Scoring] Final maximum allowed score:', {
+      maxAllowedScoreByProgress,
+      maxAllowedScoreByMilestone,
+      maxAllowedScore,
+      appliedLimit: maxAllowedScoreByProgress <= maxAllowedScoreByMilestone ? 'Progress-based' : 'Milestone-based'
+    });
+    
     if (structuredResponse.leadScore > maxAllowedScore) {
-      console.log(`⚠️ [OpenAI Service] AI assigned score ${structuredResponse.leadScore} exceeds maximum allowed (${maxAllowedScore}). Adjusting.`, {
+      console.log(`⚠️ [Lead Scoring] AI score ${structuredResponse.leadScore} exceeds maximum allowed (${maxAllowedScore}). Adjusting.`, {
         userMessagesCount,
         maxAllowedScoreByProgress,
         milestoneTarget: conversationContext.milestoneTarget,
@@ -944,9 +1008,15 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
         maxAllowedScoreByMilestone,
         maxAllowedScore,
         originalScore: structuredResponse.leadScore,
-        adjustedScore: maxAllowedScore
+        adjustedScore: maxAllowedScore,
+        adjustmentReason: 'Score exceeded maximum allowed limit'
       });
       structuredResponse.leadScore = maxAllowedScore;
+    } else {
+      console.log('✅ [Lead Scoring] AI score is within allowed limits:', {
+        aiAssignedScore: structuredResponse.leadScore,
+        maxAllowedScore
+      });
     }
     
     // SPECIAL RULE: Score 5 (Reminder Sent) validation
@@ -960,34 +1030,80 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
         msg.content.toLowerCase().includes('seguimiento')
       );
       
+      console.log('🔍 [Lead Scoring] Validating score 5 (Reminder Sent):', {
+        aiAssignedScore: 5,
+        userMessagesCount,
+        assistantMessagesCount: assistantMessages.length,
+        hasReminderSent,
+        reminderKeywordsFound: assistantMessages.some(msg => 
+          msg.content.toLowerCase().includes('recordatorio') || 
+          msg.content.toLowerCase().includes('reminder') ||
+          msg.content.toLowerCase().includes('seguimiento')
+        )
+      });
+      
       if (!hasReminderSent || userMessagesCount < 3) {
-        console.log(`⚠️ [OpenAI Service] AI assigned score 5 (Reminder Sent) but no reminder was actually sent or conversation is too early. Adjusting to ${maxAllowedScore}.`, {
+        const adjustedScore = Math.min(4, maxAllowedScore);
+        console.log(`⚠️ [Lead Scoring] Score 5 invalid - no reminder sent or conversation too early. Adjusting.`, {
           userMessagesCount,
           hasReminderSent,
+          requiresReminder: true,
+          requiresMinMessages: 3,
           originalScore: 5,
-          adjustedScore: maxAllowedScore
+          adjustedScore,
+          adjustmentReason: !hasReminderSent ? 'No reminder found in conversation history' : 'Conversation too early for score 5'
         });
-        structuredResponse.leadScore = Math.min(4, maxAllowedScore);
+        structuredResponse.leadScore = adjustedScore;
+      } else {
+        console.log('✅ [Lead Scoring] Score 5 is valid - reminder was sent:', {
+          hasReminderSent,
+          userMessagesCount
+        });
       }
     }
     
     // SPECIAL RULE: First message must always be score 1
     if (userMessagesCount === 1 && structuredResponse.leadScore !== 1) {
-      console.log(`⚠️ [OpenAI Service] First user message detected but AI assigned score ${structuredResponse.leadScore}. Forcing to 1.`, {
+      console.log(`⚠️ [Lead Scoring] First message rule violated. Forcing score to 1.`, {
         userMessagesCount,
         originalScore: structuredResponse.leadScore,
-        adjustedScore: 1
+        adjustedScore: 1,
+        adjustmentReason: 'First user message must always have score 1'
       });
       structuredResponse.leadScore = 1;
+    } else if (userMessagesCount === 1 && structuredResponse.leadScore === 1) {
+      console.log('✅ [Lead Scoring] First message rule satisfied:', {
+        userMessagesCount,
+        score: 1
+      });
     }
 
-    console.log('✅ Structured response generated successfully:', {
-      leadScore: structuredResponse.leadScore,
+    const wasScoreAdjusted = originalAiAssignedScore !== structuredResponse.leadScore;
+    
+    console.log('✅ [Lead Scoring] Final score assignment complete:', {
+      finalScore: structuredResponse.leadScore,
+      originalAiAssignedScore: originalAiAssignedScore,
+      wasAdjusted: wasScoreAdjusted,
+      adjustmentApplied: wasScoreAdjusted ? `${originalAiAssignedScore} → ${structuredResponse.leadScore}` : 'None',
       intent: structuredResponse.intent,
       nextAction: structuredResponse.nextAction,
+      confidence: structuredResponse.confidence,
+      userMessagesCount,
       milestoneTarget: conversationContext.milestoneTarget,
       milestoneStatus: conversationContext.milestoneStatus,
-      maxAllowedScore
+      maxAllowedScore,
+      maxAllowedScoreByProgress,
+      maxAllowedScoreByMilestone,
+      leadHistory: conversationContext.leadHistory,
+      calculatedScore: leadScoringData.currentScore,
+      calculatedScoreReasons: leadScoringData.reasons,
+      scoreStep: structuredResponse.leadScore === 1 ? 'Contact Received' :
+                 structuredResponse.leadScore === 2 ? 'Answers 1 Question' :
+                 structuredResponse.leadScore === 3 ? 'Confirms Interest' :
+                 structuredResponse.leadScore === 4 ? 'Milestone Met' :
+                 structuredResponse.leadScore === 5 ? 'Reminder Sent' :
+                 structuredResponse.leadScore === 6 ? 'Reminder Answered' :
+                 structuredResponse.leadScore === 7 ? 'Sales Done' : 'Unknown'
     });
 
     return structuredResponse;
