@@ -425,7 +425,11 @@ class DebounceWorkerService {
         lastMessage: newMessages.map(msg => msg.content.text).join('\n\n'),
         timeSinceLastMessage: this.calculateTimeSinceLastMessage(conversationHistory),
         repetitionPatterns: [],
-        leadHistory: conversation.leadScoring?.scoreHistory?.map(h => h.score) || []
+        leadHistory: conversation.leadScoring?.scoreHistory?.map(h => h.score) || [],
+        // Include milestone information for lead score validation
+        milestoneTarget: conversation.milestone?.target,
+        milestoneStatus: conversation.milestone?.status,
+        milestoneCustomTarget: conversation.milestone?.customTarget
       };
 
       // Create AI response config

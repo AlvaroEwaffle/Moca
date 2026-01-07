@@ -702,6 +702,30 @@ ESCALA DE PUNTUACIÓN DE LEADS (1-7):
 6. Reminder Answered - Cliente responde al seguimiento
 7. Sales Done - Venta completada o trato cerrado
 
+${conversationContext.milestoneTarget ? `🎯 MILESTONE OBJETIVO DE ESTA CONVERSACIÓN:
+- Target: ${conversationContext.milestoneTarget === 'link_shared' ? 'Link Shared (compartir enlace)' : 
+  conversationContext.milestoneTarget === 'meeting_scheduled' ? 'Meeting Scheduled (agendar reunión)' :
+  conversationContext.milestoneTarget === 'demo_booked' ? 'Demo Booked (reservar demo)' :
+  `Custom: ${conversationContext.milestoneCustomTarget || 'N/A'}`}
+- Estado: ${conversationContext.milestoneStatus === 'pending' ? 'PENDIENTE (no alcanzado)' : 
+  conversationContext.milestoneStatus === 'achieved' ? 'ALCANZADO ✅' :
+  conversationContext.milestoneStatus === 'failed' ? 'FALLIDO ❌' : 'Desconocido'}
+
+⚠️ REGLA CRÍTICA DE SCORING BASADA EN MILESTONE:
+${conversationContext.milestoneStatus === 'pending' ? `
+El milestone objetivo NO ha sido alcanzado aún. 
+Por lo tanto, el leadScore MÁXIMO que puedes asignar es 4 (Milestone Met).
+NO asignes scores 5, 6 o 7 hasta que el milestone objetivo sea alcanzado.
+El score 5 (Reminder Sent) solo debe asignarse cuando realmente se envía un reminder.
+` : conversationContext.milestoneStatus === 'achieved' ? `
+El milestone objetivo YA ha sido alcanzado.
+Puedes asignar cualquier score de 1 a 7 según corresponda.
+` : `
+El milestone objetivo ha fallado.
+Puedes asignar cualquier score de 1 a 7 según corresponda, pero considera el contexto.
+`}
+` : ''}
+
 ${functions.length > 0 ? `🚨 REGLA CRÍTICA SOBRE HERRAMIENTAS MCP - LEE ANTES DE LLAMAR CUALQUIER HERRAMIENTA:
 
 ANTES de llamar a cualquier herramienta MCP, VERIFICA que:
@@ -857,10 +881,40 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
     structuredResponse.metadata.leadProgression = leadScoringData.progression;
     structuredResponse.metadata.repetitionDetected = repetitionPatterns.length > 0;
 
+    // CRITICAL: Validate and limit lead score based on milestone objective
+    // This ensures the AI's assigned score respects the milestone constraints
+    const maxAllowedScore = LeadScoringService.getMaxAllowedLeadScore(
+      conversationContext.milestoneTarget,
+      conversationContext.milestoneStatus
+    );
+    
+    if (structuredResponse.leadScore > maxAllowedScore) {
+      console.log(`⚠️ [OpenAI Service] AI assigned score ${structuredResponse.leadScore} exceeds maximum allowed (${maxAllowedScore}) based on milestone. Adjusting.`, {
+        milestoneTarget: conversationContext.milestoneTarget,
+        milestoneStatus: conversationContext.milestoneStatus,
+        originalScore: structuredResponse.leadScore,
+        adjustedScore: maxAllowedScore
+      });
+      structuredResponse.leadScore = maxAllowedScore;
+    }
+    
+    // SPECIAL RULE: Score 5 (Reminder Sent) validation
+    // Score 5 should only be assigned when a reminder is actually sent
+    if (structuredResponse.leadScore === 5 && conversationContext.milestoneStatus === 'pending') {
+      // Check if milestone allows score 5 (it shouldn't if milestone is pending)
+      if (maxAllowedScore <= 4) {
+        console.log(`⚠️ [OpenAI Service] AI assigned score 5 (Reminder Sent) but milestone is pending. Adjusting to 4.`);
+        structuredResponse.leadScore = 4;
+      }
+    }
+
     console.log('✅ Structured response generated successfully:', {
       leadScore: structuredResponse.leadScore,
       intent: structuredResponse.intent,
-      nextAction: structuredResponse.nextAction
+      nextAction: structuredResponse.nextAction,
+      milestoneTarget: conversationContext.milestoneTarget,
+      milestoneStatus: conversationContext.milestoneStatus,
+      maxAllowedScore
     });
 
     return structuredResponse;

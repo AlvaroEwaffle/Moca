@@ -7,6 +7,21 @@
 
 **Latest Testing Version:** `03450ca` - "Model Simplification + Field Cleanup + Performance Optimization + Kanban UI + Collapsible Sidebar"
 
+## ✉️ Gmail Agent Module (MVP)
+- Feature-flagged: set `ENABLE_GMAIL_AGENT=true` to enable.
+- Tokens (paridad con Moca2): usa OAuth Google; `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `ENCRYPTION_KEY` para cifrar tokens en DB (Integration model). Para modo env plano siguen funcionando `GMAIL_ACCESS_TOKEN`/`GMAIL_REFRESH_TOKEN`/`GMAIL_TOKEN_EXPIRY` si los setea manualmente.
+- Labels: override processed label with `GMAIL_AGENT_PROCESSED_LABEL` (default `GMAIL_AGENT_PROCESSED`).
+- Endpoints (protegidos por JWT):
+  - `GET /api/internal/gmail-agent/health`
+  - `POST /api/internal/gmail-agent/run` with `{ maxEmails?: number, mode?: "dry_run"|"process" }`
+- Gmail parity endpoints (flag ON):
+  - OAuth: `GET /api/integrations/google/auth-url` (scope query: gmail|calendar), `POST /api/integrations/google/callback`
+  - Gmail API: `POST /api/gmail/fetch`, `GET /api/gmail/list`
+  - Fetch rules CRUD/execute: `/api/gmail/fetch-rules` (+ `/id/execute`, `/id/emails`, `/id/threads`)
+  - Draft queue: `/api/gmail/drafts` (queue/process/send/reset/delete)
+- Behavior: fetches emails; en modo `process` crea drafts y aplica label. No envía correos salvo `send` explícito en `/drafts/:id/send`.
+- Disable module: leave `ENABLE_GMAIL_AGENT` undefined/false and restart the server.
+
 ### ✅ **What's Working:**
 - **Multi-Account Support**: Perfect account identification with Page-Scoped ID matching
 - **Username Display**: Instagram usernames fetched and displayed in conversations

@@ -1003,6 +1003,19 @@ const InstagramAccounts = () => {
 
     try {
       const backendUrl = BACKEND_URL;
+      
+      // CRITICAL: If enableLeadScoreAutoDisable is false, set autoDisableOnScore to undefined
+      // This ensures consistency - if the feature is disabled, the threshold should not be set
+      const autoDisableOnScore = globalConfigForm.enableLeadScoreAutoDisable 
+        ? globalConfigForm.autoDisableOnScore 
+        : undefined;
+      
+      // CRITICAL: If enableMilestoneAutoDisable is false, set autoDisableOnMilestone to false
+      // This ensures consistency - if the feature is disabled, the setting should be false
+      const autoDisableOnMilestone = globalConfigForm.enableMilestoneAutoDisable 
+        ? globalConfigForm.autoDisableOnMilestone 
+        : false;
+      
       const response = await fetch(`${backendUrl}/api/global-agent-config`, {
         method: 'PUT',
         headers: {
@@ -1015,8 +1028,8 @@ const InstagramAccounts = () => {
             resetCounterOnMilestone: globalConfigForm.resetCounterOnMilestone
           },
           leadScoring: {
-            autoDisableOnScore: globalConfigForm.autoDisableOnScore,
-            autoDisableOnMilestone: globalConfigForm.autoDisableOnMilestone
+            autoDisableOnScore: autoDisableOnScore,
+            autoDisableOnMilestone: autoDisableOnMilestone
           },
           systemSettings: {
             enableResponseLimits: globalConfigForm.enableResponseLimits,

@@ -19,6 +19,35 @@ import { GENERIC_AI_INSTRUCTIONS } from '../templates/aiInstructions';
 export class LeadScoringService {
   
   /**
+   * Get maximum allowed lead score based on milestone target and status
+   * This ensures that scores cannot exceed the milestone step until the milestone is achieved
+   */
+  static getMaxAllowedLeadScore(
+    milestoneTarget?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom',
+    milestoneStatus?: 'pending' | 'achieved' | 'failed'
+  ): number {
+    // If milestone is achieved or failed, no restriction
+    if (milestoneStatus === 'achieved' || milestoneStatus === 'failed') {
+      return 7; // Maximum score allowed
+    }
+    
+    // If no milestone target is set, no restriction
+    if (!milestoneTarget) {
+      return 7; // Maximum score allowed
+    }
+    
+    // If milestone is pending, limit score to step 4 (Milestone Met)
+    // All milestone targets (link_shared, meeting_scheduled, demo_booked) correspond to step 4
+    // The lead cannot progress beyond step 4 until the milestone is achieved
+    if (milestoneStatus === 'pending') {
+      return 4; // Maximum score until milestone is achieved
+    }
+    
+    // Default: no restriction
+    return 7;
+  }
+  
+  /**
    * Map old 1-10 scale to new 1-7 scale
    */
   private static mapToSevenStepScale(oldScore: number): number {
@@ -63,6 +92,36 @@ export class LeadScoringService {
     if (mappedAdditionalScore > maxScore) {
       maxScore = mappedAdditionalScore;
       reasons.push('Additional context indicators detected');
+    }
+    
+    // CRITICAL: Limit score based on milestone target and status
+    // If milestone is pending, score cannot exceed step 4 until milestone is achieved
+    const maxAllowedScore = this.getMaxAllowedLeadScore(
+      conversationContext.milestoneTarget,
+      conversationContext.milestoneStatus
+    );
+    
+    if (maxScore > maxAllowedScore) {
+      console.log(`⚠️ [Lead Scoring] Score ${maxScore} exceeds maximum allowed (${maxAllowedScore}) based on milestone. Limiting to ${maxAllowedScore}.`, {
+        milestoneTarget: conversationContext.milestoneTarget,
+        milestoneStatus: conversationContext.milestoneStatus,
+        originalScore: maxScore,
+        limitedScore: maxAllowedScore
+      });
+      reasons.push(`Score limited to ${maxAllowedScore} (milestone: ${conversationContext.milestoneTarget} - ${conversationContext.milestoneStatus})`);
+      maxScore = maxAllowedScore;
+    }
+    
+    // SPECIAL RULE: Score 5 (Reminder Sent) should only be assigned when a reminder is actually sent
+    // This score represents an action by the agent, not just keywords in the message
+    if (maxScore === 5) {
+      // TODO: Check if a reminder was actually sent in the conversation history
+      // For now, we'll limit it to 4 if milestone is pending
+      if (conversationContext.milestoneStatus === 'pending' && maxAllowedScore <= 4) {
+        console.log(`⚠️ [Lead Scoring] Score 5 (Reminder Sent) not allowed - milestone pending and no reminder sent. Limiting to 4.`);
+        maxScore = 4;
+        reasons.push('Score 5 (Reminder Sent) requires milestone achievement or actual reminder sent');
+      }
     }
     
     // Calculate progression

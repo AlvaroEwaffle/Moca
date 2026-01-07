@@ -25,30 +25,44 @@ export class GlobalAgentRulesService {
     ruleType?: 'response_limit' | 'lead_score' | 'milestone';
   }> {
     
+    // Log the configuration being used
+    console.log('🔍 [Global Agent Rules] Evaluating agent disable rules:', {
+      conversationId: conversation.id,
+      config: {
+        enableResponseLimits: globalConfig.systemSettings.enableResponseLimits,
+        enableLeadScoreAutoDisable: globalConfig.systemSettings.enableLeadScoreAutoDisable,
+        enableMilestoneAutoDisable: globalConfig.systemSettings.enableMilestoneAutoDisable,
+        autoDisableOnScore: globalConfig.leadScoring.autoDisableOnScore,
+        autoDisableOnMilestone: globalConfig.leadScoring.autoDisableOnMilestone
+      }
+    });
+    
     // Check response limit rule
     if (globalConfig.systemSettings.enableResponseLimits) {
       const responseLimitResult = this.checkResponseLimit(conversation, globalConfig);
       if (responseLimitResult.shouldDisable) {
+        console.log('🚫 [Global Agent Rules] Agent disabled by response limit rule');
         return responseLimitResult;
       }
     }
     
     // Check lead score rule
-    if (globalConfig.systemSettings.enableLeadScoreAutoDisable) {
-      const leadScoreResult = this.checkLeadScoreRule(conversation, globalConfig);
-      if (leadScoreResult.shouldDisable) {
-        return leadScoreResult;
-      }
+    // Note: checkLeadScoreRule now validates enableLeadScoreAutoDisable internally
+    const leadScoreResult = this.checkLeadScoreRule(conversation, globalConfig);
+    if (leadScoreResult.shouldDisable) {
+      console.log('🚫 [Global Agent Rules] Agent disabled by lead score rule');
+      return leadScoreResult;
     }
     
     // Check milestone rule
-    if (globalConfig.systemSettings.enableMilestoneAutoDisable) {
-      const milestoneResult = this.checkMilestoneRule(conversation, globalConfig);
-      if (milestoneResult.shouldDisable) {
-        return milestoneResult;
-      }
+    // Note: checkMilestoneRule now validates enableMilestoneAutoDisable internally
+    const milestoneResult = this.checkMilestoneRule(conversation, globalConfig);
+    if (milestoneResult.shouldDisable) {
+      console.log('🚫 [Global Agent Rules] Agent disabled by milestone rule');
+      return milestoneResult;
     }
     
+    console.log('✅ [Global Agent Rules] All rules passed, agent will continue');
     return { shouldDisable: false };
   }
   
@@ -82,15 +96,39 @@ export class GlobalAgentRulesService {
     globalConfig: IGlobalAgentConfig
   ): { shouldDisable: boolean; reason?: string; ruleType?: 'lead_score' } {
     
+    // CRITICAL: If enableLeadScoreAutoDisable is false, do NOT evaluate
+    // This setting must take precedence over autoDisableOnScore
+    if (!globalConfig.systemSettings.enableLeadScoreAutoDisable) {
+      console.log('🔍 [Global Agent Rules] Lead score auto-disable is disabled, skipping check');
+      return { shouldDisable: false };
+    }
+    
     const autoDisableScore = globalConfig.leadScoring.autoDisableOnScore;
-    if (!autoDisableScore) {
+    
+    // If autoDisableOnScore is undefined/null/0, do NOT disable
+    if (!autoDisableScore || autoDisableScore < 1 || autoDisableScore > 7) {
+      console.log('🔍 [Global Agent Rules] Auto-disable score not set or invalid, skipping check');
       return { shouldDisable: false };
     }
     
     const currentScore = conversation.leadScoring?.currentScore || 1;
     
+    // Log detailed information for debugging
+    console.log('🔍 [Global Agent Rules] Checking lead score rule:', {
+      conversationId: conversation.id,
+      currentScore,
+      autoDisableScore,
+      thresholdMet: currentScore >= autoDisableScore,
+      currentStepName: LEAD_SCORING_STEPS[currentScore as keyof typeof LEAD_SCORING_STEPS]?.name || 'Unknown'
+    });
+    
     if (currentScore >= autoDisableScore) {
       const stepInfo = LEAD_SCORING_STEPS[currentScore as keyof typeof LEAD_SCORING_STEPS];
+      console.log('🚫 [Global Agent Rules] Lead score threshold exceeded:', {
+        currentScore,
+        threshold: autoDisableScore,
+        stepName: stepInfo?.name || 'Unknown'
+      });
       return {
         shouldDisable: true,
         reason: `Lead score milestone reached (${currentScore}/7: ${stepInfo?.name})`,
@@ -98,6 +136,7 @@ export class GlobalAgentRulesService {
       };
     }
     
+    console.log('✅ [Global Agent Rules] Lead score below threshold, agent will continue');
     return { shouldDisable: false };
   }
   
@@ -109,12 +148,34 @@ export class GlobalAgentRulesService {
     globalConfig: IGlobalAgentConfig
   ): { shouldDisable: boolean; reason?: string; ruleType?: 'milestone' } {
     
+    // CRITICAL: If enableMilestoneAutoDisable is false, do NOT evaluate
+    // This setting must take precedence over autoDisableOnMilestone
+    if (!globalConfig.systemSettings.enableMilestoneAutoDisable) {
+      console.log('🔍 [Global Agent Rules] Milestone auto-disable is disabled, skipping check');
+      return { shouldDisable: false };
+    }
+    
+    // Also check the legacy autoDisableOnMilestone flag for backwards compatibility
     if (!globalConfig.leadScoring.autoDisableOnMilestone) {
+      console.log('🔍 [Global Agent Rules] Auto-disable on milestone setting is false, skipping check');
       return { shouldDisable: false };
     }
     
     const milestone = conversation.milestone;
+    
+    // Log detailed information for debugging
+    console.log('🔍 [Global Agent Rules] Checking milestone rule:', {
+      conversationId: conversation.id,
+      milestoneTarget: milestone?.target || 'none',
+      milestoneStatus: milestone?.status || 'none',
+      autoDisableAgent: milestone?.autoDisableAgent || false
+    });
+    
     if (milestone && milestone.status === 'achieved' && milestone.autoDisableAgent) {
+      console.log('🚫 [Global Agent Rules] Milestone achieved and auto-disable enabled:', {
+        milestoneTarget: milestone.target,
+        milestoneStatus: milestone.status
+      });
       return {
         shouldDisable: true,
         reason: `Conversation milestone achieved: ${milestone.target}`,
@@ -122,6 +183,7 @@ export class GlobalAgentRulesService {
       };
     }
     
+    console.log('✅ [Global Agent Rules] Milestone rule check passed, agent will continue');
     return { shouldDisable: false };
   }
   

@@ -34,7 +34,8 @@ import {
   ChevronRight,
   Mail,
   Settings2,
-  Activity
+  Activity,
+  MessageCircle
 } from "lucide-react";
 import {
   Accordion,
@@ -149,7 +150,7 @@ const MainLayout = () => {
       name: 'Instagram',
       href: '/app/instagram',
       icon: Instagram,
-      current: location.pathname.startsWith('/app/instagram') || location.pathname.startsWith('/app/conversations'),
+      current: location.pathname.startsWith('/app/instagram') || location.pathname.startsWith('/app/conversations') || location.pathname.startsWith('/app/comments'),
       subItems: [
         {
           name: 'Agent Config',
@@ -162,6 +163,12 @@ const MainLayout = () => {
           href: '/app/conversations',
           icon: MessageSquare,
           current: location.pathname.startsWith('/app/conversations')
+        },
+        {
+          name: 'Comentarios',
+          href: '/app/instagram/comments',
+          icon: MessageCircle,
+          current: location.pathname.startsWith('/app/instagram/comments')
         }
       ]
     },

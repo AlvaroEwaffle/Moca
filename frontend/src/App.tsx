@@ -39,6 +39,7 @@ import AnalyticsDashboard from "./pages/analytics/AnalyticsDashboard";
 // Instagram OAuth
 import InstagramAuth from "./pages/auth/InstagramAuth";
 import InstagramCallback from "./pages/auth/InstagramCallback";
+import InstagramComments from "./pages/instagram/InstagramComments";
 import GoogleOAuthCallback from "./pages/auth/GoogleOAuthCallback";
 
 // Legal Pages
@@ -104,6 +105,7 @@ function App() {
                 <Route path="queue" element={<QueueStatus />} />
                 <Route path="logs" element={<SystemLogs />} />
               <Route path="instagram" element={<InstagramAccounts />} />
+              <Route path="instagram/comments" element={<InstagramComments />} />
               <Route path="accounts" element={<Navigate to="/app/instagram" replace />} />
                 
                 {/* Analytics */}

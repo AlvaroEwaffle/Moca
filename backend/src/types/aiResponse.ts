@@ -41,6 +41,9 @@ export interface ConversationContext {
   timeSinceLastMessage: number; // minutes
   repetitionPatterns: string[];
   leadHistory: number[];
+  milestoneTarget?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
+  milestoneStatus?: 'pending' | 'achieved' | 'failed';
+  milestoneCustomTarget?: string;
 }
 
 export interface AIResponseConfig {
