@@ -69,8 +69,7 @@ const InstagramCommentSchema = new Schema<IInstagramComment>({
     index: true
   },
   matchedRuleId: {
-    type: Schema.Types.ObjectId,
-    ref: 'CommentAutoReplyRule',
+    type: String,
     required: false,
     index: true
   },

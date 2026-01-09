@@ -278,7 +278,9 @@ export class CommentWorkerService {
   async getStats(): Promise<{
     total: number;
     pending: number;
+    detected: number;
     replied: number;
+    omitted: number;
     failed: number;
   }> {
     try {
@@ -294,7 +296,7 @@ export class CommentWorkerService {
       return { total, pending, detected, replied, omitted, failed };
     } catch (error) {
       console.error('❌ [Comment Worker] Error getting stats:', error);
-      return { total: 0, pending: 0, replied: 0, failed: 0 };
+      return { total: 0, pending: 0, detected: 0, replied: 0, omitted: 0, failed: 0 };
     }
   }
 }
