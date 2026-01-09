@@ -1,5 +1,6 @@
 import InstagramAccount from '../models/instagramAccount.model';
 import InstagramComment from '../models/instagramComment.model';
+import CommentAutoReplyRule from '../models/commentAutoReplyRule.model';
 
 export class InstagramCommentService {
   /**
@@ -13,12 +14,6 @@ export class InstagramCommentService {
       const account = await InstagramAccount.findOne({ accountId, isActive: true });
       if (!account) {
         console.error(`❌ [Comment Service] Account not found: ${accountId}`);
-        return;
-      }
-
-      // Check if comment processing is enabled
-      if (!account.commentSettings?.enabled) {
-        console.log(`⚠️ [Comment Service] Comment processing disabled for account: ${account.accountName}`);
         return;
       }
 
@@ -40,55 +35,96 @@ export class InstagramCommentService {
       await commentDoc.save();
       console.log(`🔄 [Comment Service] Marked comment ${comment.id} as processing to prevent duplicate processing`);
 
-      // Apply delay if configured (AFTER marking as processing)
-      if (account.commentSettings.replyDelay > 0) {
-        console.log(`⏳ [Comment Service] Waiting ${account.commentSettings.replyDelay} seconds before processing`);
-        await new Promise(resolve => setTimeout(resolve, account.commentSettings.replyDelay * 1000));
+      // Check if there are any enabled rules for this account (this is the source of truth)
+      const rules = await CommentAutoReplyRule.find({ 
+        accountId: commentDoc.accountId,
+        enabled: true 
+      });
+
+      if (rules.length === 0) {
+        console.log(`⚠️ [Comment Service] No enabled auto-reply rules configured for account: ${account.accountName}`);
+        commentDoc.status = 'omitted';
+        await commentDoc.save();
+        return;
       }
 
-      // Reply to comment if enabled
-      if (account.commentSettings.autoReplyComment) {
-        try {
-          await this.replyToComment(comment.id, account.commentSettings.commentMessage, account.accessToken);
-          commentDoc.status = 'replied';
-          commentDoc.replyText = account.commentSettings.commentMessage;
-          commentDoc.replyTimestamp = new Date();
-          console.log(`✅ [Comment Service] Comment reply sent: ${comment.id}`);
-        } catch (error) {
-          console.error(`❌ [Comment Service] Failed to reply to comment:`, error);
-          commentDoc.status = 'failed';
+      // Also check if comment processing is globally enabled (for backward compatibility)
+      // But rules being present is the primary check
+      if (account.commentSettings?.enabled === false) {
+        console.log(`⚠️ [Comment Service] Comment auto-reply globally disabled for account: ${account.accountName}`);
+        commentDoc.status = 'omitted';
+        await commentDoc.save();
+        return;
+      }
+
+      // Search for matching keyword in comment text (case-insensitive)
+      const commentTextLower = commentDoc.text.toLowerCase();
+      let matchedRule = null;
+
+      for (const rule of rules) {
+        if (commentTextLower.includes(rule.keyword)) {
+          matchedRule = rule;
+          break; // Use first matching rule
         }
       }
 
-      // Send DM if enabled and not already failed
-      if (account.commentSettings.autoReplyDM && !commentDoc.dmFailed) {
-        try {
-          await this.sendDMReply(comment.id, account.commentSettings.dmMessage, account.accessToken, account.accountId);
-          commentDoc.dmSent = true;
-          commentDoc.dmTimestamp = new Date();
-          commentDoc.dmFailed = false; // Reset failure status on success
-          commentDoc.dmFailureReason = undefined;
-          commentDoc.dmFailureTimestamp = undefined;
-          console.log(`✅ [Comment Service] DM sent for comment: ${comment.id}`);
-        } catch (error) {
-          console.error(`❌ [Comment Service] Failed to send DM:`, error);
-          
-          // Check if it's a daily limit error
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
-                                  errorMessage.includes('The requested user cannot be found') ||
-                                  errorMessage.includes('error_subcode":2534014');
-          
-          if (isDailyLimitError) {
-            // Mark as failed to prevent retrying
-            commentDoc.dmFailed = true;
-            commentDoc.dmFailureReason = 'Daily DM limit reached';
-            commentDoc.dmFailureTimestamp = new Date();
-            console.log(`⚠️ [Comment Service] DM daily limit reached for account ${account.accountName}, marking as failed`);
+      if (!matchedRule) {
+        // No keyword match - mark as omitted
+        console.log(`ℹ️ [Comment Service] No keyword match found for comment: ${comment.id}`);
+        commentDoc.status = 'omitted';
+        await commentDoc.save();
+        return;
+      }
+
+      // Keyword matched - mark as detected and reply
+      console.log(`🔍 [Comment Service] Keyword "${matchedRule.keyword}" matched for comment: ${comment.id}`);
+      commentDoc.status = 'detected';
+      commentDoc.matchedKeyword = matchedRule.keyword;
+      commentDoc.matchedRuleId = matchedRule._id;
+
+      try {
+        await this.replyToComment(comment.id, matchedRule.responseMessage, account.accessToken);
+        commentDoc.status = 'replied';
+        commentDoc.replyText = matchedRule.responseMessage;
+        commentDoc.replyTimestamp = new Date();
+        console.log(`✅ [Comment Service] Comment reply sent using rule "${matchedRule.keyword}": ${comment.id}`);
+        
+        // Send DM if rule is configured to do so
+        if (matchedRule.sendDM && matchedRule.dmMessage && !commentDoc.dmFailed) {
+          try {
+            console.log(`💬 [Comment Service] Sending DM after comment reply using rule "${matchedRule.keyword}"`);
+            await this.sendDMReply(
+              comment.id, // Use comment.id (Instagram comment ID)
+              matchedRule.dmMessage, 
+              account.accessToken, 
+              account.accountId
+            );
+            commentDoc.dmSent = true;
+            commentDoc.dmTimestamp = new Date();
+            commentDoc.dmFailed = false;
+            commentDoc.dmFailureReason = undefined;
+            commentDoc.dmFailureTimestamp = undefined;
+            console.log(`✅ [Comment Service] DM sent successfully after comment reply using rule "${matchedRule.keyword}"`);
+          } catch (error) {
+            console.error(`❌ [Comment Service] Failed to send DM:`, error);
+            
+            // Check if it's a daily limit error
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
+                                    errorMessage.includes('The requested user cannot be found') ||
+                                    errorMessage.includes('error_subcode":2534014');
+            
+            if (isDailyLimitError) {
+              commentDoc.dmFailed = true;
+              commentDoc.dmFailureReason = 'Daily DM limit reached';
+              commentDoc.dmFailureTimestamp = new Date();
+              console.log(`⚠️ [Comment Service] DM daily limit reached for account ${account.accountName}, marking as failed`);
+            }
           }
         }
-      } else if (commentDoc.dmFailed) {
-        console.log(`⚠️ [Comment Service] DM already failed for comment ${comment.id}, skipping`);
+      } catch (error) {
+        console.error(`❌ [Comment Service] Failed to reply to comment:`, error);
+        commentDoc.status = 'failed';
       }
 
       // Save updated comment record

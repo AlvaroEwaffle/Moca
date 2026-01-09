@@ -8,7 +8,9 @@ export interface IInstagramComment extends Document {
   username: string;
   text: string;
   timestamp: Date;
-  status: 'pending' | 'processing' | 'replied' | 'failed';
+  status: 'pending' | 'processing' | 'detected' | 'replied' | 'omitted' | 'failed';
+  matchedKeyword?: string; // Keyword that matched this comment
+  matchedRuleId?: string; // ID of the rule that matched (ObjectId reference)
   replyText?: string;
   replyTimestamp?: Date;
   dmSent?: boolean;
@@ -57,8 +59,19 @@ const InstagramCommentSchema = new Schema<IInstagramComment>({
   },
   status: {
     type: String,
-    enum: ['pending', 'processing', 'replied', 'failed'],
+    enum: ['pending', 'processing', 'detected', 'replied', 'omitted', 'failed'],
     default: 'pending',
+    index: true
+  },
+  matchedKeyword: {
+    type: String,
+    required: false,
+    index: true
+  },
+  matchedRuleId: {
+    type: Schema.Types.ObjectId,
+    ref: 'CommentAutoReplyRule',
+    required: false,
     index: true
   },
   replyText: {

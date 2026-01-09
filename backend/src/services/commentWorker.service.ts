@@ -1,5 +1,6 @@
 import InstagramComment from '../models/instagramComment.model';
 import InstagramAccount from '../models/instagramAccount.model';
+import CommentAutoReplyRule from '../models/commentAutoReplyRule.model';
 import { InstagramCommentService } from './instagramComment.service';
 
 export class CommentWorkerService {
@@ -138,75 +139,105 @@ export class CommentWorkerService {
         return;
       }
 
-      // Check if comment processing is enabled
-      if (!account.commentSettings?.enabled) {
-        console.log(`⚠️ [Comment Worker] Comment processing disabled for account: ${account.accountName}`);
-        comment.status = 'failed';
+      // Check if there are any enabled rules for this account (this is the source of truth)
+      const rules = await CommentAutoReplyRule.find({ 
+        accountId: comment.accountId,
+        enabled: true 
+      });
+
+      if (rules.length === 0) {
+        console.log(`⚠️ [Comment Worker] No enabled auto-reply rules configured for account: ${account.accountName}`);
+        comment.status = 'omitted';
         await comment.save();
         return;
+      }
+
+      // Also check if comment processing is globally enabled (for backward compatibility)
+      // But rules being present is the primary check
+      if (account.commentSettings?.enabled === false) {
+        console.log(`⚠️ [Comment Worker] Comment auto-reply globally disabled for account: ${account.accountName}`);
+        comment.status = 'omitted';
+        await comment.save();
+        return;
+      }
+
+      // Search for matching keyword in comment text (case-insensitive)
+      const commentTextLower = comment.text.toLowerCase();
+      let matchedRule = null;
+
+      for (const rule of rules) {
+        if (commentTextLower.includes(rule.keyword)) {
+          matchedRule = rule;
+          break; // Use first matching rule
+        }
       }
 
       // Create comment service instance
       const commentService = new InstagramCommentService();
 
-      // Apply delay if configured
-      if (account.commentSettings.replyDelay > 0) {
-        console.log(`⏳ [Comment Worker] Waiting ${account.commentSettings.replyDelay} seconds before processing`);
-        await new Promise(resolve => setTimeout(resolve, account.commentSettings.replyDelay * 1000));
+      if (!matchedRule) {
+        // No keyword match - mark as omitted
+        console.log(`ℹ️ [Comment Worker] No keyword match found for comment: ${comment.commentId}`);
+        comment.status = 'omitted';
+        await comment.save();
+        return;
       }
 
-      // Reply to comment if enabled
-      if (account.commentSettings.autoReplyComment) {
-        try {
-          await commentService.replyToComment(
-            comment.commentId, 
-            account.commentSettings.commentMessage, 
-            account.accessToken
-          );
-          comment.status = 'replied';
-          comment.replyText = account.commentSettings.commentMessage;
-          comment.replyTimestamp = new Date();
-          console.log(`✅ [Comment Worker] Comment reply sent: ${comment.commentId}`);
-        } catch (error) {
-          console.error(`❌ [Comment Worker] Failed to reply to comment:`, error);
-          comment.status = 'failed';
-        }
-      }
+      // Keyword matched - mark as detected
+      console.log(`🔍 [Comment Worker] Keyword "${matchedRule.keyword}" matched for comment: ${comment.commentId}`);
+      comment.status = 'detected';
+      comment.matchedKeyword = matchedRule.keyword;
+      comment.matchedRuleId = matchedRule._id;
+      await comment.save();
 
-      // Send DM if enabled and not already failed
-      if (account.commentSettings.autoReplyDM && !comment.dmFailed) {
-        try {
-          await commentService.sendDMReply(
-            comment.userId, 
-            account.commentSettings.dmMessage, 
-            account.accessToken, 
-            account.accountId
-          );
-          comment.dmSent = true;
-          comment.dmTimestamp = new Date();
-          comment.dmFailed = false; // Reset failure status on success
-          comment.dmFailureReason = undefined;
-          comment.dmFailureTimestamp = undefined;
-          console.log(`✅ [Comment Worker] DM sent to user: ${comment.userId}`);
-        } catch (error) {
-          console.error(`❌ [Comment Worker] Failed to send DM:`, error);
-          
-          // Check if it's a daily limit error
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
-                                  errorMessage.includes('The requested user cannot be found') ||
-                                  errorMessage.includes('error_subcode":2534014');
-          
-          if (isDailyLimitError) {
-            // Mark as failed to prevent retrying
-            comment.dmFailed = true;
-            comment.dmFailureReason = 'Daily DM limit reached';
-            comment.dmFailureTimestamp = new Date();
-            console.log(`⚠️ [Comment Worker] DM daily limit reached for account ${account.accountName}, marking as failed`);
+      // Reply to comment using matched rule's response message
+      try {
+        await commentService.replyToComment(
+          comment.commentId, 
+          matchedRule.responseMessage, 
+          account.accessToken
+        );
+        comment.status = 'replied';
+        comment.replyText = matchedRule.responseMessage;
+        comment.replyTimestamp = new Date();
+        console.log(`✅ [Comment Worker] Comment reply sent using rule "${matchedRule.keyword}": ${comment.commentId}`);
+        
+        // Send DM if rule is configured to do so
+        if (matchedRule.sendDM && matchedRule.dmMessage && !comment.dmFailed) {
+          try {
+            console.log(`💬 [Comment Worker] Sending DM after comment reply using rule "${matchedRule.keyword}"`);
+            await commentService.sendDMReply(
+              comment.commentId, // Use commentId (Instagram uses comment_id for comment-based DMs)
+              matchedRule.dmMessage, 
+              account.accessToken, 
+              account.accountId
+            );
+            comment.dmSent = true;
+            comment.dmTimestamp = new Date();
+            comment.dmFailed = false;
+            comment.dmFailureReason = undefined;
+            comment.dmFailureTimestamp = undefined;
+            console.log(`✅ [Comment Worker] DM sent successfully after comment reply using rule "${matchedRule.keyword}"`);
+          } catch (error) {
+            console.error(`❌ [Comment Worker] Failed to send DM:`, error);
+            
+            // Check if it's a daily limit error
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
+                                    errorMessage.includes('The requested user cannot be found') ||
+                                    errorMessage.includes('error_subcode":2534014');
+            
+            if (isDailyLimitError) {
+              comment.dmFailed = true;
+              comment.dmFailureReason = 'Daily DM limit reached';
+              comment.dmFailureTimestamp = new Date();
+              console.log(`⚠️ [Comment Worker] DM daily limit reached for account ${account.accountName}, marking as failed`);
+            }
           }
         }
-      } else if (comment.dmFailed) {
-        console.log(`⚠️ [Comment Worker] DM already failed for comment ${comment.commentId}, skipping`);
+      } catch (error) {
+        console.error(`❌ [Comment Worker] Failed to reply to comment:`, error);
+        comment.status = 'failed';
       }
 
       // Save updated comment
@@ -251,14 +282,16 @@ export class CommentWorkerService {
     failed: number;
   }> {
     try {
-      const [total, pending, replied, failed] = await Promise.all([
+      const [total, pending, detected, replied, omitted, failed] = await Promise.all([
         InstagramComment.countDocuments(),
         InstagramComment.countDocuments({ status: 'pending' }),
+        InstagramComment.countDocuments({ status: 'detected' }),
         InstagramComment.countDocuments({ status: 'replied' }),
+        InstagramComment.countDocuments({ status: 'omitted' }),
         InstagramComment.countDocuments({ status: 'failed' })
       ]);
 
-      return { total, pending, replied, failed };
+      return { total, pending, detected, replied, omitted, failed };
     } catch (error) {
       console.error('❌ [Comment Worker] Error getting stats:', error);
       return { total: 0, pending: 0, replied: 0, failed: 0 };

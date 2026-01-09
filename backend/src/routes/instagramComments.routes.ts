@@ -1,6 +1,7 @@
 import express from 'express';
 import InstagramComment from '../models/instagramComment.model';
 import InstagramAccount from '../models/instagramAccount.model';
+import CommentAutoReplyRule from '../models/commentAutoReplyRule.model';
 import { InstagramCommentService } from '../services/instagramComment.service';
 import commentWorkerService from '../services/commentWorker.service';
 import { authenticateToken } from '../middleware/auth';
@@ -141,14 +142,14 @@ router.post('/comments/:commentId/reply', authenticateToken, async (req, res) =>
 });
 
 /**
- * Update comment settings for an account
+ * Update comment auto-reply enabled status for an account
  */
 router.put('/settings/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
-    const { commentSettings } = req.body;
+    const { enabled } = req.body;
 
-    console.log(`⚙️ [Update Settings] Updating comment settings for account: ${accountId}`);
+    console.log(`⚙️ [Update Settings] Updating comment auto-reply enabled status for account: ${accountId}`);
 
     // Verify account belongs to user
     const account = await InstagramAccount.findOne({ 
@@ -163,19 +164,19 @@ router.put('/settings/:accountId', authenticateToken, async (req, res) => {
       });
     }
 
-    // Update comment settings
-    account.commentSettings = {
-      ...account.commentSettings,
-      ...commentSettings
-    };
+    // Update comment settings - only the enabled flag
+    if (!account.commentSettings) {
+      account.commentSettings = { enabled: false };
+    }
+    account.commentSettings.enabled = enabled === true;
 
     await account.save();
 
     res.json({
       success: true,
       data: { 
-        message: 'Comment settings updated successfully',
-        commentSettings: account.commentSettings
+        message: 'Comment auto-reply settings updated successfully',
+        enabled: account.commentSettings.enabled
       }
     });
 
@@ -209,12 +210,242 @@ router.get('/settings/:accountId', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      data: { commentSettings: account.commentSettings }
+      data: { 
+        enabled: account.commentSettings?.enabled || false
+      }
     });
 
   } catch (error) {
     console.error('❌ [Get Settings] Error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch settings' });
+  }
+});
+
+/**
+ * Get all auto-reply rules for an account
+ */
+router.get('/rules/:accountId', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    console.log(`📋 [Get Rules] Fetching auto-reply rules for account: ${accountId}`);
+
+    // Verify account belongs to user
+    const account = await InstagramAccount.findOne({ 
+      accountId, 
+      userId: req.user!.userId 
+    });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Account not found'
+      });
+    }
+
+    // Get all rules for this account
+    const rules = await CommentAutoReplyRule.find({ 
+      accountId,
+      userId: req.user!.userId 
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: { rules }
+    });
+
+  } catch (error) {
+    console.error('❌ [Get Rules] Error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch rules' });
+  }
+});
+
+/**
+ * Create a new auto-reply rule
+ */
+router.post('/rules/:accountId', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { keyword, responseMessage, enabled = true, sendDM = false, dmMessage } = req.body;
+
+    if (!keyword || !responseMessage) {
+      return res.status(400).json({
+        success: false,
+        error: 'Keyword and response message are required'
+      });
+    }
+
+    // Validate DM configuration
+    if (sendDM === true && !dmMessage) {
+      return res.status(400).json({
+        success: false,
+        error: 'DM message is required when sendDM is enabled'
+      });
+    }
+
+    console.log(`➕ [Create Rule] Creating auto-reply rule for account: ${accountId}`);
+
+    // Verify account belongs to user
+    const account = await InstagramAccount.findOne({ 
+      accountId, 
+      userId: req.user!.userId 
+    });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Account not found'
+      });
+    }
+
+    // Create new rule
+    const rule = new CommentAutoReplyRule({
+      accountId,
+      userId: req.user!.userId,
+      keyword: keyword.trim().toLowerCase(),
+      responseMessage: responseMessage.trim(),
+      enabled: enabled === true,
+      sendDM: sendDM === true,
+      dmMessage: sendDM === true ? dmMessage?.trim() : undefined
+    });
+
+    await rule.save();
+
+    res.json({
+      success: true,
+      data: { rule, message: 'Rule created successfully' }
+    });
+
+  } catch (error: any) {
+    console.error('❌ [Create Rule] Error:', error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: 'A rule with this keyword already exists for this account'
+      });
+    }
+    res.status(500).json({ success: false, error: 'Failed to create rule' });
+  }
+});
+
+/**
+ * Update an auto-reply rule
+ */
+router.put('/rules/:ruleId', authenticateToken, async (req, res) => {
+  try {
+    const { ruleId } = req.params;
+    const { keyword, responseMessage, enabled, sendDM, dmMessage } = req.body;
+
+    console.log(`✏️ [Update Rule] Updating rule: ${ruleId}`);
+
+    // Find rule and verify ownership
+    const rule = await CommentAutoReplyRule.findById(ruleId);
+    if (!rule) {
+      return res.status(404).json({
+        success: false,
+        error: 'Rule not found'
+      });
+    }
+
+    // Verify account belongs to user
+    const account = await InstagramAccount.findOne({ 
+      accountId: rule.accountId, 
+      userId: req.user!.userId 
+    });
+
+    if (!account || rule.userId !== req.user!.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+
+    // Validate DM configuration
+    const newSendDM = sendDM !== undefined ? sendDM === true : rule.sendDM;
+    if (newSendDM === true && !dmMessage && !rule.dmMessage) {
+      return res.status(400).json({
+        success: false,
+        error: 'DM message is required when sendDM is enabled'
+      });
+    }
+
+    // Update rule fields
+    if (keyword !== undefined) {
+      rule.keyword = keyword.trim().toLowerCase();
+    }
+    if (responseMessage !== undefined) {
+      rule.responseMessage = responseMessage.trim();
+    }
+    if (enabled !== undefined) {
+      rule.enabled = enabled === true;
+    }
+    if (sendDM !== undefined) {
+      rule.sendDM = sendDM === true;
+    }
+    if (dmMessage !== undefined) {
+      rule.dmMessage = sendDM === true ? dmMessage.trim() : undefined;
+    }
+
+    await rule.save();
+
+    res.json({
+      success: true,
+      data: { rule, message: 'Rule updated successfully' }
+    });
+
+  } catch (error: any) {
+    console.error('❌ [Update Rule] Error:', error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: 'A rule with this keyword already exists for this account'
+      });
+    }
+    res.status(500).json({ success: false, error: 'Failed to update rule' });
+  }
+});
+
+/**
+ * Delete an auto-reply rule
+ */
+router.delete('/rules/:ruleId', authenticateToken, async (req, res) => {
+  try {
+    const { ruleId } = req.params;
+
+    console.log(`🗑️ [Delete Rule] Deleting rule: ${ruleId}`);
+
+    // Find rule and verify ownership
+    const rule = await CommentAutoReplyRule.findById(ruleId);
+    if (!rule) {
+      return res.status(404).json({
+        success: false,
+        error: 'Rule not found'
+      });
+    }
+
+    // Verify account belongs to user
+    const account = await InstagramAccount.findOne({ 
+      accountId: rule.accountId, 
+      userId: req.user!.userId 
+    });
+
+    if (!account || rule.userId !== req.user!.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+
+    await CommentAutoReplyRule.findByIdAndDelete(ruleId);
+
+    res.json({
+      success: true,
+      data: { message: 'Rule deleted successfully' }
+    });
+
+  } catch (error) {
+    console.error('❌ [Delete Rule] Error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete rule' });
   }
 });
 

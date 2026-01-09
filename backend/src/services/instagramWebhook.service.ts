@@ -4,6 +4,7 @@ import Conversation from '../models/conversation.model';
 import Message from '../models/message.model';
 import InstagramAccount from '../models/instagramAccount.model';
 import InstagramComment from '../models/instagramComment.model';
+import OutboundQueue from '../models/outboundQueue.model';
 import { IContact } from '../models/contact.model';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
@@ -434,32 +435,52 @@ export class InstagramWebhookService {
         return;
       }
 
-      // Check if this is a message we sent (bot message detection by message ID)
+      // IMPROVED: Check if this is a message we sent by searching in multiple places
+      // 1. Check Message collection by Instagram response messageId (primary check)
       const sentMessage = await Message.findOne({ 
         'metadata.instagramResponse.messageId': messageData.mid,
         role: 'assistant'
       });
       
       if (sentMessage) {
-        console.log(`🤖 Bot message detected by message ID, skipping processing to avoid loops: ${messageData.mid}`);
+        console.log(`🤖 [Bot Detection] Bot message detected by Message ID in Message collection, skipping processing to avoid loops: ${messageData.mid}`);
         return;
       }
 
-      // NEW STRATEGY: Use is_echo flag for bot detection, then PSID-based account identification
-      const isBotMessage = messageData.is_echo === true;
+      // 2. IMPROVED: Check OutboundQueue for recently sent messages that might match
+      // Look for messages in the queue that were sent recently (within last 2 minutes)
+      // and check if any sent message has the same MID stored
+      const recentQueueItems = await OutboundQueue.find({
+        status: 'sent',
+        'metadata.lastAttempt': { 
+          $gte: new Date(Date.now() - 120000) // Check last 2 minutes
+        }
+      }).limit(10); // Limit to recent items only
       
-      // Additional bot detection: Check if this is a comment-related DM response
-      // These messages often have specific patterns or come from our own account
+      // For each queue item, check if the associated message has this MID
+      for (const queueItem of recentQueueItems) {
+        const associatedMessage = await Message.findById(queueItem.messageId);
+        if (associatedMessage && associatedMessage.metadata?.instagramResponse?.messageId === messageData.mid) {
+          console.log(`🤖 [Bot Detection] Bot message detected by matching MID in OutboundQueue/Message, skipping: ${messageData.mid}`);
+          return;
+        }
+      }
+
+      // 3. Check is_echo flag (Instagram's own indicator)
+      const isEchoFlag = messageData.is_echo === true;
+      
+      // 4. Additional bot detection: Check if this is a comment-related DM response
       const isCommentRelatedDM = Boolean(messageData.text && (
         messageData.text.includes('Thanks for commenting') ||
         messageData.text.includes('DM us for more info') ||
         messageData.text.includes('How can we help you today')
       ));
       
-      const finalIsBotMessage = isBotMessage || isCommentRelatedDM;
-      console.log(`🤖 [Bot Detection] is_echo flag: ${messageData.is_echo}, isCommentRelatedDM: ${isCommentRelatedDM}, isBotMessage: ${finalIsBotMessage}`);
+      const isBotMessageByFlags = isEchoFlag || isCommentRelatedDM;
+      console.log(`🤖 [Bot Detection] Flags: is_echo=${messageData.is_echo}, isCommentRelatedDM=${isCommentRelatedDM}, isBotMessageByFlags=${isBotMessageByFlags}`);
       
-      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, finalIsBotMessage);
+      // Identify account to check if sender is our account
+      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, isBotMessageByFlags);
       if (!accountResult) {
         console.error('❌ [CRITICAL ERROR] Cannot process message - account identification failed');
         console.error('❌ [CRITICAL ERROR] PSID:', messageData.psid);
@@ -467,14 +488,34 @@ export class InstagramWebhookService {
         console.error('❌ [CRITICAL ERROR] Message MID:', messageData.mid);
         console.error('❌ [CRITICAL ERROR] Message text:', messageData.text?.substring(0, 100) || 'NO TEXT');
         console.error('❌ [CRITICAL ERROR] Message will be SKIPPED to prevent incorrect account assignment');
-        // TODO: Consider storing failed messages in a separate collection for manual review
         return;
       }
 
-      const { account: instagramAccount } = accountResult;
+      const { account: instagramAccount, isBotMessage: isBotMessageFromAccount } = accountResult;
       
-      if (isBotMessage) {
-        console.log(`🤖 Bot message detected by PSID matching, skipping processing to avoid loops: ${messageData.mid}`);
+      // CRITICAL FIX #1: Check if sender is our account - if so, STOP processing immediately
+      const senderIsOurAccount = messageData.psid === instagramAccount.pageScopedId;
+      console.log(`🔍 [Bot Detection - Account Check] Checking if sender is our account:`);
+      console.log(`🔍 [Bot Detection - Account Check] Sender PSID: ${messageData.psid}`);
+      console.log(`🔍 [Bot Detection - Account Check] Account pageScopedId: ${instagramAccount.pageScopedId}`);
+      console.log(`🔍 [Bot Detection - Account Check] Account accountId: ${instagramAccount.accountId}`);
+      console.log(`🔍 [Bot Detection - Account Check] Account name: ${instagramAccount.accountName}`);
+      console.log(`🔍 [Bot Detection - Account Check] Comparison result: senderIsOurAccount = ${senderIsOurAccount}`);
+      
+      if (senderIsOurAccount) {
+        console.log(`🚫 [Bot Detection - CRITICAL STOP] Message sent FROM our own account (${instagramAccount.accountName}).`);
+        console.log(`🚫 [Bot Detection - CRITICAL STOP] Sender PSID (${messageData.psid}) matches account pageScopedId (${instagramAccount.pageScopedId}).`);
+        console.log(`🚫 [Bot Detection - CRITICAL STOP] This is our own message being echoed back by Instagram.`);
+        console.log(`🚫 [Bot Detection - CRITICAL STOP] Stopping processing immediately to prevent infinite loop.`);
+        console.log(`🚫 [Bot Detection - CRITICAL STOP] Message MID: ${messageData.mid}, Text: ${messageData.text?.substring(0, 50) || 'NO TEXT'}...`);
+        return; // STOP PROCESSING - This is our own message
+      } else {
+        console.log(`✅ [Bot Detection - Account Check] Sender is NOT our account - continuing with normal processing.`);
+      }
+
+      // Additional check: if account identification marked this as a bot message
+      if (isBotMessageFromAccount || isBotMessageByFlags) {
+        console.log(`🤖 [Bot Detection] Bot message detected by account identification or flags, skipping processing to avoid loops: ${messageData.mid}`);
         return;
       }
       
@@ -509,41 +550,10 @@ export class InstagramWebhookService {
       }
 
       // Determine which PSID to use for contact
-      // If the sender PSID belongs to one of our accounts, this means the message was sent FROM our account
-      // In this case, the contact should be the RECIPIENT, not the sender
-      let contactPSID = messageData.psid;
-      const senderIsOurAccount = messageData.psid === instagramAccount.pageScopedId;
-      
-      console.log(`🔍 [Contact Selection] Checking if sender is our account:`);
-      console.log(`🔍 [Contact Selection] Sender PSID: ${messageData.psid}`);
-      console.log(`🔍 [Contact Selection] Account pageScopedId: ${instagramAccount.pageScopedId}`);
-      console.log(`🔍 [Contact Selection] senderIsOurAccount: ${senderIsOurAccount}`);
-      console.log(`🔍 [Contact Selection] Recipient ID: ${messageData.recipient?.id || 'NOT PROVIDED'}`);
-      
-      if (senderIsOurAccount && messageData.recipient?.id) {
-        // Message sent FROM our account TO another account
-        // The contact should be the recipient, not the sender
-        console.log(`📤 [Contact Selection] Message sent FROM our account (${instagramAccount.accountName}). Using recipient as contact.`);
-        console.log(`📤 [Contact Selection] Sender PSID: ${messageData.psid}, Recipient ID: ${messageData.recipient.id}`);
-        
-        // Try to find existing contact by recipient ID first (in case it's already stored as a PSID)
-        // Try to find by psid and channel first, then fallback to psid only for backward compatibility
-        const existingContactByRecipientId = await Contact.findOne({ psid: messageData.recipient.id, channel: 'instagram' }) || await Contact.findOne({ psid: messageData.recipient.id });
-        
-        if (existingContactByRecipientId) {
-          console.log(`📤 [Contact Selection] Found existing contact by recipient ID: ${existingContactByRecipientId.id}`);
-          contactPSID = existingContactByRecipientId.psid;
-        } else {
-          // Use recipient ID as PSID (it might be a valid PSID or pageScopedId)
-          // The upsertContact function will try to fetch username, and if it fails, we'll still have a contact
-          contactPSID = messageData.recipient.id;
-          console.log(`📤 [Contact Selection] Using recipient ID as contact PSID: ${contactPSID}`);
-        }
-      } else {
-        // Normal case: message received from a lead
-        contactPSID = messageData.psid;
-        console.log(`📥 [Contact Selection] Message received from lead. Using sender PSID as contact: ${contactPSID}`);
-      }
+      // At this point, we know senderIsOurAccount is FALSE (we already checked and returned if true)
+      // So this is a normal message from a lead
+      const contactPSID = messageData.psid;
+      console.log(`📥 [Contact Selection] Message received from lead. Using sender PSID as contact: ${contactPSID}`);
 
       // Get or create contact
       const contact = await this.upsertContact(contactPSID, messageData, instagramAccount);
@@ -553,8 +563,8 @@ export class InstagramWebhookService {
       const conversation = await this.getOrCreateConversation(contact.id, instagramAccount.accountId);
       console.log(`🔍 [Message Processing] Using conversation: ${conversation.id} for contact: ${contact.id}`);
 
-      // Create message record
-      const message = await this.createMessage(messageData, conversation.id, contact.id, instagramAccount.accountId);
+      // Create message record (pass instagramAccount to avoid extra query)
+      const message = await this.createMessage(messageData, conversation.id, contact.id, instagramAccount.accountId, instagramAccount);
 
       // Update conversation metadata
       await this.updateConversationMetadata(conversation.id, messageData);
@@ -829,15 +839,37 @@ export class InstagramWebhookService {
     messageData: InstagramMessage, 
     conversationId: string, 
     contactId: string, 
-    accountId: string
+    accountId: string,
+    instagramAccount?: any // Optional: pass account to avoid extra query
   ): Promise<IMessage> {
     try {
+      // CRITICAL FIX #2: Get the InstagramAccount to compare with pageScopedId (not accountId)
+      // Use passed account if available, otherwise query
+      const account = instagramAccount || await InstagramAccount.findOne({ accountId });
+      if (!account) {
+        throw new Error(`Account not found: ${accountId}`);
+      }
+
       // Determine if this message is from our bot or from a user
-      // If the sender ID matches our Instagram account ID, it's a bot message
-      const isBotMessage = messageData.psid === accountId;
+      // Compare sender PSID with account's pageScopedId (not accountId - they are different!)
+      const isBotMessage = messageData.psid === account.pageScopedId;
       const messageRole = isBotMessage ? 'assistant' : 'user';
       
-      console.log(`🔍 Message role detection: PSID=${messageData.psid}, AccountID=${accountId}, Role=${messageRole}`);
+      console.log(`🔍 [Message Role Detection] Creating message record:`);
+      console.log(`🔍 [Message Role Detection] PSID=${messageData.psid}`);
+      console.log(`🔍 [Message Role Detection] AccountID=${accountId}`);
+      console.log(`🔍 [Message Role Detection] Account pageScopedId=${account.pageScopedId}`);
+      console.log(`🔍 [Message Role Detection] Comparison: ${messageData.psid} === ${account.pageScopedId} = ${isBotMessage}`);
+      console.log(`🔍 [Message Role Detection] Determined role: ${messageRole}`);
+      
+      // Additional safety check: if role is assistant but we're processing it, log warning
+      // This should NOT happen if our early checks are working, but it's a safety net
+      if (isBotMessage) {
+        console.warn(`⚠️ [Message Role Detection] CRITICAL WARNING: Detected bot message being created!`);
+        console.warn(`⚠️ [Message Role Detection] This should have been caught earlier by senderIsOurAccount check.`);
+        console.warn(`⚠️ [Message Role Detection] PSID: ${messageData.psid}, pageScopedId: ${account.pageScopedId}, Account: ${account.accountName}`);
+        console.warn(`⚠️ [Message Role Detection] Message will be created with role='assistant' but should not trigger AI response.`);
+      }
       
       console.log(`💾 [Message Creation] Storing recipientId: ${messageData.recipient?.id}`);
       

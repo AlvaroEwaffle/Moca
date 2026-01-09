@@ -90,7 +90,13 @@ class DebounceWorkerService {
     console.log(`🎯 DebounceWorkerService: Triggering message collection for conversation ${conversationId}`);
     
     try {
-      // Add message to collection window
+      // SAFETY CHECK: Do not process messages with role='assistant' (our own messages)
+      if (message.role === 'assistant') {
+        console.log(`🚫 DebounceWorkerService: Message has role='assistant', skipping collection to prevent loop. Message ID: ${message.id}, MID: ${message.mid}`);
+        return;
+      }
+
+      // Add message to collection window (only user messages)
       this.addMessageToCollection(conversationId, message);
       
       console.log(`✅ DebounceWorkerService: Message collection triggered for conversation ${conversationId}`);
@@ -332,13 +338,16 @@ class DebounceWorkerService {
     // Remove from pending messages
     this.pendingMessages.delete(conversationId);
     
-    const messages = collection.messages;
-    console.log(`📦 DebounceWorkerService: Processing ${messages.length} collected messages for conversation ${conversationId}`);
+    // Filter out any assistant messages that might have slipped through (safety check)
+    const userMessages = collection.messages.filter(msg => msg.role === 'user');
+    console.log(`📦 DebounceWorkerService: Processing ${userMessages.length} collected user messages for conversation ${conversationId} (filtered ${collection.messages.length - userMessages.length} assistant messages)`);
 
-    if (messages.length === 0) {
-      console.log(`⚠️ DebounceWorkerService: No messages to process for conversation ${conversationId}`);
+    if (userMessages.length === 0) {
+      console.log(`⚠️ DebounceWorkerService: No user messages to process for conversation ${conversationId} (all messages were from assistant or filtered out)`);
       return;
     }
+
+    const messages = userMessages;
 
     // Get conversation details
     const conversation = await Conversation.findById(conversationId);
@@ -347,7 +356,7 @@ class DebounceWorkerService {
       return;
     }
 
-    // Process the batch
+    // Process the batch (only user messages)
     await this.processConversationBatch(conversation, messages);
   }
 
