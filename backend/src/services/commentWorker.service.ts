@@ -206,8 +206,10 @@ export class CommentWorkerService {
         if (matchedRule.sendDM && matchedRule.dmMessage && !comment.dmFailed) {
           try {
             console.log(`💬 [Comment Worker] Sending DM after comment reply using rule "${matchedRule.keyword}"`);
+            console.log(`💬 [Comment Worker] Comment ID: ${comment.commentId}, User ID: ${comment.userId}`);
             await commentService.sendDMReply(
-              comment.commentId, // Use commentId (Instagram uses comment_id for comment-based DMs)
+              comment.commentId, // Use commentId for comment-based DM
+              comment.userId, // Also pass userId as fallback
               matchedRule.dmMessage, 
               account.accessToken, 
               account.accountId
@@ -232,8 +234,20 @@ export class CommentWorkerService {
               comment.dmFailureReason = 'Daily DM limit reached';
               comment.dmFailureTimestamp = new Date();
               console.log(`⚠️ [Comment Worker] DM daily limit reached for account ${account.accountName}, marking as failed`);
+            } else {
+              // Mark as failed for other errors too
+              comment.dmFailed = true;
+              comment.dmFailureReason = errorMessage;
+              comment.dmFailureTimestamp = new Date();
             }
           }
+        } else {
+          const reasons = [];
+          if (!matchedRule.sendDM) reasons.push('sendDM is false');
+          if (!matchedRule.dmMessage) reasons.push('dmMessage is empty/missing');
+          if (comment.dmFailed) reasons.push('previous DM attempt failed');
+          
+          console.log(`⚠️ [Comment Worker] DM not sent for rule "${matchedRule.keyword}". Reasons: ${reasons.join(', ')}`);
         }
       } catch (error) {
         console.error(`❌ [Comment Worker] Failed to reply to comment:`, error);

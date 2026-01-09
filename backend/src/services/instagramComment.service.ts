@@ -89,12 +89,28 @@ export class InstagramCommentService {
         commentDoc.replyTimestamp = new Date();
         console.log(`✅ [Comment Service] Comment reply sent using rule "${matchedRule.keyword}": ${comment.id}`);
         
+        // Debug: Log rule DM configuration
+        console.log(`🔍 [Comment Service] Rule DM configuration check:`, {
+          ruleId: matchedRule._id,
+          keyword: matchedRule.keyword,
+          sendDM: matchedRule.sendDM,
+          hasDmMessage: !!matchedRule.dmMessage,
+          dmMessageLength: matchedRule.dmMessage?.length || 0,
+          commentDmFailed: commentDoc.dmFailed
+        });
+        
         // Send DM if rule is configured to do so
         if (matchedRule.sendDM && matchedRule.dmMessage && !commentDoc.dmFailed) {
           try {
             console.log(`💬 [Comment Service] Sending DM after comment reply using rule "${matchedRule.keyword}"`);
+            console.log(`💬 [Comment Service] DM message: "${matchedRule.dmMessage}"`);
+            console.log(`💬 [Comment Service] Comment ID: ${comment.id}, Comment User ID: ${commentDoc.userId}, Account ID: ${account.accountId}`);
+            
+            // Try using comment_id first (Instagram API supports this for comment-based DMs)
+            // If that fails, we can fallback to user_id
             await this.sendDMReply(
-              comment.id, // Use comment.id (Instagram comment ID)
+              comment.id, // Use comment.id (Instagram comment ID) for comment-based DM
+              commentDoc.userId, // Also pass userId as fallback
               matchedRule.dmMessage, 
               account.accessToken, 
               account.accountId
@@ -119,8 +135,20 @@ export class InstagramCommentService {
               commentDoc.dmFailureReason = 'Daily DM limit reached';
               commentDoc.dmFailureTimestamp = new Date();
               console.log(`⚠️ [Comment Service] DM daily limit reached for account ${account.accountName}, marking as failed`);
+            } else {
+              // Mark as failed for other errors too
+              commentDoc.dmFailed = true;
+              commentDoc.dmFailureReason = errorMessage;
+              commentDoc.dmFailureTimestamp = new Date();
             }
           }
+        } else {
+          const reasons = [];
+          if (!matchedRule.sendDM) reasons.push('sendDM is false');
+          if (!matchedRule.dmMessage) reasons.push('dmMessage is empty/missing');
+          if (commentDoc.dmFailed) reasons.push('previous DM attempt failed');
+          
+          console.log(`⚠️ [Comment Service] DM not sent for rule "${matchedRule.keyword}". Reasons: ${reasons.join(', ')}`);
         }
       } catch (error) {
         console.error(`❌ [Comment Service] Failed to reply to comment:`, error);
@@ -183,13 +211,14 @@ export class InstagramCommentService {
 
   /**
    * Send DM to user using v23.0 API
-   * Note: According to Instagram API docs, recipient should be comment_id for comment-based DMs
+   * First tries with comment_id (for comment-based DMs), then falls back to user_id if needed
    */
-  async sendDMReply(commentId: string, message: string, accessToken: string, accountId: string): Promise<any> {
+  async sendDMReply(commentId: string, userId: string, message: string, accessToken: string, accountId: string): Promise<any> {
     try {
-      console.log(`💬 [DM Reply] Sending DM for comment ${commentId} with: "${message}"`);
+      console.log(`💬 [DM Reply] Attempting to send DM for comment ${commentId}, user ${userId} with: "${message}"`);
 
-      const response = await fetch(`https://graph.instagram.com/v23.0/${accountId}/messages`, {
+      // First, try with comment_id (preferred method for comment-based DMs)
+      let response = await fetch(`https://graph.instagram.com/v23.0/${accountId}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -207,7 +236,31 @@ export class InstagramCommentService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Instagram API error: ${response.status} - ${JSON.stringify(errorData)}`);
+        const errorMessage = JSON.stringify(errorData);
+        
+        console.log(`⚠️ [DM Reply] Comment-based DM failed, trying with user_id. Error: ${errorMessage}`);
+        
+        // If comment_id method fails, try with user_id (Instagram user ID)
+        response = await fetch(`https://graph.instagram.com/v23.0/${accountId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            recipient: {
+              user_id: userId
+            },
+            message: {
+              text: message
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const fallbackErrorData = await response.json().catch(() => ({}));
+          throw new Error(`Instagram API error (both methods failed): ${response.status} - Comment method: ${errorMessage}, User method: ${JSON.stringify(fallbackErrorData)}`);
+        }
       }
 
       const result = await response.json();
