@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken } from '../middleware/auth';
 import { processEmails } from '../services/gmailProcessor.service';
 import { fetchEmails } from '../services/gmail.service';
+import { extractContactsFromEmails } from '../services/gmailContactExtractor.service';
 
 const router = express.Router();
 
@@ -111,6 +112,39 @@ router.get('/list', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to list emails'
+    });
+  }
+});
+
+/**
+ * POST /api/gmail/contacts/extract
+ * Extract contacts from Gmail emails for a specific time period
+ */
+router.post('/contacts/extract', authenticateToken, async (req, res) => {
+  try {
+    const { days } = req.body;
+
+    // Validate days parameter
+    if (!days || typeof days !== 'number' || days < 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid days parameter. Must be a positive number.'
+      });
+    }
+
+    console.log(`📧 [Gmail API] Contact extraction request from user ${req.user!.userId}, ${days} days`);
+
+    const result = await extractContactsFromEmails(req.user!.userId, days);
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error: any) {
+    console.error('❌ [Gmail API] Error extracting contacts:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to extract contacts'
     });
   }
 });

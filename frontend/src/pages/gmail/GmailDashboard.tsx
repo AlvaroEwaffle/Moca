@@ -7,10 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { BACKEND_URL } from '@/utils/config';
-import { Mail, FileText, TrendingUp, AlertCircle, Play, Pause, Clock, ExternalLink, Plus, Loader2, ChevronDown, ChevronUp, User, MessageSquare, Send, Edit, Filter, Save, Zap, Eye, RotateCw, Trash2, Plug } from 'lucide-react';
+import { Mail, FileText, TrendingUp, AlertCircle, Play, Pause, Clock, ExternalLink, Plus, Loader2, ChevronDown, ChevronUp, User, MessageSquare, Send, Edit, Filter, Save, Zap, Eye, RotateCw, Trash2, Plug, Users, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Helmet } from 'react-helmet';
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface ActivityMetrics {
   emailsAnalyzed24h: number;
@@ -103,6 +105,12 @@ const GmailDashboard = () => {
   const [deletingDrafts, setDeletingDrafts] = useState(false);
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [contactExtractorOpen, setContactExtractorOpen] = useState(false);
+  const [extractingContacts, setExtractingContacts] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('180'); // Default 6 months
+  const [extractionResult, setExtractionResult] = useState<any>(null);
+  const [contactsPage, setContactsPage] = useState(1);
+  const contactsPerPage = 10;
 
   const fetchIntegrationStatus = useCallback(async () => {
     if (!accessToken) {
@@ -157,6 +165,93 @@ const GmailDashboard = () => {
       setConnecting(false);
     }
   }, [accessToken, toast]);
+
+  const handleExtractContacts = useCallback(async () => {
+    if (!accessToken) {
+      toast({
+        title: 'Sesión requerida',
+        description: 'Inicia sesión para extraer contactos.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setExtractingContacts(true);
+    setExtractionResult(null);
+    try {
+      const days = parseInt(selectedPeriod);
+      const resp = await fetch(`${BACKEND_URL}/api/gmail/contacts/extract`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ days })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setExtractionResult(data.data);
+        toast({
+          title: 'Contactos extraídos exitosamente',
+          description: `Se encontraron ${data.data.contactsFound} contactos (${data.data.contactsCreated} nuevos, ${data.data.contactsUpdated} actualizados)`,
+          variant: 'default'
+        });
+      } else {
+        throw new Error(data.error || 'No se pudieron extraer los contactos');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error al extraer contactos',
+        description: error.message || 'Intenta nuevamente más tarde',
+        variant: 'destructive'
+      });
+    } finally {
+      setExtractingContacts(false);
+    }
+  }, [accessToken, toast, selectedPeriod]);
+
+  const handleDownloadCSV = useCallback(() => {
+    if (!extractionResult || !extractionResult.contacts || extractionResult.contacts.length === 0) {
+      toast({
+        title: 'No hay contactos para descargar',
+        description: 'Primero extrae los contactos antes de descargar',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Generate CSV content
+    const headers = ['Nombre', 'Email'];
+    const csvRows = [
+      headers.join(','),
+      ...extractionResult.contacts.map((contact: { name?: string; email: string }) => {
+        const name = contact.name || '';
+        const email = contact.email || '';
+        // Escape commas and quotes in CSV
+        const escapedName = name.includes(',') || name.includes('"') ? `"${name.replace(/"/g, '""')}"` : name;
+        const escapedEmail = email.includes(',') || email.includes('"') ? `"${email.replace(/"/g, '""')}"` : email;
+        return `${escapedName},${escapedEmail}`;
+      })
+    ];
+
+    const csvContent = csvRows.join('\n');
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `gmail-contactos-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    toast({
+      title: 'CSV descargado',
+      description: `Se descargaron ${extractionResult.contacts.length} contactos`,
+      variant: 'default'
+    });
+  }, [extractionResult, toast]);
 
   const fetchDashboardData = useCallback(async () => {
     if (!accessToken) {
@@ -1030,10 +1125,16 @@ const GmailDashboard = () => {
               Panel centralizado de actividad de Gmail
             </p>
           </div>
-          <Button onClick={() => navigate('/app/gmail/rules/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            Crear Agente Gmail
-          </Button>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setContactExtractorOpen(true)}>
+              <Users className="w-4 h-4 mr-2" />
+              Extraer Contactos
+            </Button>
+            <Button onClick={() => navigate('/app/gmail/rules/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Crear Agente Gmail
+            </Button>
+          </div>
         </div>
 
         {/* Activity Panel */}
@@ -2066,6 +2167,174 @@ const GmailDashboard = () => {
                   <>
                     <Save className="w-4 h-4 mr-2" />
                     Guardar Cambios
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contact Extractor Modal */}
+      <Dialog open={contactExtractorOpen} onOpenChange={setContactExtractorOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Extraer Contactos de Gmail</DialogTitle>
+            <DialogDescription>
+              Extrae contactos (nombre y email) de tus emails de Gmail del período seleccionado.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="period">Período de tiempo</Label>
+              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                <SelectTrigger id="period">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">1 semana</SelectItem>
+                  <SelectItem value="30">1 mes</SelectItem>
+                  <SelectItem value="90">3 meses</SelectItem>
+                  <SelectItem value="180">6 meses</SelectItem>
+                  <SelectItem value="365">12 meses</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {extractionResult && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Resultados de Extracción</CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDownloadCSV}
+                      disabled={!extractionResult.contacts || extractionResult.contacts.length === 0}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Descargar CSV
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue="resultados" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="resultados">Resultados</TabsTrigger>
+                      <TabsTrigger value="contactos">
+                        Contactos ({extractionResult.contacts?.length || 0})
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="resultados" className="space-y-4 mt-4">
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b">
+                          <span className="text-sm text-gray-600">Emails procesados:</span>
+                          <span className="font-medium">{extractionResult.totalEmailsProcessed}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b">
+                          <span className="text-sm text-gray-600">Contactos encontrados:</span>
+                          <span className="font-medium">{extractionResult.contactsFound}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b">
+                          <span className="text-sm text-gray-600">Contactos nuevos:</span>
+                          <span className="font-medium text-green-600">{extractionResult.contactsCreated}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2">
+                          <span className="text-sm text-gray-600">Contactos actualizados:</span>
+                          <span className="font-medium text-blue-600">{extractionResult.contactsUpdated}</span>
+                        </div>
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="contactos" className="mt-4">
+                      {extractionResult.contacts && extractionResult.contacts.length > 0 ? (
+                        <div className="space-y-4">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Email</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {extractionResult.contacts
+                                .slice((contactsPage - 1) * contactsPerPage, contactsPage * contactsPerPage)
+                                .map((contact: { email: string; name?: string }, index: number) => (
+                                  <TableRow key={`${contact.email}-${index}`}>
+                                    <TableCell>{contact.name || <span className="text-gray-400">—</span>}</TableCell>
+                                    <TableCell className="font-mono text-sm">{contact.email}</TableCell>
+                                  </TableRow>
+                                ))}
+                            </TableBody>
+                          </Table>
+                          
+                          {Math.ceil(extractionResult.contacts.length / contactsPerPage) > 1 && (
+                            <div className="flex items-center justify-between pt-4">
+                              <div className="text-sm text-gray-600">
+                                Mostrando {((contactsPage - 1) * contactsPerPage) + 1} - {Math.min(contactsPage * contactsPerPage, extractionResult.contacts.length)} de {extractionResult.contacts.length} contactos
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setContactsPage(p => Math.max(1, p - 1))}
+                                  disabled={contactsPage === 1}
+                                >
+                                  <ChevronLeft className="w-4 h-4" />
+                                </Button>
+                                <span className="text-sm text-gray-600">
+                                  Página {contactsPage} de {Math.ceil(extractionResult.contacts.length / contactsPerPage)}
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setContactsPage(p => Math.min(Math.ceil(extractionResult.contacts.length / contactsPerPage), p + 1))}
+                                  disabled={contactsPage >= Math.ceil(extractionResult.contacts.length / contactsPerPage)}
+                                >
+                                  <ChevronRight className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          No hay contactos para mostrar
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setContactExtractorOpen(false);
+                  setExtractionResult(null);
+                  setContactsPage(1);
+                }}
+                disabled={extractingContacts}
+              >
+                Cerrar
+              </Button>
+              <Button
+                onClick={handleExtractContacts}
+                disabled={extractingContacts}
+              >
+                {extractingContacts ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Extrayendo...
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-4 h-4 mr-2" />
+                    Extraer Contactos
                   </>
                 )}
               </Button>
