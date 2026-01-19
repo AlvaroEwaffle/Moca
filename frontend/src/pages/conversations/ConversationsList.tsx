@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -96,6 +97,19 @@ const ConversationsList = () => {
     failed: number;
     estimatedTime: number;
   } | null>(null);
+  const [eligibleConversations, setEligibleConversations] = useState<Array<{
+    id: string;
+    contact: {
+      name: string;
+      username: string;
+      psid: string;
+    };
+    status: string;
+    leadScore: number;
+    lastActivity: Date;
+  }>>([]);
+  const [selectedConversationIds, setSelectedConversationIds] = useState<Set<string>>(new Set());
+  const [loadingConversations, setLoadingConversations] = useState(false);
 
   const handleAgentToggle = async (conversationId: string, enabled: boolean) => {
     console.log(`🔧 [Frontend] Toggle agent for conversation ${conversationId}: ${enabled}`);
@@ -153,10 +167,15 @@ const ConversationsList = () => {
     fetchConversations();
   }, []);
 
-  // Fetch eligible count when modal opens or filters change
+  // Fetch eligible count and conversations when modal opens or filters change
   useEffect(() => {
     if (bulkMessageOpen) {
       fetchEligibleCount();
+      fetchEligibleConversations();
+    } else {
+      // Reset when modal closes
+      setEligibleConversations([]);
+      setSelectedConversationIds(new Set());
     }
   }, [bulkMessageOpen, bulkFilters]);
 
@@ -396,6 +415,62 @@ const ConversationsList = () => {
     }
   };
 
+  const fetchEligibleConversations = async () => {
+    setLoadingConversations(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const params = new URLSearchParams({
+        status: bulkFilters.status || 'open'
+      });
+      
+      const response = await fetch(`${backendUrl}/api/instagram/conversations/bulk-message/eligible-list?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const conversations = data.data?.conversations || [];
+        setEligibleConversations(conversations);
+        // Select all by default
+        setSelectedConversationIds(new Set(conversations.map((c: any) => c.id)));
+      } else {
+        console.error('Failed to fetch eligible conversations');
+        setEligibleConversations([]);
+        setSelectedConversationIds(new Set());
+      }
+    } catch (error) {
+      console.error('Error fetching eligible conversations:', error);
+      setEligibleConversations([]);
+      setSelectedConversationIds(new Set());
+    } finally {
+      setLoadingConversations(false);
+    }
+  };
+
+  const handleToggleConversation = (conversationId: string) => {
+    setSelectedConversationIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(conversationId)) {
+        newSet.delete(conversationId);
+      } else {
+        newSet.add(conversationId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedConversationIds.size === eligibleConversations.length) {
+      // Deselect all
+      setSelectedConversationIds(new Set());
+    } else {
+      // Select all
+      setSelectedConversationIds(new Set(eligibleConversations.map(c => c.id)));
+    }
+  };
+
   const handleSendBulkMessage = async () => {
     if (!messageText.trim()) {
       toast({
@@ -415,10 +490,10 @@ const ConversationsList = () => {
       return;
     }
 
-    if (eligibleCount === 0) {
+    if (selectedConversationIds.size === 0) {
       toast({
-        title: "No recipients",
-        description: "No eligible conversations found with active agent",
+        title: "No recipients selected",
+        description: "Please select at least one conversation to send the message to",
         variant: "destructive"
       });
       return;
@@ -426,7 +501,7 @@ const ConversationsList = () => {
 
     // Confirm before sending
     const confirmed = window.confirm(
-      `Are you sure you want to send this message to ${eligibleCount} conversation${eligibleCount !== 1 ? 's' : ''}?\n\n` +
+      `Are you sure you want to send this message to ${selectedConversationIds.size} conversation${selectedConversationIds.size !== 1 ? 's' : ''}?\n\n` +
       `This action cannot be undone.`
     );
 
@@ -448,7 +523,8 @@ const ConversationsList = () => {
         body: JSON.stringify({
           messageText: messageText.trim(),
           filters: {
-            status: bulkFilters.status
+            status: bulkFilters.status,
+            conversationIds: Array.from(selectedConversationIds) // Send only selected conversations
           },
           options: {
             priority: 'normal'
@@ -797,7 +873,7 @@ const ConversationsList = () => {
                   <div className="flex items-center gap-2 text-blue-800">
                     <MessageCircle className="w-5 h-5" />
                     <span className="font-semibold">
-                      This message will be sent to <strong>{eligibleCount}</strong> conversation{eligibleCount !== 1 ? 's' : ''}
+                      <strong>{selectedConversationIds.size}</strong> of <strong>{eligibleCount}</strong> conversation{eligibleCount !== 1 ? 's' : ''} selected
                     </span>
                   </div>
                   <p className="text-sm text-blue-700">
@@ -811,6 +887,71 @@ const ConversationsList = () => {
                 </div>
               )}
             </div>
+
+            {/* Conversations List with Checkboxes */}
+            {eligibleCount > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Select Conversations</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSelectAll}
+                    className="text-sm text-violet-600 hover:text-violet-700"
+                  >
+                    {selectedConversationIds.size === eligibleConversations.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
+                <div className="border rounded-lg max-h-64 overflow-y-auto">
+                  {loadingConversations ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-violet-600" />
+                      <span className="ml-2 text-sm text-gray-600">Loading conversations...</span>
+                    </div>
+                  ) : eligibleConversations.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-500">
+                      No conversations found
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {eligibleConversations.map((conv) => (
+                        <div
+                          key={conv.id}
+                          className="flex items-center space-x-3 p-3 hover:bg-gray-50 cursor-pointer"
+                          onClick={() => handleToggleConversation(conv.id)}
+                        >
+                          <Checkbox
+                            checked={selectedConversationIds.has(conv.id)}
+                            onCheckedChange={() => handleToggleConversation(conv.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">
+                                @{conv.contact.username}
+                              </span>
+                              {conv.contact.name && conv.contact.name !== conv.contact.username && (
+                                <span className="text-xs text-gray-500">
+                                  ({conv.contact.name})
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">
+                                Score: {conv.leadScore}/7
+                              </Badge>
+                              <span className="text-xs text-gray-500">
+                                {formatTimeAgo(conv.lastActivity)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Results */}
             {sendResults && (
@@ -864,7 +1005,7 @@ const ConversationsList = () => {
             </Button>
             <Button
               onClick={handleSendBulkMessage}
-              disabled={sending || !messageText.trim() || eligibleCount === 0 || loadingCount}
+              disabled={sending || !messageText.trim() || selectedConversationIds.size === 0 || loadingCount || loadingConversations}
               className="bg-violet-600 hover:bg-violet-700"
             >
               {sending ? (
@@ -875,7 +1016,7 @@ const ConversationsList = () => {
               ) : (
                 <>
                   <Send className="w-4 h-4 mr-2" />
-                  Send to {eligibleCount} Conversation{eligibleCount !== 1 ? 's' : ''}
+                  Send to {selectedConversationIds.size} Conversation{selectedConversationIds.size !== 1 ? 's' : ''}
                 </>
               )}
             </Button>

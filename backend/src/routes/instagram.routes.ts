@@ -408,6 +408,92 @@ router.get('/conversations/bulk-message/eligible-count', authenticateToken, asyn
   }
 });
 
+// Get list of eligible conversations for bulk message
+router.get('/conversations/bulk-message/eligible-list', authenticateToken, async (req, res) => {
+  try {
+    const { status, accountIds, minLeadScore } = req.query;
+    const userId = req.user!.userId;
+
+    // Get user's Instagram accounts
+    const userAccounts = await InstagramAccount.find({ userId, isActive: true }).select('accountId accountName');
+    const userAccountIds = userAccounts.map(acc => acc.accountId);
+
+    if (userAccountIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          conversations: [],
+          count: 0
+        }
+      });
+    }
+
+    // Build query
+    const query: any = {
+      accountId: { $in: userAccountIds },
+      'settings.aiEnabled': { $ne: false }
+    };
+
+    if (status) {
+      query.status = status;
+    } else {
+      query.status = 'open';
+    }
+
+    if (accountIds && typeof accountIds === 'string') {
+      const accountIdArray = accountIds.split(',');
+      query.accountId = { $in: accountIdArray };
+    }
+
+    if (minLeadScore) {
+      query['leadScoring.currentScore'] = { $gte: parseInt(minLeadScore as string) };
+    }
+
+    // Get eligible conversations with contact info
+    const conversations = await Conversation.find(query)
+      .populate('contactId', 'psid name username metadata')
+      .select('_id status contactId leadScoring createdAt timestamps')
+      .sort({ 'timestamps.lastActivity': -1 })
+      .lean();
+
+    // Filter conversations with valid contacts and format response
+    const validConversations = conversations
+      .filter(conv => {
+        const contact = conv.contactId as any;
+        return contact && contact.psid;
+      })
+      .map(conv => {
+        const contact = conv.contactId as any;
+        return {
+          id: conv._id.toString(),
+          contact: {
+            name: contact.name || contact.username || 'Unknown',
+            username: contact.username || 'unknown',
+            psid: contact.psid
+          },
+          status: conv.status,
+          leadScore: conv.leadScoring?.currentScore || 1,
+          lastActivity: conv.timestamps?.lastActivity || new Date()
+        };
+      });
+
+    res.json({
+      success: true,
+      data: {
+        conversations: validConversations,
+        count: validConversations.length
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error getting eligible conversations list:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get eligible conversations list'
+    });
+  }
+});
+
 // Send bulk message to all conversations with active agent
 router.post('/conversations/bulk-message', authenticateToken, async (req, res) => {
   try {
@@ -466,8 +552,11 @@ router.post('/conversations/bulk-message', authenticateToken, async (req, res) =
       query['leadScoring.currentScore'] = { $gte: filters.minLeadScore };
     }
 
-    // Exclude specific conversation IDs if provided
-    if (filters.excludeConversationIds && Array.isArray(filters.excludeConversationIds) && filters.excludeConversationIds.length > 0) {
+    // If specific conversation IDs are provided, use only those
+    if (filters.conversationIds && Array.isArray(filters.conversationIds) && filters.conversationIds.length > 0) {
+      query._id = { $in: filters.conversationIds };
+    } else if (filters.excludeConversationIds && Array.isArray(filters.excludeConversationIds) && filters.excludeConversationIds.length > 0) {
+      // Exclude specific conversation IDs if provided
       query._id = { $nin: filters.excludeConversationIds };
     }
 
