@@ -540,12 +540,14 @@ export class InstagramWebhookService {
         console.log(`🤖 [Manual Message] Using conversation: ${conversation.id}`);
         
         // Create message with role='assistant' so it appears on the right side in UI
+        // Mark it as manual message (isManual=true) to identify it was sent by owner
         const message = await this.createMessage(
           messageData,
           conversation.id,
           contact.id,
           instagramAccount.accountId,
-          instagramAccount
+          instagramAccount,
+          true // isManual = true (this message was sent manually by owner)
         );
         console.log(`✅ [Manual Message] Created message record with role='assistant': ${message.id}`);
         console.log(`✅ [Manual Message] Message will appear in UI but won't trigger AI response.`);
@@ -928,7 +930,8 @@ export class InstagramWebhookService {
     conversationId: string, 
     contactId: string, 
     accountId: string,
-    instagramAccount?: any // Optional: pass account to avoid extra query
+    instagramAccount?: any, // Optional: pass account to avoid extra query
+    isManual?: boolean // Optional: true if message was sent manually by owner
   ): Promise<IMessage> {
     try {
       // CRITICAL FIX #2: Get the InstagramAccount to compare with pageScopedId (not accountId)
@@ -952,11 +955,14 @@ export class InstagramWebhookService {
       
       // Additional safety check: if role is assistant but we're processing it, log warning
       // This should NOT happen if our early checks are working, but it's a safety net
-      if (isBotMessage) {
+      // EXCEPT if this is a manual message (isManual=true), in which case it's intentional
+      if (isBotMessage && !isManual) {
         console.warn(`⚠️ [Message Role Detection] CRITICAL WARNING: Detected bot message being created!`);
         console.warn(`⚠️ [Message Role Detection] This should have been caught earlier by senderIsOurAccount check.`);
         console.warn(`⚠️ [Message Role Detection] PSID: ${messageData.psid}, pageScopedId: ${account.pageScopedId}, Account: ${account.accountName}`);
         console.warn(`⚠️ [Message Role Detection] Message will be created with role='assistant' but should not trigger AI response.`);
+      } else if (isBotMessage && isManual) {
+        console.log(`✅ [Message Role Detection] Creating manual message with role='assistant' (intentional)`);
       }
       
       console.log(`💾 [Message Creation] Storing recipientId: ${messageData.recipient?.id}`);
@@ -981,6 +987,7 @@ export class InstagramWebhookService {
           isConsolidated: false,
           originalMids: [messageData.mid],
           aiGenerated: false,
+          isManual: isManual || false, // Mark as manual if sent by owner
           processingTime: 0
         },
         status: 'received',

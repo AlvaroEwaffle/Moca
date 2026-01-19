@@ -19,7 +19,8 @@ import {
   Presentation,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  UserCheck
 } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
@@ -76,7 +77,10 @@ interface Message {
   timestamp: Date;
   createdAt: Date;
   status: string;
-  metadata?: any;
+  metadata?: {
+    isManual?: boolean;
+    [key: string]: any;
+  };
 }
 
 const ConversationDetail: React.FC = () => {
@@ -717,10 +721,11 @@ const ConversationDetail: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-start space-x-2">
-                        {message.sender === 'bot' && (
+                        {message.sender === 'bot' && message.metadata?.isManual ? (
+                            <UserCheck className="w-4 h-4 mt-0.5 text-blue-600 flex-shrink-0" />
+                        ) : message.sender === 'bot' ? (
                             <Bot className="w-4 h-4 mt-0.5 text-violet-600 flex-shrink-0" />
-                        )}
-                        {message.sender === 'user' && (
+                        ) : (
                             <User className="w-4 h-4 mt-0.5 text-white flex-shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
