@@ -54,14 +54,14 @@ export interface IEmailDraftQueue extends Document {
 const EmailDraftQueueSchema = new Schema<IEmailDraftQueue>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    agentId: { type: Schema.Types.ObjectId, ref: 'Agent', required: false, index: true },
-    conversationId: { type: Schema.Types.ObjectId, ref: 'Conversation', required: false, index: true },
+    agentId: { type: Schema.Types.ObjectId, ref: 'Agent', required: false },
+    conversationId: { type: Schema.Types.ObjectId, ref: 'Conversation', required: false },
     messageId: { type: Schema.Types.ObjectId, ref: 'Message', required: false, index: true },
     contactId: { type: Schema.Types.ObjectId, ref: 'Contact', required: false },
     
     // Email context
     emailId: { type: String, required: true },
-    threadId: { type: String, required: true, index: true },
+    threadId: { type: String, required: true },
     subject: { type: String, required: true },
     fromEmail: { type: String, required: true },
     fromName: { type: String, required: false },

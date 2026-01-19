@@ -33,7 +33,11 @@ const ConversationSettingsSchema = new Schema({
     disabledByResponseLimit: { type: Boolean, default: false }, // Disabled due to response limit
     disabledByLeadScore: { type: Boolean, default: false }, // Disabled due to lead score milestone
     disabledByMilestone: { type: Boolean, default: false } // Disabled due to conversation milestone
-  }
+  },
+  
+  // Keyword activation tracking
+  activatedByKeyword: { type: Boolean, default: false }, // Whether conversation was activated by keyword
+  activationKeyword: { type: String, required: false } // The keyword that activated this conversation
 });
 
 // Lead scoring sub-schema - Updated to use 7-step scale
@@ -128,6 +132,8 @@ export interface IConversation extends Document {
       disabledByLeadScore: boolean;
       disabledByMilestone: boolean;
     };
+    activatedByKeyword?: boolean;
+    activationKeyword?: string;
   };
   leadScoring: {
     currentScore: number;

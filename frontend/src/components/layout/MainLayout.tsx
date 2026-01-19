@@ -251,18 +251,18 @@ const MainLayout = () => {
                     </AccordionItem>
                   </Accordion>
                 ) : (
-                  <Link
-                    to={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      item.current
-                        ? 'bg-violet-100 text-violet-700'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <item.icon className="w-5 h-5" />
-                    <span>{item.name}</span>
-                  </Link>
+              <Link
+                to={item.href}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  item.current
+                    ? 'bg-violet-100 text-violet-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span>{item.name}</span>
+              </Link>
                 )}
               </div>
             ))}
@@ -398,9 +398,9 @@ const MainLayout = () => {
                           {userData.name}
                         </p>
                         {userData.specialization && (
-                          <p className="text-xs text-gray-500 truncate">
+                        <p className="text-xs text-gray-500 truncate">
                             {userData.specialization}
-                          </p>
+                        </p>
                         )}
                       </div>
                       <DropdownMenu>

@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link as LinkIcon, Presentation, CheckCircle, XCircle, Info, LayoutGrid } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link as LinkIcon, Presentation, CheckCircle, XCircle, Info, LayoutGrid, Key, Send, Loader2, AlertTriangle } from "lucide-react";
 import { Helmet } from "react-helmet";
 import LeadScoreIndicator from "@/components/LeadScoreIndicator";
 
@@ -61,16 +65,37 @@ interface Conversation {
     notes?: string;
     autoDisableAgent: boolean;
   };
+  settings?: {
+    aiEnabled?: boolean;
+    activatedByKeyword?: boolean;
+    activationKeyword?: string;
+  };
 }
 
 const ConversationsList = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("recent");
+  
+  // Bulk message state
+  const [bulkMessageOpen, setBulkMessageOpen] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [eligibleCount, setEligibleCount] = useState(0);
+  const [loadingCount, setLoadingCount] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [bulkFilters, setBulkFilters] = useState({
+    status: 'open' as 'open' | 'closed' | 'archived'
+  });
+  const [sendResults, setSendResults] = useState<{
+    queued: number;
+    failed: number;
+    estimatedTime: number;
+  } | null>(null);
 
   const handleAgentToggle = async (conversationId: string, enabled: boolean) => {
     console.log(`🔧 [Frontend] Toggle agent for conversation ${conversationId}: ${enabled}`);
@@ -127,6 +152,13 @@ const ConversationsList = () => {
   useEffect(() => {
     fetchConversations();
   }, []);
+
+  // Fetch eligible count when modal opens or filters change
+  useEffect(() => {
+    if (bulkMessageOpen) {
+      fetchEligibleCount();
+    }
+  }, [bulkMessageOpen, bulkFilters]);
 
   useEffect(() => {
     filterAndSortConversations();
@@ -334,6 +366,139 @@ const ConversationsList = () => {
     return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
   };
 
+  // Bulk message functions
+  const fetchEligibleCount = async () => {
+    setLoadingCount(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const params = new URLSearchParams({
+        status: bulkFilters.status || 'open'
+      });
+      
+      const response = await fetch(`${backendUrl}/api/instagram/conversations/bulk-message/eligible-count?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setEligibleCount(data.data?.count || 0);
+      } else {
+        console.error('Failed to fetch eligible count');
+        setEligibleCount(0);
+      }
+    } catch (error) {
+      console.error('Error fetching eligible count:', error);
+      setEligibleCount(0);
+    } finally {
+      setLoadingCount(false);
+    }
+  };
+
+  const handleSendBulkMessage = async () => {
+    if (!messageText.trim()) {
+      toast({
+        title: "Error",
+        description: "Message text cannot be empty",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (messageText.length > 1000) {
+      toast({
+        title: "Error",
+        description: "Message text cannot exceed 1000 characters",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (eligibleCount === 0) {
+      toast({
+        title: "No recipients",
+        description: "No eligible conversations found with active agent",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Confirm before sending
+    const confirmed = window.confirm(
+      `Are you sure you want to send this message to ${eligibleCount} conversation${eligibleCount !== 1 ? 's' : ''}?\n\n` +
+      `This action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSending(true);
+    setSendResults(null);
+
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/conversations/bulk-message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          messageText: messageText.trim(),
+          filters: {
+            status: bulkFilters.status
+          },
+          options: {
+            priority: 'normal'
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setSendResults({
+          queued: data.data.messagesQueued || 0,
+          failed: (data.data.totalTargeted || 0) - (data.data.messagesQueued || 0),
+          estimatedTime: data.data.estimatedTimeToComplete || 0
+        });
+
+        toast({
+          title: "Success",
+          description: `Successfully queued ${data.data.messagesQueued} message${data.data.messagesQueued !== 1 ? 's' : ''}. Messages will be sent automatically.`,
+        });
+
+        // Reset form and close after 3 seconds
+        setTimeout(() => {
+          setMessageText("");
+          setBulkMessageOpen(false);
+          setSendResults(null);
+          fetchConversations(); // Refresh conversations
+        }, 3000);
+      } else {
+        throw new Error(data.error || 'Failed to send bulk message');
+      }
+    } catch (error: any) {
+      console.error('Error sending bulk message:', error);
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to send bulk message',
+        variant: "destructive"
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleOpenBulkMessage = () => {
+    setBulkMessageOpen(true);
+    setMessageText("");
+    setSendResults(null);
+    setBulkFilters({ status: 'open' });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -382,6 +547,10 @@ const ConversationsList = () => {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button onClick={handleOpenBulkMessage} variant="default" size="sm" className="bg-violet-600 hover:bg-violet-700">
+              <Send className="w-4 h-4 mr-2" />
+              Bulk Message
+            </Button>
             <Button asChild variant="outline" size="sm">
               <Link to="/app/conversations-kanban">
                 <LayoutGrid className="w-4 h-4 mr-2" />
@@ -474,6 +643,12 @@ const ConversationsList = () => {
                             </span>
                             {getStatusBadge(conversation.status)}
                             {conversation.milestone && getMilestoneBadge(conversation.milestone)}
+                            {conversation.settings?.activatedByKeyword && conversation.settings?.activationKeyword && (
+                              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                <Key className="w-3 h-3" />
+                                Activated: {conversation.settings.activationKeyword.toUpperCase()}
+                              </Badge>
+                            )}
                           </div>
                           
                           {/* Lead Score and Meta Information */}
@@ -553,6 +728,160 @@ const ConversationsList = () => {
           )}
         </div>
       </div>
+
+      {/* Bulk Message Modal */}
+      <Dialog open={bulkMessageOpen} onOpenChange={setBulkMessageOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Send Bulk Message</DialogTitle>
+            <DialogDescription>
+              Send a message to all conversations where the agent is active
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Message Input */}
+            <div className="space-y-2">
+              <Label htmlFor="messageText">Message</Label>
+              <Textarea
+                id="messageText"
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                placeholder="Enter your message here..."
+                rows={6}
+                className="resize-none"
+                maxLength={1000}
+              />
+              <div className="flex justify-between items-center text-sm text-gray-500">
+                <span>Characters: {messageText.length} / 1000</span>
+                {messageText.length > 800 && (
+                  <span className="text-amber-600">Approaching character limit</span>
+                )}
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="space-y-2">
+              <Label>Filters</Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="statusFilter" className="text-sm font-normal w-24">Status:</Label>
+                  <Select
+                    value={bulkFilters.status}
+                    onValueChange={(value: 'open' | 'closed' | 'archived') =>
+                      setBulkFilters({ ...bulkFilters, status: value })
+                    }
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Open only</SelectItem>
+                      <SelectItem value="closed">Closed only</SelectItem>
+                      <SelectItem value="archived">Archived only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Eligible Count Preview */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              {loadingCount ? (
+                <div className="flex items-center gap-2 text-blue-800">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Calculating eligible conversations...</span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-blue-800">
+                    <MessageCircle className="w-5 h-5" />
+                    <span className="font-semibold">
+                      This message will be sent to <strong>{eligibleCount}</strong> conversation{eligibleCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <p className="text-sm text-blue-700">
+                    Only conversations with active agent ({bulkFilters.status} status) will receive this message.
+                  </p>
+                  {eligibleCount === 0 && (
+                    <p className="text-sm text-amber-700 font-medium mt-2">
+                      ⚠️ No eligible conversations found. Make sure you have conversations with active agent in the selected status.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Results */}
+            {sendResults && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <CheckCircle className="w-5 h-5" />
+                    <span className="font-semibold">Messages Queued Successfully</span>
+                  </div>
+                  <div className="text-sm text-green-700 space-y-1">
+                    <p>✅ Successfully queued: <strong>{sendResults.queued}</strong> message{sendResults.queued !== 1 ? 's' : ''}</p>
+                    {sendResults.failed > 0 && (
+                      <p className="text-amber-700">⚠️ Failed: {sendResults.failed} message{sendResults.failed !== 1 ? 's' : ''}</p>
+                    )}
+                    <p>⏱️ Estimated time to complete: <strong>{sendResults.estimatedTime}</strong> second{sendResults.estimatedTime !== 1 ? 's' : ''}</p>
+                    <p className="mt-2 text-xs">Messages will be sent automatically by the system, respecting rate limits.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Warning */}
+            {eligibleCount > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start gap-2 text-amber-800">
+                  <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm space-y-1">
+                    <p className="font-semibold">Important:</p>
+                    <ul className="list-disc list-inside space-y-1 text-xs">
+                      <li>This action cannot be undone</li>
+                      <li>Messages will be sent automatically and respect rate limits</li>
+                      <li>Only conversations with active agent will receive the message</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulkMessageOpen(false);
+                setMessageText("");
+                setSendResults(null);
+              }}
+              disabled={sending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendBulkMessage}
+              disabled={sending || !messageText.trim() || eligibleCount === 0 || loadingCount}
+              className="bg-violet-600 hover:bg-violet-700"
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Send to {eligibleCount} Conversation{eligibleCount !== 1 ? 's' : ''}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 };

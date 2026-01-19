@@ -82,11 +82,11 @@ export class InstagramCommentService {
       commentDoc.matchedKeyword = matchedRule.keyword;
       commentDoc.matchedRuleId = matchedRule._id;
 
-      try {
+        try {
         await this.replyToComment(comment.id, matchedRule.responseMessage, account.accessToken);
-        commentDoc.status = 'replied';
+          commentDoc.status = 'replied';
         commentDoc.replyText = matchedRule.responseMessage;
-        commentDoc.replyTimestamp = new Date();
+          commentDoc.replyTimestamp = new Date();
         console.log(`✅ [Comment Service] Comment reply sent using rule "${matchedRule.keyword}": ${comment.id}`);
         
         // Debug: Log rule DM configuration
@@ -115,33 +115,33 @@ export class InstagramCommentService {
               account.accessToken, 
               account.accountId
             );
-            commentDoc.dmSent = true;
-            commentDoc.dmTimestamp = new Date();
+          commentDoc.dmSent = true;
+          commentDoc.dmTimestamp = new Date();
             commentDoc.dmFailed = false;
-            commentDoc.dmFailureReason = undefined;
-            commentDoc.dmFailureTimestamp = undefined;
+          commentDoc.dmFailureReason = undefined;
+          commentDoc.dmFailureTimestamp = undefined;
             console.log(`✅ [Comment Service] DM sent successfully after comment reply using rule "${matchedRule.keyword}"`);
-          } catch (error) {
-            console.error(`❌ [Comment Service] Failed to send DM:`, error);
-            
-            // Check if it's a daily limit error
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
-                                    errorMessage.includes('The requested user cannot be found') ||
-                                    errorMessage.includes('error_subcode":2534014');
-            
-            if (isDailyLimitError) {
-              commentDoc.dmFailed = true;
-              commentDoc.dmFailureReason = 'Daily DM limit reached';
-              commentDoc.dmFailureTimestamp = new Date();
-              console.log(`⚠️ [Comment Service] DM daily limit reached for account ${account.accountName}, marking as failed`);
+        } catch (error) {
+          console.error(`❌ [Comment Service] Failed to send DM:`, error);
+          
+          // Check if it's a daily limit error
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
+                                  errorMessage.includes('The requested user cannot be found') ||
+                                  errorMessage.includes('error_subcode":2534014');
+          
+          if (isDailyLimitError) {
+            commentDoc.dmFailed = true;
+            commentDoc.dmFailureReason = 'Daily DM limit reached';
+            commentDoc.dmFailureTimestamp = new Date();
+            console.log(`⚠️ [Comment Service] DM daily limit reached for account ${account.accountName}, marking as failed`);
             } else {
               // Mark as failed for other errors too
               commentDoc.dmFailed = true;
               commentDoc.dmFailureReason = errorMessage;
               commentDoc.dmFailureTimestamp = new Date();
-            }
           }
+        }
         } else {
           const reasons = [];
           if (!matchedRule.sendDM) reasons.push('sendDM is false');

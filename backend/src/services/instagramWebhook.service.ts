@@ -5,6 +5,7 @@ import Message from '../models/message.model';
 import InstagramAccount from '../models/instagramAccount.model';
 import InstagramComment from '../models/instagramComment.model';
 import OutboundQueue from '../models/outboundQueue.model';
+import KeywordActivationRule from '../models/keywordActivationRule.model';
 import { IContact } from '../models/contact.model';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
@@ -493,7 +494,7 @@ export class InstagramWebhookService {
 
       const { account: instagramAccount, isBotMessage: isBotMessageFromAccount } = accountResult;
       
-      // CRITICAL FIX #1: Check if sender is our account - if so, STOP processing immediately
+      // CRITICAL FIX #1: Check if sender is our account - if so, create message but don't trigger AI response
       const senderIsOurAccount = messageData.psid === instagramAccount.pageScopedId;
       console.log(`🔍 [Bot Detection - Account Check] Checking if sender is our account:`);
       console.log(`🔍 [Bot Detection - Account Check] Sender PSID: ${messageData.psid}`);
@@ -503,12 +504,56 @@ export class InstagramWebhookService {
       console.log(`🔍 [Bot Detection - Account Check] Comparison result: senderIsOurAccount = ${senderIsOurAccount}`);
       
       if (senderIsOurAccount) {
-        console.log(`🚫 [Bot Detection - CRITICAL STOP] Message sent FROM our own account (${instagramAccount.accountName}).`);
-        console.log(`🚫 [Bot Detection - CRITICAL STOP] Sender PSID (${messageData.psid}) matches account pageScopedId (${instagramAccount.pageScopedId}).`);
-        console.log(`🚫 [Bot Detection - CRITICAL STOP] This is our own message being echoed back by Instagram.`);
-        console.log(`🚫 [Bot Detection - CRITICAL STOP] Stopping processing immediately to prevent infinite loop.`);
-        console.log(`🚫 [Bot Detection - CRITICAL STOP] Message MID: ${messageData.mid}, Text: ${messageData.text?.substring(0, 50) || 'NO TEXT'}...`);
-        return; // STOP PROCESSING - This is our own message
+        console.log(`🤖 [Bot Detection] Message sent FROM our own account (${instagramAccount.accountName}).`);
+        console.log(`🤖 [Bot Detection] Sender PSID (${messageData.psid}) matches account pageScopedId (${instagramAccount.pageScopedId}).`);
+        console.log(`🤖 [Bot Detection] This is our own message - will create message with role='assistant' but won't trigger AI response.`);
+        console.log(`🤖 [Bot Detection] Message MID: ${messageData.mid}, Text: ${messageData.text?.substring(0, 50) || 'NO TEXT'}...`);
+        
+        // Check if message already exists (deduplication)
+        const existingMessage = await Message.findOne({ mid: messageData.mid });
+        if (existingMessage) {
+          console.log(`⚠️ Message ${messageData.mid} already exists, skipping`);
+          return;
+        }
+        
+        // When we send a message, the recipientId is the lead's PSID
+        // We need to find/create the contact and conversation based on recipientId
+        if (!messageData.recipient?.id) {
+          console.warn(`⚠️ [Manual Message] No recipient ID found for our own message, cannot create conversation. Skipping.`);
+          return;
+        }
+        
+        const recipientPSID = messageData.recipient.id;
+        console.log(`🤖 [Manual Message] Our message sent TO lead PSID: ${recipientPSID}`);
+        
+        // Get or create contact based on recipient PSID
+        const contact = await this.upsertContact(recipientPSID, {
+          ...messageData,
+          psid: recipientPSID // Use recipient as the contact PSID
+        } as InstagramMessage, instagramAccount);
+        console.log(`🤖 [Manual Message] Using contact: ${contact.id} for recipient PSID: ${recipientPSID}`);
+        
+        // Get or create conversation
+        const conversation = await this.getOrCreateConversation(contact.id, instagramAccount.accountId);
+        console.log(`🤖 [Manual Message] Using conversation: ${conversation.id}`);
+        
+        // Create message with role='assistant' so it appears on the right side in UI
+        const message = await this.createMessage(
+          messageData,
+          conversation.id,
+          contact.id,
+          instagramAccount.accountId,
+          instagramAccount
+        );
+        console.log(`✅ [Manual Message] Created message record with role='assistant': ${message.id}`);
+        console.log(`✅ [Manual Message] Message will appear in UI but won't trigger AI response.`);
+        
+        // Update conversation metadata but don't trigger AI response
+        conversation.lastMessageAt = new Date();
+        conversation.lastMessageText = messageData.text || '';
+        await conversation.save();
+        
+        return; // STOP - Don't trigger AI response for our own messages
       } else {
         console.log(`✅ [Bot Detection - Account Check] Sender is NOT our account - continuing with normal processing.`);
       }
@@ -562,6 +607,28 @@ export class InstagramWebhookService {
       // Get or create conversation
       const conversation = await this.getOrCreateConversation(contact.id, instagramAccount.accountId);
       console.log(`🔍 [Message Processing] Using conversation: ${conversation.id} for contact: ${contact.id}`);
+
+      // Check for keyword activation (works for both lead and owner messages)
+      // Only check if conversation is not already activated by keyword
+      if (messageData.text && !conversation.settings?.activatedByKeyword) {
+        const keywordDetectionResult = await this.checkKeywordActivation(
+          messageData.text,
+          instagramAccount.accountId,
+          conversation,
+          senderIsOurAccount
+        );
+        
+        if (keywordDetectionResult.activated) {
+          console.log(`✅ [Keyword Activation] Conversation ${conversation.id} activated by keyword: "${keywordDetectionResult.keyword}"`);
+          console.log(`✅ [Keyword Activation] Bot will now respond to messages in this conversation`);
+          // Conversation is now activated, will be saved with keyword info
+          conversation.settings = conversation.settings || {};
+          conversation.settings.activatedByKeyword = true;
+          conversation.settings.activationKeyword = keywordDetectionResult.keyword;
+          conversation.settings.aiEnabled = true; // Ensure AI is enabled
+          await conversation.save();
+        }
+      }
 
       // Create message record (pass instagramAccount to avoid extra query)
       const message = await this.createMessage(messageData, conversation.id, contact.id, instagramAccount.accountId, instagramAccount);
@@ -784,6 +851,12 @@ export class InstagramWebhookService {
       if (!conversation) {
         console.log(`💬 Creating new conversation for contact: ${contactId}`);
         
+        // Get account to check defaultAgentEnabled setting
+        const account = await InstagramAccount.findOne({ accountId, isActive: true });
+        const defaultAgentEnabled = account?.settings?.defaultAgentEnabled ?? false; // Default to false if not set
+        
+        console.log(`🔧 [New Conversation] Account defaultAgentEnabled: ${defaultAgentEnabled} (account: ${account?.accountName || accountId})`);
+        
         conversation = new Conversation({
           contactId,
           accountId,
@@ -810,7 +883,7 @@ export class InstagramWebhookService {
           },
           settings: {
             autoRespond: true,
-            aiEnabled: true,
+            aiEnabled: defaultAgentEnabled, // Use account's default setting
             priority: 'normal',
             businessHoursOnly: false
           },
@@ -820,7 +893,7 @@ export class InstagramWebhookService {
         });
 
         await conversation.save();
-        console.log(`✅ Created new conversation: ${conversation.id}`);
+        console.log(`✅ Created new conversation: ${conversation.id} with aiEnabled: ${defaultAgentEnabled}`);
       } else {
         console.log(`💬 Using existing conversation: ${conversation.id}`);
       }
@@ -1156,6 +1229,61 @@ export class InstagramWebhookService {
       console.log(`✅ [Cache] Successfully cached Page-Scoped ID ${pageScopedId} for account ${accountId}`);
     } catch (error) {
       console.error(`❌ [Cache] Error caching Page-Scoped ID:`, error);
+    }
+  }
+
+  /**
+   * Check if message text contains any enabled keyword activation rules
+   * Returns the matched keyword if found, or null if no match
+   */
+  private async checkKeywordActivation(
+    messageText: string,
+    accountId: string,
+    conversation: IConversation,
+    senderIsOurAccount: boolean
+  ): Promise<{ activated: boolean; keyword?: string }> {
+    try {
+      // Normalize message text to lowercase for matching
+      const normalizedText = messageText.toLowerCase().trim();
+      
+      if (!normalizedText || normalizedText.length === 0) {
+        return { activated: false };
+      }
+
+      // Get all enabled keyword activation rules for this account
+      const enabledRules = await KeywordActivationRule.find({
+        accountId,
+        enabled: true
+      });
+
+      if (enabledRules.length === 0) {
+        console.log(`🔍 [Keyword Activation] No enabled keyword rules found for account ${accountId}`);
+        return { activated: false };
+      }
+
+      console.log(`🔍 [Keyword Activation] Checking ${enabledRules.length} enabled keyword rules for account ${accountId}`);
+      console.log(`🔍 [Keyword Activation] Message text: "${messageText.substring(0, 100)}"`);
+      console.log(`🔍 [Keyword Activation] Sender is our account: ${senderIsOurAccount}`);
+      console.log(`🔍 [Keyword Activation] Conversation already activated: ${conversation.settings?.activatedByKeyword || false}`);
+
+      // Check each enabled keyword rule
+      for (const rule of enabledRules) {
+        // Keywords are stored in lowercase, so direct comparison works
+        if (normalizedText.includes(rule.keyword)) {
+          console.log(`✅ [Keyword Activation] Keyword "${rule.keyword}" matched in message!`);
+          console.log(`✅ [Keyword Activation] Activating conversation ${conversation.id} with keyword: "${rule.keyword}"`);
+          return {
+            activated: true,
+            keyword: rule.keyword
+          };
+        }
+      }
+
+      console.log(`ℹ️ [Keyword Activation] No keyword matches found in message`);
+      return { activated: false };
+    } catch (error) {
+      console.error('❌ [Keyword Activation] Error checking keyword activation:', error);
+      return { activated: false };
     }
   }
 

@@ -66,7 +66,7 @@ export interface IGmailFetchRule extends Document {
 const GmailFetchRuleSchema = new Schema<IGmailFetchRule>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    agentId: { type: Schema.Types.ObjectId, ref: 'Agent', required: false, index: true },
+    agentId: { type: Schema.Types.ObjectId, ref: 'Agent', required: false },
     name: { type: String, required: true, trim: true },
     status: {
       type: String,

@@ -6,6 +6,7 @@ import Conversation from '../models/conversation.model';
 import Message from '../models/message.model';
 import OutboundQueue from '../models/outboundQueue.model';
 import InstagramAccount from '../models/instagramAccount.model';
+import KeywordActivationRule from '../models/keywordActivationRule.model';
 import { authenticateToken } from '../middleware/auth';
 import { generateInstagramResponse } from '../services/openai.service';
 
@@ -332,6 +333,289 @@ router.post('/conversations/:id/messages', async (req, res) => {
   }
 });
 
+// Get count of eligible conversations for bulk message
+router.get('/conversations/bulk-message/eligible-count', authenticateToken, async (req, res) => {
+  try {
+    const { status, accountIds, minLeadScore } = req.query;
+    const userId = req.user!.userId;
+
+    // Get user's Instagram accounts
+    const userAccounts = await InstagramAccount.find({ userId, isActive: true }).select('accountId accountName');
+    const userAccountIds = userAccounts.map(acc => acc.accountId);
+
+    if (userAccountIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          count: 0,
+          accounts: []
+        }
+      });
+    }
+
+    // Build query
+    const query: any = {
+      accountId: { $in: userAccountIds },
+      'settings.aiEnabled': { $ne: false }
+    };
+
+    if (status) {
+      query.status = status;
+    } else {
+      query.status = 'open';
+    }
+
+    if (accountIds && typeof accountIds === 'string') {
+      const accountIdArray = accountIds.split(',');
+      query.accountId = { $in: accountIdArray };
+    }
+
+    if (minLeadScore) {
+      query['leadScoring.currentScore'] = { $gte: parseInt(minLeadScore as string) };
+    }
+
+    // Count eligible conversations
+    const count = await Conversation.countDocuments(query);
+
+    // Also count conversations with valid contacts
+    const conversationsWithContacts = await Conversation.find(query)
+      .populate('contactId', 'psid')
+      .lean();
+
+    const validCount = conversationsWithContacts.filter(conv => {
+      const contact = conv.contactId as any;
+      return contact && contact.psid;
+    }).length;
+
+    res.json({
+      success: true,
+      data: {
+        count: validCount,
+        totalEligible: count,
+        accounts: userAccounts.map(acc => ({
+          accountId: acc.accountId,
+          accountName: acc.accountName
+        }))
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error getting eligible count:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get eligible count'
+    });
+  }
+});
+
+// Send bulk message to all conversations with active agent
+router.post('/conversations/bulk-message', authenticateToken, async (req, res) => {
+  try {
+    const { messageText, filters = {}, options = {} } = req.body;
+    const userId = req.user!.userId;
+
+    // Validation
+    if (!messageText || typeof messageText !== 'string' || messageText.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Message text is required and cannot be empty'
+      });
+    }
+
+    if (messageText.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Message text cannot exceed 1000 characters'
+      });
+    }
+
+    console.log(`📢 [Bulk Message] User ${userId} initiating bulk message to conversations with active agent`);
+
+    // Get user's Instagram accounts
+    const userAccounts = await InstagramAccount.find({ userId, isActive: true }).select('accountId accountName');
+    const userAccountIds = userAccounts.map(acc => acc.accountId);
+
+    if (userAccountIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No active Instagram accounts found for this user'
+      });
+    }
+
+    // Build query for eligible conversations
+    const query: any = {
+      accountId: { $in: userAccountIds },
+      'settings.aiEnabled': { $ne: false } // Agent is active (not explicitly disabled)
+    };
+
+    // Apply status filter
+    if (filters.status) {
+      query.status = filters.status;
+    } else {
+      // Default: only open conversations
+      query.status = 'open';
+    }
+
+    // Apply account filter if specified
+    if (filters.accountIds && Array.isArray(filters.accountIds) && filters.accountIds.length > 0) {
+      query.accountId = { $in: filters.accountIds };
+    }
+
+    // Apply lead score filter if specified
+    if (filters.minLeadScore && typeof filters.minLeadScore === 'number') {
+      query['leadScoring.currentScore'] = { $gte: filters.minLeadScore };
+    }
+
+    // Exclude specific conversation IDs if provided
+    if (filters.excludeConversationIds && Array.isArray(filters.excludeConversationIds) && filters.excludeConversationIds.length > 0) {
+      query._id = { $nin: filters.excludeConversationIds };
+    }
+
+    // Find eligible conversations
+    const eligibleConversations = await Conversation.find(query)
+      .populate('contactId', 'psid name username')
+      .lean();
+
+    console.log(`📊 [Bulk Message] Found ${eligibleConversations.length} eligible conversations`);
+
+    if (eligibleConversations.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No eligible conversations found with active agent'
+      });
+    }
+
+    // Filter out conversations without valid contacts
+    const validConversations = eligibleConversations.filter(conv => {
+      const contact = conv.contactId as any;
+      return contact && contact.psid;
+    });
+
+    console.log(`✅ [Bulk Message] ${validConversations.length} conversations with valid contacts`);
+
+    if (validConversations.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No conversations found with valid contacts'
+      });
+    }
+
+    // Priority from options or default to 'normal'
+    const priority = options.priority || 'normal';
+
+    // Process conversations in batches to avoid overwhelming the database
+    const batchSize = 50;
+    const queueIds: string[] = [];
+    const errors: Array<{ conversationId: string; error: string }> = [];
+    let successCount = 0;
+
+    for (let i = 0; i < validConversations.length; i += batchSize) {
+      const batch = validConversations.slice(i, i + batchSize);
+
+      await Promise.all(
+        batch.map(async (conversation) => {
+          try {
+            const contact = conversation.contactId as any;
+            const conversationId = conversation._id.toString();
+
+            // Create bot message
+            const message = new Message({
+              mid: `bulk_${Date.now()}_${conversationId}_${Math.random().toString(36).substring(7)}`,
+              conversationId,
+              contactId: contact._id || contact.id,
+              accountId: conversation.accountId,
+              role: 'assistant',
+              content: {
+                text: messageText.trim(),
+                attachments: [],
+                quickReplies: [],
+                buttons: []
+              },
+              metadata: {
+                timestamp: new Date(),
+                isConsolidated: false,
+                originalMids: [],
+                aiGenerated: false,
+                processingTime: 0,
+                bulkMessage: true,
+                bulkMessageTimestamp: new Date()
+              },
+              status: 'queued',
+              priority,
+              tags: ['bulk_message', 'manual_response'],
+              notes: ['Sent via bulk message']
+            });
+
+            await message.save();
+
+            // Add to outbound queue
+            const queueItem = new OutboundQueue({
+              messageId: message.id,
+              conversationId,
+              contactId: contact._id || contact.id,
+              accountId: conversation.accountId,
+              priority,
+              status: 'pending',
+              content: {
+                text: messageText.trim()
+              },
+              tags: ['bulk_message', 'manual_response'],
+              notes: ['Sent via bulk message']
+            });
+
+            await queueItem.save();
+            queueIds.push(queueItem.id);
+
+            // Update conversation metadata (don't await to speed up)
+            Conversation.findByIdAndUpdate(conversationId, {
+              $inc: {
+                messageCount: 1,
+                'metrics.totalMessages': 1,
+                'metrics.botMessages': 1
+              },
+              'timestamps.lastBotMessage': new Date(),
+              'timestamps.lastActivity': new Date()
+            }).catch(err => console.error(`Error updating conversation ${conversationId}:`, err));
+
+            successCount++;
+
+          } catch (error: any) {
+            console.error(`❌ [Bulk Message] Error processing conversation ${conversation._id}:`, error);
+            errors.push({
+              conversationId: conversation._id.toString(),
+              error: error.message || 'Unknown error'
+            });
+          }
+        })
+      );
+    }
+
+    // Calculate estimated time based on rate limits (default: 3 messages/second)
+    const defaultRateLimit = 3; // messages per second
+    const estimatedTimeToComplete = Math.ceil(successCount / defaultRateLimit);
+
+    console.log(`✅ [Bulk Message] Successfully queued ${successCount} messages. Errors: ${errors.length}`);
+
+    res.json({
+      success: true,
+      data: {
+        totalTargeted: validConversations.length,
+        messagesQueued: successCount,
+        queueIds: queueIds.slice(0, 100), // Limit response size
+        estimatedTimeToComplete, // in seconds
+        errors: errors.length > 0 ? errors : undefined
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error sending bulk message:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to send bulk message'
+    });
+  }
+});
+
 // Get outbound queue status
 router.get('/queue/status', async (req, res) => {
   try {
@@ -594,6 +878,64 @@ router.put('/accounts/:accountId/active', authenticateToken, async (req, res) =>
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to update account active status'
+    });
+  }
+});
+
+// Update default agent enabled setting for new conversations
+router.put('/accounts/:accountId/default-agent-enabled', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { defaultAgentEnabled } = req.body;
+
+    if (typeof defaultAgentEnabled !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'defaultAgentEnabled must be a boolean'
+      });
+    }
+
+    const account = await InstagramAccount.findOne({ accountId });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    // Ensure settings object exists
+    if (!account.settings) {
+      account.settings = {
+        systemPrompt: "You are a helpful customer service assistant for a business. Respond to customer inquiries professionally and helpfully.",
+        toneOfVoice: 'professional',
+        keyInformation: '',
+        fallbackRules: [],
+        defaultResponse: "Thanks for your message! I'll get back to you soon.",
+        autoRespond: true,
+        aiEnabled: 'on',
+        defaultAgentEnabled: false
+      };
+    }
+
+    account.settings.defaultAgentEnabled = defaultAgentEnabled;
+    account.markModified('settings');
+    await account.save({ validateBeforeSave: false });
+
+    console.log(`✅ [Default Agent Enabled] Updated for account ${accountId}: ${defaultAgentEnabled}`);
+
+    res.json({
+      success: true,
+      data: {
+        accountId: account.accountId,
+        accountName: account.accountName,
+        defaultAgentEnabled: account.settings.defaultAgentEnabled
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error updating default agent enabled:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update default agent enabled'
     });
   }
 });
@@ -1574,6 +1916,195 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to generate response'
+    });
+  }
+});
+
+// Keyword Activation Routes
+// Get all keyword activation rules for an account
+router.get('/:accountId/keyword-activation', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const userId = req.user!.userId;
+
+    const rules = await KeywordActivationRule.find({
+      accountId,
+      userId
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: { rules }
+    });
+  } catch (error: any) {
+    console.error('❌ Error fetching keyword activation rules:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch keyword activation rules'
+    });
+  }
+});
+
+// Create a new keyword activation rule
+router.post('/:accountId/keyword-activation', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const userId = req.user!.userId;
+    const { keyword, enabled = true } = req.body;
+
+    if (!keyword || typeof keyword !== 'string' || keyword.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Keyword is required and must be a non-empty string'
+      });
+    }
+
+    // Normalize keyword to lowercase
+    const normalizedKeyword = keyword.trim().toLowerCase();
+
+    // Check if keyword already exists for this account
+    const existingRule = await KeywordActivationRule.findOne({
+      accountId,
+      keyword: normalizedKeyword
+    });
+
+    if (existingRule) {
+      return res.status(400).json({
+        success: false,
+        error: `Keyword "${keyword}" already exists for this account`
+      });
+    }
+
+    const rule = new KeywordActivationRule({
+      accountId,
+      userId,
+      keyword: normalizedKeyword,
+      enabled: enabled === true
+    });
+
+    await rule.save();
+
+    res.json({
+      success: true,
+      data: { rule, message: 'Keyword activation rule created successfully' }
+    });
+  } catch (error: any) {
+    console.error('❌ Error creating keyword activation rule:', error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Keyword already exists for this account'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create keyword activation rule'
+    });
+  }
+});
+
+// Update a keyword activation rule
+router.put('/:accountId/keyword-activation/:ruleId', authenticateToken, async (req, res) => {
+  try {
+    const { accountId, ruleId } = req.params;
+    const userId = req.user!.userId;
+    const { keyword, enabled } = req.body;
+
+    const rule = await KeywordActivationRule.findOne({
+      _id: ruleId,
+      accountId,
+      userId
+    });
+
+    if (!rule) {
+      return res.status(404).json({
+        success: false,
+        error: 'Keyword activation rule not found'
+      });
+    }
+
+    // Update keyword if provided
+    if (keyword !== undefined) {
+      if (typeof keyword !== 'string' || keyword.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Keyword must be a non-empty string'
+        });
+      }
+
+      const normalizedKeyword = keyword.trim().toLowerCase();
+
+      // Check if new keyword already exists (excluding current rule)
+      const existingRule = await KeywordActivationRule.findOne({
+        accountId,
+        keyword: normalizedKeyword,
+        _id: { $ne: ruleId }
+      });
+
+      if (existingRule) {
+        return res.status(400).json({
+          success: false,
+          error: `Keyword "${keyword}" already exists for this account`
+        });
+      }
+
+      rule.keyword = normalizedKeyword;
+    }
+
+    // Update enabled status if provided
+    if (enabled !== undefined) {
+      rule.enabled = enabled === true;
+    }
+
+    await rule.save();
+
+    res.json({
+      success: true,
+      data: { rule, message: 'Keyword activation rule updated successfully' }
+    });
+  } catch (error: any) {
+    console.error('❌ Error updating keyword activation rule:', error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Keyword already exists for this account'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update keyword activation rule'
+    });
+  }
+});
+
+// Delete a keyword activation rule
+router.delete('/:accountId/keyword-activation/:ruleId', authenticateToken, async (req, res) => {
+  try {
+    const { accountId, ruleId } = req.params;
+    const userId = req.user!.userId;
+
+    const rule = await KeywordActivationRule.findOneAndDelete({
+      _id: ruleId,
+      accountId,
+      userId
+    });
+
+    if (!rule) {
+      return res.status(404).json({
+        success: false,
+        error: 'Keyword activation rule not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { message: 'Keyword activation rule deleted successfully' }
+    });
+  } catch (error: any) {
+    console.error('❌ Error deleting keyword activation rule:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete keyword activation rule'
     });
   }
 });

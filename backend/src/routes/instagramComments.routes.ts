@@ -166,7 +166,7 @@ router.put('/settings/:accountId', authenticateToken, async (req, res) => {
 
     // Update comment settings - only the enabled flag
     if (!account.commentSettings) {
-      account.commentSettings = { 
+    account.commentSettings = {
         enabled: false,
         autoReplyComment: false,
         autoReplyDM: false,

@@ -48,18 +48,18 @@ export class GlobalAgentRulesService {
     
     // Check lead score rule
     // Note: checkLeadScoreRule now validates enableLeadScoreAutoDisable internally
-    const leadScoreResult = this.checkLeadScoreRule(conversation, globalConfig);
-    if (leadScoreResult.shouldDisable) {
+      const leadScoreResult = this.checkLeadScoreRule(conversation, globalConfig);
+      if (leadScoreResult.shouldDisable) {
       console.log('🚫 [Global Agent Rules] Agent disabled by lead score rule');
-      return leadScoreResult;
+        return leadScoreResult;
     }
     
     // Check milestone rule
     // Note: checkMilestoneRule now validates enableMilestoneAutoDisable internally
-    const milestoneResult = this.checkMilestoneRule(conversation, globalConfig);
-    if (milestoneResult.shouldDisable) {
+      const milestoneResult = this.checkMilestoneRule(conversation, globalConfig);
+      if (milestoneResult.shouldDisable) {
       console.log('🚫 [Global Agent Rules] Agent disabled by milestone rule');
-      return milestoneResult;
+        return milestoneResult;
     }
     
     console.log('✅ [Global Agent Rules] All rules passed, agent will continue');

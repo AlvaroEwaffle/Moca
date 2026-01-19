@@ -161,9 +161,16 @@ class DebounceWorkerService {
     try {
       // Check if AI is enabled for this conversation
       // Note: conversation.settings.aiEnabled is boolean (Conversation model uses boolean, not string enum)
-      if (conversation.settings?.aiEnabled === false) {
+      // EXCEPTION: If conversation was activated by keyword, allow processing even if aiEnabled was false
+      const isActivatedByKeyword = conversation.settings?.activatedByKeyword === true;
+      
+      if (conversation.settings?.aiEnabled === false && !isActivatedByKeyword) {
         console.log(`🚫 AI disabled for conversation ${conversation.id} (conversation-level)`);
         return false;
+      }
+      
+      if (isActivatedByKeyword) {
+        console.log(`✅ [Keyword Activation] Conversation ${conversation.id} was activated by keyword "${conversation.settings?.activationKeyword || 'unknown'}", allowing processing`);
       }
 
       // Check if AI is enabled at account level (global toggle)

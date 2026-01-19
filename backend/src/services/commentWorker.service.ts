@@ -191,15 +191,15 @@ export class CommentWorkerService {
       await comment.save();
 
       // Reply to comment using matched rule's response message
-      try {
-        await commentService.replyToComment(
-          comment.commentId, 
+        try {
+          await commentService.replyToComment(
+            comment.commentId, 
           matchedRule.responseMessage, 
-          account.accessToken
-        );
-        comment.status = 'replied';
+            account.accessToken
+          );
+          comment.status = 'replied';
         comment.replyText = matchedRule.responseMessage;
-        comment.replyTimestamp = new Date();
+          comment.replyTimestamp = new Date();
         console.log(`✅ [Comment Worker] Comment reply sent using rule "${matchedRule.keyword}": ${comment.commentId}`);
         
         // Send DM if rule is configured to do so
@@ -207,40 +207,40 @@ export class CommentWorkerService {
           try {
             console.log(`💬 [Comment Worker] Sending DM after comment reply using rule "${matchedRule.keyword}"`);
             console.log(`💬 [Comment Worker] Comment ID: ${comment.commentId}, User ID: ${comment.userId}`);
-            await commentService.sendDMReply(
+          await commentService.sendDMReply(
               comment.commentId, // Use commentId for comment-based DM
               comment.userId, // Also pass userId as fallback
               matchedRule.dmMessage, 
-              account.accessToken, 
-              account.accountId
-            );
-            comment.dmSent = true;
-            comment.dmTimestamp = new Date();
+            account.accessToken, 
+            account.accountId
+          );
+          comment.dmSent = true;
+          comment.dmTimestamp = new Date();
             comment.dmFailed = false;
-            comment.dmFailureReason = undefined;
-            comment.dmFailureTimestamp = undefined;
+          comment.dmFailureReason = undefined;
+          comment.dmFailureTimestamp = undefined;
             console.log(`✅ [Comment Worker] DM sent successfully after comment reply using rule "${matchedRule.keyword}"`);
-          } catch (error) {
-            console.error(`❌ [Comment Worker] Failed to send DM:`, error);
-            
-            // Check if it's a daily limit error
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
-                                    errorMessage.includes('The requested user cannot be found') ||
-                                    errorMessage.includes('error_subcode":2534014');
-            
-            if (isDailyLimitError) {
-              comment.dmFailed = true;
-              comment.dmFailureReason = 'Daily DM limit reached';
-              comment.dmFailureTimestamp = new Date();
-              console.log(`⚠️ [Comment Worker] DM daily limit reached for account ${account.accountName}, marking as failed`);
+        } catch (error) {
+          console.error(`❌ [Comment Worker] Failed to send DM:`, error);
+          
+          // Check if it's a daily limit error
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const isDailyLimitError = errorMessage.includes('لا يمكن العثور على المستخدم المطلوب') || 
+                                  errorMessage.includes('The requested user cannot be found') ||
+                                  errorMessage.includes('error_subcode":2534014');
+          
+          if (isDailyLimitError) {
+            comment.dmFailed = true;
+            comment.dmFailureReason = 'Daily DM limit reached';
+            comment.dmFailureTimestamp = new Date();
+            console.log(`⚠️ [Comment Worker] DM daily limit reached for account ${account.accountName}, marking as failed`);
             } else {
               // Mark as failed for other errors too
               comment.dmFailed = true;
               comment.dmFailureReason = errorMessage;
               comment.dmFailureTimestamp = new Date();
-            }
           }
+        }
         } else {
           const reasons = [];
           if (!matchedRule.sendDM) reasons.push('sendDM is false');

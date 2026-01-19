@@ -672,7 +672,7 @@ Agente: (AHORA SÍ ejecuta la herramienta con los datos reales)
       intent,
       conversationContext
     );
-    
+
     // Log conversation context for scoring
     const userMessagesCount = conversationContext.conversationHistory.filter(msg => msg.role === 'user').length;
     const assistantMessagesCount = conversationContext.conversationHistory.filter(msg => msg.role === 'assistant').length;

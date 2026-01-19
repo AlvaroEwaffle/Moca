@@ -37,7 +37,8 @@ import {
   Activity,
   Download,
   CheckCircle2,
-  Power
+  Power,
+  Key
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { useToast } from "@/hooks/use-toast";
@@ -52,6 +53,7 @@ interface InstagramAccount {
   isActive: boolean;
   settings?: {
     aiEnabled?: 'off' | 'test' | 'on' | boolean; // Support both new string format and old boolean for migration
+    defaultAgentEnabled?: boolean; // Whether new conversations should have agent enabled by default
     systemPrompt?: string;
     defaultMilestone?: {
       target: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
@@ -181,6 +183,13 @@ const InstagramAccounts = () => {
   // Accordion state
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
   
+  // Keyword Activation state
+  const [keywordRules, setKeywordRules] = useState<Array<{id: string; keyword: string; enabled: boolean; createdAt: string; updatedAt: string}>>([]);
+  const [loadingKeywords, setLoadingKeywords] = useState(false);
+  const [editingKeyword, setEditingKeyword] = useState<{id?: string; keyword: string; enabled: boolean} | null>(null);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [savingKeyword, setSavingKeyword] = useState(false);
+  
   // MCP Tools state
   const [mcpConfig, setMcpConfig] = useState<MCPToolsConfig>({
     enabled: false,
@@ -200,6 +209,13 @@ const InstagramAccounts = () => {
     fetchGlobalConfig();
     fetchMcpConfig();
   }, []);
+
+  // Fetch keywords when accounts are loaded
+  useEffect(() => {
+    if (accounts.length > 0) {
+      fetchKeywordRules(accounts[0].accountId);
+    }
+  }, [accounts]);
 
   // Test connection after accounts are loaded
   useEffect(() => {
@@ -305,6 +321,56 @@ const InstagramAccounts = () => {
         title: "Error",
         description: error.message || "No se pudo actualizar el modo del agente",
         variant: "destructive"
+      });
+      
+      // Refresh accounts to revert UI state
+      fetchAccounts();
+    }
+  };
+
+  const handleDefaultAgentEnabledToggle = async (accountId: string, enabled: boolean) => {
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/accounts/${accountId}/default-agent-enabled`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({ defaultAgentEnabled: enabled })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update local state
+        setAccounts(prev => 
+          prev.map(account => 
+            account.accountId === accountId 
+              ? { 
+                  ...account, 
+                  settings: { 
+                    ...account.settings, 
+                    defaultAgentEnabled: enabled 
+                  } 
+                }
+              : account
+          )
+        );
+
+        toast({
+          title: "Default Agent State Updated",
+          description: `New conversations will now ${enabled ? 'have' : 'not have'} the agent enabled by default.`,
+        });
+      } else {
+        throw new Error(data.error || 'Failed to update default agent enabled setting');
+      }
+    } catch (error: any) {
+      console.error('Error updating default agent enabled:', error);
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to update default agent enabled setting',
+        variant: "destructive",
       });
       
       // Refresh accounts to revert UI state
@@ -1310,6 +1376,138 @@ const InstagramAccounts = () => {
     return new Date(date).toLocaleString();
   };
 
+  // Keyword Activation functions
+  const fetchKeywordRules = async (accountId: string) => {
+    setLoadingKeywords(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/${accountId}/keyword-activation`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setKeywordRules(data.data?.rules || []);
+      } else {
+        console.error('Failed to fetch keyword rules');
+        setKeywordRules([]);
+      }
+    } catch (error) {
+      console.error('Error fetching keyword rules:', error);
+      setKeywordRules([]);
+    } finally {
+      setLoadingKeywords(false);
+    }
+  };
+
+  const createKeywordRule = async (accountId: string) => {
+    if (!newKeyword.trim()) {
+      setError('Keyword cannot be empty');
+      return;
+    }
+
+    setSavingKeyword(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/${accountId}/keyword-activation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          keyword: newKeyword.trim(),
+          enabled: true
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await fetchKeywordRules(accountId);
+        setNewKeyword("");
+        setSuccess('Keyword activation rule created successfully');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(data.error || 'Failed to create keyword rule');
+      }
+    } catch (error) {
+      console.error('Error creating keyword rule:', error);
+      setError('Failed to create keyword rule');
+    } finally {
+      setSavingKeyword(false);
+    }
+  };
+
+  const updateKeywordRule = async (accountId: string, ruleId: string, updates: { keyword?: string; enabled?: boolean }) => {
+    setSavingKeyword(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/${accountId}/keyword-activation/${ruleId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify(updates)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await fetchKeywordRules(accountId);
+        setEditingKeyword(null);
+        setSuccess('Keyword activation rule updated successfully');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(data.error || 'Failed to update keyword rule');
+      }
+    } catch (error) {
+      console.error('Error updating keyword rule:', error);
+      setError('Failed to update keyword rule');
+    } finally {
+      setSavingKeyword(false);
+    }
+  };
+
+  const deleteKeywordRule = async (accountId: string, ruleId: string) => {
+    if (!window.confirm('Are you sure you want to delete this keyword activation rule?')) {
+      return;
+    }
+
+    setSavingKeyword(true);
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/${accountId}/keyword-activation/${ruleId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await fetchKeywordRules(accountId);
+        setSuccess('Keyword activation rule deleted successfully');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(data.error || 'Failed to delete keyword rule');
+      }
+    } catch (error) {
+      console.error('Error deleting keyword rule:', error);
+      setError('Failed to delete keyword rule');
+    } finally {
+      setSavingKeyword(false);
+    }
+  };
+
+  const toggleKeywordEnabled = async (accountId: string, ruleId: string, currentEnabled: boolean) => {
+    await updateKeywordRule(accountId, ruleId, { enabled: !currentEnabled });
+  };
+
   const toggleAccordion = (accountId: string, section: string) => {
     const key = `${accountId}-${section}`;
     setExpandedSections(prev => ({
@@ -2205,8 +2403,63 @@ const InstagramAccounts = () => {
                     </div>
                   </div>
 
-                  {/* System Prompt Accordion */}
+                  {/* Default Agent Enabled Accordion */}
                   <div className="border-t pt-4">
+                    <button
+                      onClick={() => toggleAccordion(account.accountId, 'defaultAgentEnabled')}
+                      className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Power className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                        <h4 className="text-sm font-medium text-gray-700">Default Agent State</h4>
+                        <Badge variant="outline" className="text-xs">
+                          {account.settings?.defaultAgentEnabled ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                      </div>
+                      {isAccordionExpanded(account.accountId, 'defaultAgentEnabled') ? (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
+                    
+                    {isAccordionExpanded(account.accountId, 'defaultAgentEnabled') && (
+                      <div className="mt-3 space-y-4">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <p className="text-sm text-blue-800 mb-3">
+                            <strong>Configure the default state for new conversations:</strong>
+                          </p>
+                          <ul className="text-xs text-blue-700 space-y-2 list-disc list-inside">
+                            <li><strong>Enabled:</strong> New conversations will have the agent active by default</li>
+                            <li><strong>Disabled:</strong> New conversations will have the agent inactive (can be activated via keywords or manually)</li>
+                          </ul>
+                          <p className="text-xs text-blue-700 mt-3 font-medium">
+                            💡 Tip: Use "Keyword Activation" feature to automatically activate conversations when specific keywords are detected.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                          <div className="flex-1">
+                            <Label htmlFor="defaultAgentEnabled" className="text-sm font-medium text-gray-900">
+                              Agent Enabled by Default for New Conversations
+                            </Label>
+                            <p className="text-xs text-gray-500 mt-1">
+                              When {account.settings?.defaultAgentEnabled ? 'enabled' : 'disabled'}, all new conversations will start with the agent {account.settings?.defaultAgentEnabled ? 'active' : 'inactive'}.
+                            </p>
+                          </div>
+                          <Switch
+                            id="defaultAgentEnabled"
+                            checked={account.settings?.defaultAgentEnabled ?? false}
+                            onCheckedChange={(checked) => handleDefaultAgentEnabledToggle(account.accountId, checked)}
+                            disabled={saving}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* System Prompt Accordion */}
+                  <div className="border-t pt-4 mt-4">
                     <button
                       onClick={() => toggleAccordion(account.accountId, 'systemPrompt')}
                       className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
@@ -2471,6 +2724,172 @@ const InstagramAccounts = () => {
                             <p className="text-sm text-gray-500">
                               Loading follow-up configuration...
                             </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Keyword Activation Accordion */}
+                  <div className="border-t pt-4 mt-4">
+                    <button
+                      onClick={() => toggleAccordion(account.accountId, 'keywordActivation')}
+                      className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Key className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                        <h4 className="text-sm font-medium text-gray-700">Keyword Activation</h4>
+                        {keywordRules.length > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            {keywordRules.filter(r => r.enabled).length} active
+                          </Badge>
+                        )}
+                      </div>
+                      {isAccordionExpanded(account.accountId, 'keywordActivation') ? (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
+                    
+                    {isAccordionExpanded(account.accountId, 'keywordActivation') && (
+                      <div className="mt-3 space-y-4">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-xs text-blue-800">
+                            <strong>How it works:</strong> The bot is inactive by default. When a message (from lead or owner) contains any of these keywords, 
+                            the bot will automatically activate and start responding in that conversation.
+                          </p>
+                        </div>
+
+                        {loadingKeywords ? (
+                          <div className="flex items-center justify-center py-4">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-600"></div>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* Add New Keyword */}
+                            <div className="border rounded-lg p-4 bg-gray-50">
+                              <Label htmlFor="newKeyword" className="text-sm font-medium">Add New Keyword</Label>
+                              <div className="flex gap-2 mt-2">
+                                <Input
+                                  id="newKeyword"
+                                  value={newKeyword}
+                                  onChange={(e) => setNewKeyword(e.target.value)}
+                                  placeholder="e.g., LANDING"
+                                  className="flex-1"
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter' && newKeyword.trim()) {
+                                      createKeywordRule(account.accountId);
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  onClick={() => createKeywordRule(account.accountId)}
+                                  disabled={!newKeyword.trim() || savingKeyword}
+                                  size="sm"
+                                >
+                                  {savingKeyword ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  ) : (
+                                    <>
+                                      <Plus className="w-4 h-4 mr-1" />
+                                      Add
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Keywords are case-insensitive. Example: "LANDING" will match "landing", "Landing", etc.
+                              </p>
+                            </div>
+
+                            {/* Keywords List */}
+                            {keywordRules.length === 0 ? (
+                              <div className="bg-gray-50 p-4 rounded-lg text-center">
+                                <Key className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                <p className="text-sm text-gray-500">
+                                  No keyword activation rules configured
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Add keywords to enable automatic bot activation
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {keywordRules.map((rule) => (
+                                  <div key={rule.id} className="border rounded-lg p-3 bg-white flex items-center justify-between">
+                                    <div className="flex items-center space-x-3 flex-1">
+                                      <Switch
+                                        checked={rule.enabled}
+                                        onCheckedChange={() => toggleKeywordEnabled(account.accountId, rule.id, rule.enabled)}
+                                        disabled={savingKeyword}
+                                      />
+                                      <div className="flex-1">
+                                        {editingKeyword?.id === rule.id ? (
+                                          <div className="flex items-center gap-2">
+                                            <Input
+                                              value={editingKeyword.keyword}
+                                              onChange={(e) => setEditingKeyword({ ...editingKeyword, keyword: e.target.value })}
+                                              className="text-sm"
+                                              autoFocus
+                                            />
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => {
+                                                if (editingKeyword.keyword.trim()) {
+                                                  updateKeywordRule(account.accountId, rule.id, { keyword: editingKeyword.keyword });
+                                                }
+                                              }}
+                                              disabled={!editingKeyword.keyword.trim() || savingKeyword}
+                                            >
+                                              <Save className="w-3 h-3" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => setEditingKeyword(null)}
+                                              disabled={savingKeyword}
+                                            >
+                                              Cancel
+                                            </Button>
+                                          </div>
+                                        ) : (
+                                          <div>
+                                            <span className={`text-sm font-medium ${rule.enabled ? 'text-gray-900' : 'text-gray-400'}`}>
+                                              {rule.keyword.toUpperCase()}
+                                            </span>
+                                            {!rule.enabled && (
+                                              <Badge variant="secondary" className="ml-2 text-xs">Disabled</Badge>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {editingKeyword?.id !== rule.id && (
+                                      <div className="flex items-center space-x-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setEditingKeyword({ id: rule.id, keyword: rule.keyword, enabled: rule.enabled })}
+                                          disabled={savingKeyword}
+                                        >
+                                          <Settings className="w-3 h-3" />
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => deleteKeywordRule(account.accountId, rule.id)}
+                                          disabled={savingKeyword}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

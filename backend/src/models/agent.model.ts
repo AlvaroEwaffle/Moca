@@ -53,7 +53,7 @@ export interface IAgent extends Document {
 const AgentSchema = new Schema<IAgent>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: false, index: true },
+    tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: false },
     name: { type: String, required: true, trim: true },
     description: { type: String, required: false, trim: true },
     systemPrompt: {
