@@ -429,10 +429,12 @@ export class InstagramWebhookService {
       console.log(`🔧 [Webhook] Is Echo (Bot Message): ${messageData.is_echo || false}`);
       console.log(`🔧 [Webhook] Processing message from PSID: ${messageData.psid || 'unknown'}`);
 
-      // Check if message already exists (deduplication)
+      // CRITICAL: Check if message already exists FIRST (before account identification)
+      // This prevents processing the same message twice when Instagram sends multiple webhooks
+      // with the same MID but different sender/recipient perspectives
       const existingMessage = await Message.findOne({ mid: messageData.mid });
       if (existingMessage) {
-        console.log(`⚠️ Message ${messageData.mid} already exists, skipping`);
+        console.log(`⚠️ [Deduplication] Message ${messageData.mid} already exists with role=${existingMessage.role}, skipping duplicate webhook`);
         return;
       }
 
@@ -549,8 +551,10 @@ export class InstagramWebhookService {
         console.log(`✅ [Manual Message] Message will appear in UI but won't trigger AI response.`);
         
         // Update conversation metadata but don't trigger AI response
-        conversation.lastMessageAt = new Date();
-        conversation.lastMessageText = messageData.text || '';
+        conversation.timestamps.lastBotMessage = new Date(messageData.timestamp || Date.now());
+        conversation.timestamps.lastActivity = new Date(messageData.timestamp || Date.now());
+        conversation.metrics.totalMessages += 1;
+        conversation.metrics.botMessages += 1;
         await conversation.save();
         
         return; // STOP - Don't trigger AI response for our own messages
@@ -622,7 +626,18 @@ export class InstagramWebhookService {
           console.log(`✅ [Keyword Activation] Conversation ${conversation.id} activated by keyword: "${keywordDetectionResult.keyword}"`);
           console.log(`✅ [Keyword Activation] Bot will now respond to messages in this conversation`);
           // Conversation is now activated, will be saved with keyword info
-          conversation.settings = conversation.settings || {};
+          if (!conversation.settings) {
+            conversation.settings = {
+              aiEnabled: true,
+              responseCounter: {
+                totalResponses: 0,
+                lastResetAt: new Date(),
+                disabledByResponseLimit: false,
+                disabledByLeadScore: false,
+                disabledByMilestone: false
+              }
+            };
+          }
           conversation.settings.activatedByKeyword = true;
           conversation.settings.activationKeyword = keywordDetectionResult.keyword;
           conversation.settings.aiEnabled = true; // Ensure AI is enabled
@@ -1130,10 +1145,11 @@ export class InstagramWebhookService {
           
           // Try to match by sender PSID (the account that initiated the conversation)
           // This handles the case where a user sends a message FROM their account TO an external account
+          // IMPORTANT: If sender PSID matches our pageScopedId, this is OUR message (isBotMessage: true)
           for (const account of allAccounts) {
             if (psid === account.pageScopedId) {
-              console.log(`👤 [Account Identification] Matched by sender PSID: ${account.accountName} (${account.userEmail}) - conversation initiated from this account`);
-              return { account, isBotMessage: false };
+              console.log(`🤖 [Account Identification] Matched by sender PSID: ${account.accountName} (${account.userEmail}) - this is OUR message (owner sent manually)`);
+              return { account, isBotMessage: true }; // This is our own message, not a lead message
             }
           }
           
@@ -1152,10 +1168,11 @@ export class InstagramWebhookService {
           console.warn(`⚠️ [PSID Matching] No recipient ID provided for user message`);
           
           // If no recipient ID, try to match by sender PSID
+          // IMPORTANT: If sender PSID matches our pageScopedId, this is OUR message (isBotMessage: true)
           for (const account of allAccounts) {
             if (psid === account.pageScopedId) {
-              console.log(`👤 [Account Identification] Matched by sender PSID (no recipient ID): ${account.accountName} (${account.userEmail})`);
-              return { account, isBotMessage: false };
+              console.log(`🤖 [Account Identification] Matched by sender PSID (no recipient ID): ${account.accountName} (${account.userEmail}) - this is OUR message`);
+              return { account, isBotMessage: true }; // This is our own message, not a lead message
             }
           }
           
