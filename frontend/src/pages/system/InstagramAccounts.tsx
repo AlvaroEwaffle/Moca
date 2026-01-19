@@ -1389,7 +1389,11 @@ const InstagramAccounts = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setKeywordRules(data.data?.rules || []);
+        // Filter out any invalid rules (null, undefined, or missing required fields)
+        const validRules = (data.data?.rules || []).filter((rule: any) => 
+          rule && rule.id && rule.keyword && typeof rule.keyword === 'string'
+        );
+        setKeywordRules(validRules);
       } else {
         console.error('Failed to fetch keyword rules');
         setKeywordRules([]);
@@ -2816,11 +2820,11 @@ const InstagramAccounts = () => {
                               </div>
                             ) : (
                               <div className="space-y-2">
-                                {keywordRules.map((rule) => (
+                                {keywordRules.filter(rule => rule && rule.id && rule.keyword).map((rule) => (
                                   <div key={rule.id} className="border rounded-lg p-3 bg-white flex items-center justify-between">
                                     <div className="flex items-center space-x-3 flex-1">
                                       <Switch
-                                        checked={rule.enabled}
+                                        checked={rule.enabled ?? false}
                                         onCheckedChange={() => toggleKeywordEnabled(account.accountId, rule.id, rule.enabled)}
                                         disabled={savingKeyword}
                                       />
@@ -2828,8 +2832,8 @@ const InstagramAccounts = () => {
                                         {editingKeyword?.id === rule.id ? (
                                           <div className="flex items-center gap-2">
                                             <Input
-                                              value={editingKeyword.keyword}
-                                              onChange={(e) => setEditingKeyword({ ...editingKeyword, keyword: e.target.value })}
+                                              value={editingKeyword?.keyword || ''}
+                                              onChange={(e) => setEditingKeyword(editingKeyword ? { ...editingKeyword, keyword: e.target.value } : null)}
                                               className="text-sm"
                                               autoFocus
                                             />
@@ -2837,11 +2841,11 @@ const InstagramAccounts = () => {
                                               size="sm"
                                               variant="outline"
                                               onClick={() => {
-                                                if (editingKeyword.keyword.trim()) {
+                                                if (editingKeyword?.keyword?.trim()) {
                                                   updateKeywordRule(account.accountId, rule.id, { keyword: editingKeyword.keyword });
                                                 }
                                               }}
-                                              disabled={!editingKeyword.keyword.trim() || savingKeyword}
+                                              disabled={!editingKeyword?.keyword?.trim() || savingKeyword}
                                             >
                                               <Save className="w-3 h-3" />
                                             </Button>
@@ -2857,7 +2861,7 @@ const InstagramAccounts = () => {
                                         ) : (
                                           <div>
                                             <span className={`text-sm font-medium ${rule.enabled ? 'text-gray-900' : 'text-gray-400'}`}>
-                                              {rule.keyword.toUpperCase()}
+                                              {rule.keyword?.toUpperCase() || 'UNKNOWN'}
                                             </span>
                                             {!rule.enabled && (
                                               <Badge variant="secondary" className="ml-2 text-xs">Disabled</Badge>
@@ -2871,7 +2875,11 @@ const InstagramAccounts = () => {
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={() => setEditingKeyword({ id: rule.id, keyword: rule.keyword, enabled: rule.enabled })}
+                                          onClick={() => {
+                                            if (rule && rule.id && rule.keyword) {
+                                              setEditingKeyword({ id: rule.id, keyword: rule.keyword, enabled: rule.enabled ?? false });
+                                            }
+                                          }}
                                           disabled={savingKeyword}
                                         >
                                           <Settings className="w-3 h-3" />

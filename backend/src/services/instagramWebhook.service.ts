@@ -557,6 +557,39 @@ export class InstagramWebhookService {
         conversation.timestamps.lastActivity = new Date(messageData.timestamp || Date.now());
         conversation.metrics.totalMessages += 1;
         conversation.metrics.botMessages += 1;
+        
+        // Check for keyword activation in manual messages (e.g., if owner sends "LANDING" message)
+        // This allows the owner to activate the agent by sending a keyword manually
+        if (messageData.text && !conversation.settings?.activatedByKeyword) {
+          const keywordDetectionResult = await this.checkKeywordActivation(
+            messageData.text,
+            instagramAccount.accountId,
+            conversation,
+            true // senderIsOurAccount = true (this is our message)
+          );
+          
+          if (keywordDetectionResult.activated) {
+            console.log(`✅ [Keyword Activation - Manual Message] Conversation ${conversation.id} activated by keyword in manual message: "${keywordDetectionResult.keyword}"`);
+            console.log(`✅ [Keyword Activation - Manual Message] Bot will now respond to messages in this conversation`);
+            // Initialize settings if not present
+            if (!conversation.settings) {
+              conversation.settings = {
+                aiEnabled: true,
+                responseCounter: {
+                  totalResponses: 0,
+                  lastResetAt: new Date(),
+                  disabledByResponseLimit: false,
+                  disabledByLeadScore: false,
+                  disabledByMilestone: false
+                }
+              };
+            }
+            conversation.settings.activatedByKeyword = true;
+            conversation.settings.activationKeyword = keywordDetectionResult.keyword;
+            conversation.settings.aiEnabled = true; // Ensure AI is enabled
+          }
+        }
+        
         await conversation.save();
         
         return; // STOP - Don't trigger AI response for our own messages
@@ -604,7 +637,7 @@ export class InstagramWebhookService {
       // At this point, we know senderIsOurAccount is FALSE (we already checked and returned if true)
       // So this is a normal message from a lead
       const contactPSID = messageData.psid;
-      console.log(`📥 [Contact Selection] Message received from lead. Using sender PSID as contact: ${contactPSID}`);
+        console.log(`📥 [Contact Selection] Message received from lead. Using sender PSID as contact: ${contactPSID}`);
 
       // Get or create contact
       const contact = await this.upsertContact(contactPSID, messageData, instagramAccount);
