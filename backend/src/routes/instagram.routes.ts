@@ -451,7 +451,7 @@ router.get('/conversations/bulk-message/eligible-list', authenticateToken, async
 
     // Get eligible conversations with contact info
     const conversations = await Conversation.find(query)
-      .populate('contactId', 'psid name username metadata')
+      .populate('contactId', 'psid name metadata')
       .select('_id status contactId leadScoring createdAt timestamps')
       .sort({ 'timestamps.lastActivity': -1 })
       .lean();
@@ -464,11 +464,15 @@ router.get('/conversations/bulk-message/eligible-list', authenticateToken, async
       })
       .map(conv => {
         const contact = conv.contactId as any;
+        // Get username from metadata.instagramData.username (Instagram) or use psid as fallback
+        const username = contact.metadata?.instagramData?.username || contact.psid || 'unknown';
+        const name = contact.name || username || 'Unknown';
+        
         return {
           id: conv._id.toString(),
           contact: {
-            name: contact.name || contact.username || 'Unknown',
-            username: contact.username || 'unknown',
+            name: name,
+            username: username,
             psid: contact.psid
           },
           status: conv.status,
