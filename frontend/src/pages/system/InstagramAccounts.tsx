@@ -1389,10 +1389,20 @@ const InstagramAccounts = () => {
 
       if (response.ok) {
         const data = await response.json();
+        // Transform MongoDB documents (_id) to frontend format (id)
         // Filter out any invalid rules (null, undefined, or missing required fields)
-        const validRules = (data.data?.rules || []).filter((rule: any) => 
-          rule && rule.id && rule.keyword && typeof rule.keyword === 'string'
-        );
+        const validRules = (data.data?.rules || [])
+          .filter((rule: any) => 
+            rule && (rule._id || rule.id) && rule.keyword && typeof rule.keyword === 'string'
+          )
+          .map((rule: any) => ({
+            id: rule._id || rule.id,
+            keyword: rule.keyword,
+            enabled: rule.enabled ?? true,
+            createdAt: rule.createdAt,
+            updatedAt: rule.updatedAt
+          }));
+        console.log('📋 [Keyword Rules] Fetched and transformed rules:', validRules);
         setKeywordRules(validRules);
       } else {
         console.error('Failed to fetch keyword rules');
