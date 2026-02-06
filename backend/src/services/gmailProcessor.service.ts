@@ -63,18 +63,20 @@ const getOrCreateContact = async (
       lastActivity: new Date(),
       'metadata.lastSeen': new Date()
     };
+    const setOnInsert: Record<string, any> = {
+      psid: `gmail_${email}` // Unique psid for Gmail contacts to avoid E11000 on legacy psid_1 index
+    };
+    if (displayName) setOnInsert.name = displayName;
     const contact = await Contact.findOneAndUpdate(
       filter,
-      {
-        $set: baseUpdate,
-        ...(displayName && { $setOnInsert: { name: displayName } })
-      },
+      { $set: baseUpdate, $setOnInsert },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     if (contact && displayName && !contact.name) {
       await Contact.updateOne({ _id: contact._id }, { $set: { name: displayName } });
       contact.name = displayName;
     }
+    return contact;
   } catch (error: any) {
     if (error.code === 11000) {
       // Race: another process created it; fetch and return
