@@ -455,6 +455,88 @@ Respuesta:`;
 }
 
 /**
+ * Generate AI-suggested follow-up message based on conversation history and system prompt
+ * Used by the Lead Follow Up feature when messageMode is 'ai'
+ */
+export async function generateFollowUpSuggestion(context: {
+  conversationHistory: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
+  hoursSinceLastActivity: number;
+  leadScore?: number;
+  agentBehavior?: {
+    systemPrompt?: string;
+    toneOfVoice?: string;
+    keyInformation?: string;
+  };
+}): Promise<string> {
+  try {
+    console.log('🤖 [OpenAI] Generating AI follow-up suggestion');
+
+    const baseSystemPrompt = context.agentBehavior?.systemPrompt || `Eres un asistente virtual profesional y amigable para seguimiento de leads.
+Tu objetivo es generar mensajes de seguimiento naturales que continúen la conversación de manera relevante.
+Mantén el tono profesional pero cercano. Responde en español por defecto.`;
+
+    const keyInfoSection = context.agentBehavior?.keyInformation
+      ? `\n\nInformación clave del negocio:\n${context.agentBehavior.keyInformation}\n`
+      : '';
+    const toneInstruction = context.agentBehavior?.toneOfVoice
+      ? `\nTono de voz: ${context.agentBehavior.toneOfVoice}\n`
+      : '';
+
+    const systemPrompt = baseSystemPrompt + keyInfoSection + toneInstruction + `
+
+INSTRUCCIONES PARA EL MENSAJE DE SEGUIMIENTO:
+- Genera UN solo mensaje breve (2-4 frases máximo)
+- Continúa naturalmente la conversación basándote en el contexto
+- No repitas información ya mencionada
+- No uses saludos genéricos si ya hubo intercambio previo
+- Sé útil y orientado a avanzar la conversación hacia el cierre`;
+
+    const conversationText = context.conversationHistory.length > 0
+      ? context.conversationHistory.map(msg =>
+          `${msg.role === 'user' ? '👤 Cliente' : '🤖 Asistente'}: ${msg.content}`
+        ).join('\n')
+      : '(Sin historial previo)';
+
+    const userPrompt = `Genera un mensaje de seguimiento para este lead.
+
+CONVERSACIÓN ANTERIOR:
+${conversationText}
+
+CONTEXTO:
+- Horas desde la última actividad: ${context.hoursSinceLastActivity}
+- Lead score: ${context.leadScore ?? 'No especificado'}
+
+Genera un mensaje breve y natural que siga la conversación. Solo el texto del mensaje, sin explicaciones.`;
+
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages,
+      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '200'),
+      temperature: 0.7
+    });
+
+    const message = (response.choices[0]?.message?.content || '').trim();
+    if (!message) {
+      throw new Error('Empty response from OpenAI');
+    }
+
+    console.log('✅ [OpenAI] Follow-up suggestion generated:', message.substring(0, 80) + '...');
+    return message;
+  } catch (error: any) {
+    console.error('❌ [OpenAI] Error generating follow-up suggestion:', error);
+    throw error;
+  }
+}
+
+/**
  * Generate structured AI response with lead scoring and context awareness
  */
 export async function generateStructuredResponse(

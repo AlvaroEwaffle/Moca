@@ -1,6 +1,7 @@
-import { FollowUpConfig, LeadFollowUp, Conversation, Contact, InstagramAccount } from '../models';
+import { FollowUpConfig, LeadFollowUp, Conversation, Contact, InstagramAccount, Message } from '../models';
 import { OutboundQueue } from '../models';
 import instagramApiService from './instagramApi.service';
+import { generateFollowUpSuggestion } from './openai.service';
 
 export class FollowUpWorkerService {
   private static instance: FollowUpWorkerService;
@@ -178,7 +179,7 @@ export class FollowUpWorkerService {
 
     console.log(`💾 [FollowUp Worker] Creating follow-up record for lead ${lead._id}...`);
     
-    // Create follow-up record
+    // Create follow-up record (store actual message sent for audit)
     const followUp = new LeadFollowUp({
       conversationId: lead._id,
       contactId: lead.contactId._id,
@@ -187,7 +188,7 @@ export class FollowUpWorkerService {
       status: 'pending',
       scheduledAt: new Date(),
       followUpCount: 0,
-      messageTemplate: config.messageTemplate
+      messageTemplate: message // Store the actual generated message (template or AI)
     });
 
     await followUp.save();
@@ -202,29 +203,84 @@ export class FollowUpWorkerService {
   }
 
   /**
-   * Generate personalized follow-up message
+   * Generate personalized follow-up message (template or AI-suggested)
    */
   private async generateFollowUpMessage(lead: any, config: any): Promise<string> {
-    let message = config.messageTemplate;
+    const messageMode = config.messageMode || 'template';
+
+    if (messageMode === 'ai') {
+      return this.generateAiFollowUpMessage(lead, config);
+    }
+
+    // Template mode
+    let message = config.messageTemplate || '';
 
     // Basic personalization
     if (lead.contactId && lead.contactId.name) {
       message = message.replace(/\{name\}/g, lead.contactId.name);
     } else if (lead.contactId && lead.contactId.metadata?.instagramData?.username) {
-      // Fallback to Instagram username if name not available
       message = message.replace(/\{name\}/g, `@${lead.contactId.metadata.instagramData.username}`);
     } else {
-      // Remove {name} placeholder if no name available
       message = message.replace(/\{name\}/g, '');
     }
 
-    // Add lead score context
     const leadScore = lead.leadScoring?.currentScore || 0;
     if (leadScore >= 3) {
       message += `\n\nVeo que ya has mostrado interés en nuestros servicios. ¿Te gustaría agendar una consulta?`;
     }
 
     return message;
+  }
+
+  /**
+   * Generate AI-suggested follow-up based on conversation and system prompt
+   */
+  private async generateAiFollowUpMessage(lead: any, config: any): Promise<string> {
+    try {
+      // Fetch conversation messages
+      const messages = await Message.find({
+        conversationId: lead._id,
+        role: { $in: ['user', 'assistant'] }
+      })
+        .sort({ 'metadata.timestamp': 1 })
+        .lean();
+
+      const conversationHistory = messages.map((msg: any) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content?.text || ''
+      }));
+
+      // Get account agent behavior (system prompt)
+      const instagramAccount = await InstagramAccount.findOne({ accountId: config.accountId, isActive: true });
+      const agentBehavior = instagramAccount?.settings
+        ? {
+            systemPrompt: instagramAccount.settings.systemPrompt,
+            toneOfVoice: instagramAccount.settings.toneOfVoice,
+            keyInformation: instagramAccount.settings.keyInformation
+          }
+        : undefined;
+
+      const lastActivity = lead.timestamps?.lastActivity
+        ? new Date(lead.timestamps.lastActivity)
+        : new Date();
+      const hoursSinceLastActivity = Math.floor(
+        (Date.now() - lastActivity.getTime()) / (1000 * 60 * 60)
+      );
+
+      const message = await generateFollowUpSuggestion({
+        conversationHistory,
+        hoursSinceLastActivity,
+        leadScore: lead.leadScoring?.currentScore,
+        agentBehavior
+      });
+
+      return message;
+    } catch (error: any) {
+      console.error(`❌ [FollowUp Worker] AI follow-up failed for lead ${lead._id}:`, error);
+      // Fallback to template if AI fails
+      const fallback = config.messageTemplate || 'Hola! 👋 Vi que te interesó nuestro servicio. ¿Te gustaría que te cuente más detalles?';
+      return fallback.replace(/\{name\}/g, lead.contactId?.name || lead.contactId?.metadata?.instagramData?.username || '');
+    }
   }
 
   /**

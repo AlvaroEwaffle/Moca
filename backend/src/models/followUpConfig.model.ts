@@ -7,7 +7,8 @@ export interface IFollowUpConfig extends Document {
   minLeadScore: number; // Minimum lead score to follow up (e.g., 2 = follow up scores 2 and above)
   maxFollowUps: number; // Maximum number of follow-ups to send
   timeSinceLastAnswer: number; // Hours to wait since last answer before following up
-  messageTemplate: string; // Template for follow-up messages
+  messageMode: 'template' | 'ai'; // 'template' = use messageTemplate, 'ai' = AI suggests based on conversation + system prompt
+  messageTemplate: string; // Template for follow-up messages (used when messageMode is 'template')
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +48,11 @@ const FollowUpConfigSchema = new Schema<IFollowUpConfig>({
     min: 1,
     max: 168, // Max 1 week
     default: 24 // 24 hours
+  },
+  messageMode: {
+    type: String,
+    enum: ['template', 'ai'],
+    default: 'template'
   },
   messageTemplate: {
     type: String,

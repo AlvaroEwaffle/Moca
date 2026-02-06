@@ -353,10 +353,10 @@ router.get('/conversations/bulk-message/eligible-count', authenticateToken, asyn
       });
     }
 
-    // Build query
+    // Build query - only conversations with agent explicitly turned ON
     const query: any = {
       accountId: { $in: userAccountIds },
-      'settings.aiEnabled': { $ne: false }
+      'settings.aiEnabled': true
     };
 
     if (status) {
@@ -428,10 +428,10 @@ router.get('/conversations/bulk-message/eligible-list', authenticateToken, async
       });
     }
 
-    // Build query
+    // Build query - only conversations with agent explicitly turned ON
     const query: any = {
       accountId: { $in: userAccountIds },
-      'settings.aiEnabled': { $ne: false }
+      'settings.aiEnabled': true
     };
 
     if (status) {
@@ -532,10 +532,10 @@ router.post('/conversations/bulk-message', authenticateToken, async (req, res) =
       });
     }
 
-    // Build query for eligible conversations
+    // Build query for eligible conversations - only those with agent explicitly turned ON
     const query: any = {
       accountId: { $in: userAccountIds },
-      'settings.aiEnabled': { $ne: false } // Agent is active (not explicitly disabled)
+      'settings.aiEnabled': true
     };
 
     // Apply status filter

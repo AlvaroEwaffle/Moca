@@ -38,7 +38,8 @@ import {
   Download,
   CheckCircle2,
   Power,
-  Key
+  Key,
+  Sparkles
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { useToast } from "@/hooks/use-toast";
@@ -139,6 +140,7 @@ interface FollowUpConfig {
   minLeadScore: number;
   maxFollowUps: number;
   timeSinceLastAnswer: number;
+  messageMode: 'template' | 'ai';
   messageTemplate: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -2687,22 +2689,56 @@ const InstagramAccounts = () => {
                                   </div>
 
                                   <div className="md:col-span-2">
-                                    <Label htmlFor="messageTemplate">Follow-up Message Template</Label>
-                                    <Textarea
-                                      id="messageTemplate"
-                                      value={followUpConfig.messageTemplate}
-                                      onChange={(e) => setFollowUpConfig(prev => prev ? {
-                                        ...prev,
-                                        messageTemplate: e.target.value
-                                      } : null)}
-                                      className="mt-2"
-                                      rows={3}
-                                      placeholder="Enter your follow-up message template..."
-                                    />
+                                    <Label>Message Mode</Label>
+                                    <div className="mt-2 flex gap-4">
+                                      <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="messageMode"
+                                          checked={(followUpConfig.messageMode || 'template') === 'template'}
+                                          onChange={() => setFollowUpConfig(prev => prev ? { ...prev, messageMode: 'template' } : null)}
+                                          className="text-violet-600 focus:ring-violet-500"
+                                        />
+                                        <span className="text-sm">Template</span>
+                                      </label>
+                                      <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="messageMode"
+                                          checked={followUpConfig.messageMode === 'ai'}
+                                          onChange={() => setFollowUpConfig(prev => prev ? { ...prev, messageMode: 'ai' } : null)}
+                                          className="text-violet-600 focus:ring-violet-500"
+                                        />
+                                        <Sparkles className="w-4 h-4 text-violet-500" />
+                                        <span className="text-sm">AI Suggested</span>
+                                      </label>
+                                    </div>
                                     <p className="text-xs text-gray-500 mt-1">
-                                      Use {`{name}`} for personalization (e.g., "Hola {`{name}`}!")
+                                      {followUpConfig.messageMode === 'ai'
+                                        ? 'AI will analyze each conversation and suggest a continuation based on your System Prompt'
+                                        : 'Use a fixed template for all follow-up messages'}
                                     </p>
                                   </div>
+
+                                  {(followUpConfig.messageMode || 'template') === 'template' && (
+                                    <div className="md:col-span-2">
+                                      <Label htmlFor="messageTemplate">Follow-up Message Template</Label>
+                                      <Textarea
+                                        id="messageTemplate"
+                                        value={followUpConfig.messageTemplate}
+                                        onChange={(e) => setFollowUpConfig(prev => prev ? {
+                                          ...prev,
+                                          messageTemplate: e.target.value
+                                        } : null)}
+                                        className="mt-2"
+                                        rows={3}
+                                        placeholder="Enter your follow-up message template..."
+                                      />
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        Use {`{name}`} for personalization (e.g., "Hola {`{name}`}!")
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">

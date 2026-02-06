@@ -26,12 +26,18 @@ router.get('/config/:accountId', authenticateToken, async (req, res) => {
         minLeadScore: 2,
         maxFollowUps: 3,
         timeSinceLastAnswer: 24,
+        messageMode: 'template',
         messageTemplate: "Hola! 👋 Vi que te interesó nuestro servicio. ¿Te gustaría que te cuente más detalles? Estoy aquí para ayudarte! 😊"
       });
       await config.save();
     }
 
-    res.json(config);
+    // Ensure messageMode for backwards compatibility (old configs may not have it)
+    const configObj = config.toObject ? config.toObject() : config;
+    if (configObj.messageMode === undefined) {
+      configObj.messageMode = 'template';
+    }
+    res.json(configObj);
   } catch (error) {
     console.error('Error getting follow-up config:', error);
     res.status(500).json({ error: 'Failed to get follow-up configuration' });
@@ -43,10 +49,15 @@ router.put('/config/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const userId = req.user?.userId;
-    const { enabled, minLeadScore, maxFollowUps, timeSinceLastAnswer, messageTemplate } = req.body;
+    const { enabled, minLeadScore, maxFollowUps, timeSinceLastAnswer, messageMode, messageTemplate } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    // Validate messageMode if provided
+    if (messageMode !== undefined && !['template', 'ai'].includes(messageMode)) {
+      return res.status(400).json({ error: 'messageMode must be "template" or "ai"' });
     }
 
     // Validate input
@@ -62,15 +73,19 @@ router.put('/config/:accountId', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Time since last answer must be between 1 and 168 hours' });
     }
 
+    const updateData: any = {
+      enabled: Boolean(enabled),
+      minLeadScore: Number(minLeadScore),
+      maxFollowUps: Number(maxFollowUps),
+      timeSinceLastAnswer: Number(timeSinceLastAnswer),
+      messageTemplate: String(messageTemplate || '')
+    };
+    if (messageMode !== undefined) {
+      updateData.messageMode = messageMode;
+    }
     const config = await FollowUpConfig.findOneAndUpdate(
       { userId, accountId },
-      {
-        enabled: Boolean(enabled),
-        minLeadScore: Number(minLeadScore),
-        maxFollowUps: Number(maxFollowUps),
-        timeSinceLastAnswer: Number(timeSinceLastAnswer),
-        messageTemplate: String(messageTemplate)
-      },
+      updateData,
       { upsert: true, new: true }
     );
 
