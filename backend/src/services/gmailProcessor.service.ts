@@ -50,39 +50,37 @@ const extractDisplayName = (emailString: string): string | undefined => {
 
 /**
  * Get or create a contact from an email address
+ * Uses findOneAndUpdate with upsert to avoid E11000 duplicate key on psid (Gmail contacts have no psid)
  */
 const getOrCreateContact = async (
   email: string,
   displayName?: string,
-  userId: string
+  _userId: string
 ): Promise<any> => {
   try {
-    // Try to find existing contact by email
-    let contact = await Contact.findOne({ email, channel: 'gmail' });
-
-    if (!contact) {
-      // Create new contact
-      contact = new Contact({
-        email,
-        channel: 'gmail',
-        name: displayName,
-        metadata: {
-          lastSeen: new Date(),
-          messageCount: 0
-        }
-      });
-      await contact.save();
-      console.log(`✅ [Gmail Processor] Created new contact: ${email}`);
-    } else {
-      // Update existing contact
-      if (displayName && !contact.name) {
-        contact.name = displayName;
-        await contact.save();
-      }
+    const filter = { email, channel: 'gmail' };
+    const baseUpdate: Record<string, any> = {
+      lastActivity: new Date(),
+      'metadata.lastSeen': new Date()
+    };
+    const contact = await Contact.findOneAndUpdate(
+      filter,
+      {
+        $set: baseUpdate,
+        ...(displayName && { $setOnInsert: { name: displayName } })
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    if (contact && displayName && !contact.name) {
+      await Contact.updateOne({ _id: contact._id }, { $set: { name: displayName } });
+      contact.name = displayName;
     }
-
-    return contact;
   } catch (error: any) {
+    if (error.code === 11000) {
+      // Race: another process created it; fetch and return
+      const contact = await Contact.findOne({ email, channel: 'gmail' });
+      if (contact) return contact;
+    }
     console.error(`❌ [Gmail Processor] Error getting/creating contact for ${email}:`, error.message);
     throw error;
   }
@@ -185,6 +183,7 @@ const getOrCreateConversation = async (
 
 /**
  * Create message from email
+ * Uses findOneAndUpdate with upsert to avoid E11000 duplicate key on mid (race conditions)
  */
 const createMessage = async (
   email: GmailMessage,
@@ -193,45 +192,38 @@ const createMessage = async (
   accountId: string,
   agentId?: string
 ): Promise<any> => {
+  const mid = `gmail_${email.id}`;
   try {
-    // Check if message already exists
-    const existingMessage = await Message.findOne({
-      mid: `gmail_${email.id}`,
-      conversationId
-    });
+    const existingMessage = await Message.findOne({ mid });
+    if (existingMessage) return existingMessage;
 
-    if (existingMessage) {
-      return existingMessage;
-    }
-
-    // Determine if this is an inbound email (from contact) or outbound (to contact)
-    // For simplicity, we'll assume all fetched emails are inbound
-    const role = 'user';
-
-    const message = new Message({
-      mid: `gmail_${email.id}`,
-      conversationId,
-      contactId,
-      accountId,
-      agentId,
-      role,
-      content: {
-        text: email.body || email.snippet || email.subject || ''
+    const message = await Message.findOneAndUpdate(
+      { mid },
+      {
+        $setOnInsert: {
+          conversationId,
+          contactId,
+          accountId,
+          agentId,
+          role: 'user',
+          content: { text: email.body || email.snippet || email.subject || '' },
+          metadata: {
+            timestamp: email.date || new Date(),
+            processed: false,
+            aiGenerated: false
+          },
+          status: 'received',
+          deliveryConfirmed: true
+        }
       },
-      metadata: {
-        timestamp: email.date || new Date(),
-        processed: false,
-        aiGenerated: false
-      },
-      status: 'received',
-      deliveryConfirmed: true
-    });
-
-    await message.save();
-    console.log(`✅ [Gmail Processor] Created message: ${message.id}`);
-
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
     return message;
   } catch (error: any) {
+    if (error.code === 11000) {
+      const existing = await Message.findOne({ mid });
+      if (existing) return existing;
+    }
     console.error(`❌ [Gmail Processor] Error creating message:`, error.message);
     throw error;
   }
