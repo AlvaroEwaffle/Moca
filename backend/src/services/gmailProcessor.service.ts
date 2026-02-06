@@ -59,17 +59,15 @@ const getOrCreateContact = async (
 ): Promise<any> => {
   try {
     const filter = { email, channel: 'gmail' };
-    const baseUpdate: Record<string, any> = {
+    const update: Record<string, any> = {
       lastActivity: new Date(),
-      'metadata.lastSeen': new Date()
-    };
-    const setOnInsert: Record<string, any> = {
+      'metadata.lastSeen': new Date(),
       psid: `gmail_${email}` // Unique psid for Gmail contacts to avoid E11000 on legacy psid_1 index
     };
-    if (displayName) setOnInsert.name = displayName;
+    if (displayName) update.name = displayName;
     const contact = await Contact.findOneAndUpdate(
       filter,
-      { $set: baseUpdate, $setOnInsert },
+      { $set: update },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     if (contact && displayName && !contact.name) {
