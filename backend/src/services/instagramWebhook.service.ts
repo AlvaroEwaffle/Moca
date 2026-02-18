@@ -1251,7 +1251,7 @@ export class InstagramWebhookService {
 
       console.log(`🔍 [API Call] Fetching Business Account ID for Page-Scoped ID: ${pageScopedId}`);
       
-      const response = await fetch(`https://graph.instagram.com/v23.0/${pageScopedId}?fields=id,username&access_token=${activeAccount.accessToken}`, {
+      const response = await fetch(`https://graph.instagram.com/v25.0/${pageScopedId}?fields=id,username&access_token=${activeAccount.accessToken}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1351,7 +1351,7 @@ export class InstagramWebhookService {
     try {
       console.log(`🔍 [Username] Fetching Instagram username for PSID: ${psid}`);
       
-      const response = await fetch(`https://graph.instagram.com/v23.0/${psid}?fields=username&access_token=${accessToken}`, {
+      const response = await fetch(`https://graph.instagram.com/v25.0/${psid}?fields=username&access_token=${accessToken}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

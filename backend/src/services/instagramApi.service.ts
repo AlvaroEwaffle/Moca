@@ -138,7 +138,7 @@ class InstagramApiService {
       throw new Error('No access token available');
     }
 
-    const url = `https://graph.instagram.com/v23.0/me/messages?access_token=${this.accessToken}`;
+    const url = `https://graph.instagram.com/v25.0/me/messages?access_token=${this.accessToken}`;
     
     const payload = {
       recipient: { id: psid },

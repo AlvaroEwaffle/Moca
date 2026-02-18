@@ -166,13 +166,13 @@ export class InstagramCommentService {
   }
 
   /**
-   * Reply to Instagram comment using v23.0 API
+   * Reply to Instagram comment using v25.0 API
    */
   async replyToComment(commentId: string, replyText: string, accessToken: string): Promise<any> {
     try {
       console.log(`💬 [Comment Reply] Replying to comment ${commentId} with: "${replyText}"`);
 
-      const response = await fetch(`https://graph.instagram.com/v23.0/${commentId}/replies`, {
+      const response = await fetch(`https://graph.instagram.com/v25.0/${commentId}/replies`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,7 +210,7 @@ export class InstagramCommentService {
   }
 
   /**
-   * Send DM to user using v23.0 API
+   * Send DM to user using v25.0 API
    * First tries with comment_id (for comment-based DMs), then falls back to user_id if needed
    */
   async sendDMReply(commentId: string, userId: string, message: string, accessToken: string, accountId: string): Promise<any> {
@@ -218,7 +218,7 @@ export class InstagramCommentService {
       console.log(`💬 [DM Reply] Attempting to send DM for comment ${commentId}, user ${userId} with: "${message}"`);
 
       // First, try with comment_id (preferred method for comment-based DMs)
-      let response = await fetch(`https://graph.instagram.com/v23.0/${accountId}/messages`, {
+      let response = await fetch(`https://graph.instagram.com/v25.0/${accountId}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -241,7 +241,7 @@ export class InstagramCommentService {
         console.log(`⚠️ [DM Reply] Comment-based DM failed, trying with user_id. Error: ${errorMessage}`);
         
         // If comment_id method fails, try with user_id (Instagram user ID)
-        response = await fetch(`https://graph.instagram.com/v23.0/${accountId}/messages`, {
+        response = await fetch(`https://graph.instagram.com/v25.0/${accountId}/messages`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -280,7 +280,7 @@ export class InstagramCommentService {
     try {
       console.log(`📸 [Media Details] Fetching media details for: ${mediaId}`);
 
-      const response = await fetch(`https://graph.instagram.com/v23.0/${mediaId}?fields=caption,owner,username&access_token=${accessToken}`, {
+      const response = await fetch(`https://graph.instagram.com/v25.0/${mediaId}?fields=caption,owner,username&access_token=${accessToken}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -309,7 +309,7 @@ export class InstagramCommentService {
     try {
       console.log(`💬 [Get Comments] Fetching comments for media: ${mediaId}`);
 
-      const response = await fetch(`https://graph.instagram.com/v23.0/${mediaId}/comments?access_token=${accessToken}`, {
+      const response = await fetch(`https://graph.instagram.com/v25.0/${mediaId}/comments?access_token=${accessToken}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'

@@ -89,11 +89,12 @@ router.post('/callback', authenticateToken, async (req, res) => {
       access_token: longTokenParams.access_token ? `${longTokenParams.access_token.substring(0, 10)}...` : 'missing'
     });
     
-    const longTokenResponse = await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams(longTokenParams)}`, {
-      method: 'GET',
+    const longTokenResponse = await fetch('https://graph.instagram.com/access_token', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-      }
+      },
+      body: new URLSearchParams(longTokenParams)
     });
 
     let finalAccessToken = access_token;
@@ -115,7 +116,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
     }
 
     // Get user profile information using Instagram Basic Display API
-    const profileUrl = `https://graph.instagram.com/me?fields=id,username&access_token=${finalAccessToken}`;
+    const profileUrl = `https://graph.instagram.com/v25.0/me?fields=id,username&access_token=${finalAccessToken}`;
     console.log('🔧 [OAuth Callback] Fetching Instagram profile from:', profileUrl);
     
     const profileResponse = await fetch(profileUrl);
@@ -140,9 +141,9 @@ router.post('/callback', authenticateToken, async (req, res) => {
     let pageScopedId = null;
     try {
       console.log(`🔧 [OAuth Callback] Fetching Page-Scoped ID for Business Account: ${profileData.id}`);
-      console.log(`🔧 [OAuth Callback] API Call: https://graph.instagram.com/v23.0/${profileData.id}?fields=username,user_id`);
+      console.log(`🔧 [OAuth Callback] API Call: https://graph.instagram.com/v25.0/${profileData.id}?fields=username,user_id`);
       
-      const pageScopedResponse = await fetch(`https://graph.instagram.com/v23.0/${profileData.id}?fields=username,user_id&access_token=${finalAccessToken}`, {
+      const pageScopedResponse = await fetch(`https://graph.instagram.com/v25.0/${profileData.id}?fields=username,user_id&access_token=${finalAccessToken}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

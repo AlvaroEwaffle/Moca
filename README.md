@@ -52,7 +52,7 @@
 - **Robust Deduplication**: Multiple safety checks to prevent duplicate comment processing
 - **Comment Management System**: Per-account settings with custom messages and delay configuration
 - **Background Worker Service**: Automatic comment processing with 30-second intervals
-- **v23.0 API Integration**: Latest Instagram Graph API endpoints for comment replies and DMs
+- **v25.0 API Integration**: Latest Instagram Graph API endpoints for comment replies and DMs
 - **Conversation Milestones System**: Complete milestone configuration with auto-detection and agent control
 - **Mobile-First UI Design**: Responsive design with accordion components and mobile optimization
 - **Data Integrity Fixes**: Timestamp validation and corruption prevention system
