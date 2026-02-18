@@ -1159,15 +1159,23 @@ router.put('/accounts/:accountId', async (req, res) => {
 });
 
 // Delete Instagram account
-router.delete('/accounts/:accountId', async (req, res) => {
+router.delete('/accounts/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
+    const userId = req.user?.userId;
 
     const account = await InstagramAccount.findOne({ accountId });
     if (!account) {
       return res.status(404).json({
         success: false,
         error: 'Instagram account not found'
+      });
+    }
+
+    if (account.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied - you can only delete your own accounts'
       });
     }
 

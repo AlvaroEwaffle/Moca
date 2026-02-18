@@ -98,6 +98,7 @@ const InstagramComments = () => {
   // Auto-reply configuration state
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
   const [rules, setRules] = useState<CommentAutoReplyRule[]>([]);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
@@ -450,6 +451,44 @@ const InstagramComments = () => {
         {config.label}
       </Badge>
     );
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!confirm('¿Eliminar este comentario de Instagram? Esta acción no se puede deshacer.')) return;
+    
+    setDeletingCommentId(commentId);
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/api/instagram/comments/comments/${commentId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          }
+        }
+      );
+
+      if (response.ok) {
+        setComments(prev => prev.filter(c => c.commentId !== commentId));
+        setTotal(prev => Math.max(0, prev - 1));
+        toast({
+          title: "Comentario eliminado",
+          description: "El comentario se ha eliminado de Instagram correctamente"
+        });
+      } else {
+        const data = await response.json();
+        throw new Error(data.error || 'Error al eliminar');
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo eliminar el comentario",
+        variant: "destructive"
+      });
+    } finally {
+      setDeletingCommentId(null);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -903,6 +942,7 @@ const InstagramComments = () => {
                           <TableHead>DM</TableHead>
                           <TableHead>Estado</TableHead>
                           <TableHead>Fecha</TableHead>
+                          <TableHead className="w-20">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -984,6 +1024,21 @@ const InstagramComments = () => {
                                 {formatDate(comment.timestamp)}
                               </div>
                             </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteComment(comment.commentId)}
+                                disabled={deletingCommentId === comment.commentId}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                {deletingCommentId === comment.commentId ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1018,6 +1073,19 @@ const InstagramComments = () => {
                               </div>
                             </div>
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteComment(comment.commentId)}
+                            disabled={deletingCommentId === comment.commentId}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                          >
+                            {deletingCommentId === comment.commentId ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </Button>
                         </div>
 
                         {/* Comment Text */}

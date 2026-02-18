@@ -142,6 +142,49 @@ router.post('/comments/:commentId/reply', authenticateToken, async (req, res) =>
 });
 
 /**
+ * Delete a comment on Instagram
+ */
+router.delete('/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+
+    console.log(`🗑️ [Delete Comment] Deleting comment: ${commentId}`);
+
+    const comment = await InstagramComment.findOne({ commentId });
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Comment not found'
+      });
+    }
+
+    const account = await InstagramAccount.findOne({
+      accountId: comment.accountId,
+      userId: req.user!.userId
+    });
+
+    if (!account) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+
+    const commentService = new InstagramCommentService();
+    await commentService.deleteComment(commentId, account.accessToken);
+
+    res.json({
+      success: true,
+      data: { message: 'Comment deleted successfully' }
+    });
+
+  } catch (error) {
+    console.error('❌ [Delete Comment] Error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete comment' });
+  }
+});
+
+/**
  * Update comment auto-reply enabled status for an account
  */
 router.put('/settings/:accountId', authenticateToken, async (req, res) => {

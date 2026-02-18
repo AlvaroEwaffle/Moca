@@ -210,6 +210,35 @@ export class InstagramCommentService {
   }
 
   /**
+   * Delete Instagram comment using v25.0 API
+   * Requires instagram_business_manage_comments permission
+   */
+  async deleteComment(commentId: string, accessToken: string): Promise<any> {
+    try {
+      console.log(`🗑️ [Comment Delete] Deleting comment: ${commentId}`);
+
+      const response = await fetch(`https://graph.instagram.com/v25.0/${commentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Instagram API error: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+
+      const result = await response.json().catch(() => ({ success: true }));
+      console.log(`✅ [Comment Delete] Comment deleted successfully`);
+      return result;
+    } catch (error) {
+      console.error(`❌ [Comment Delete] Error deleting comment:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Send DM to user using v25.0 API
    * First tries with comment_id (for comment-based DMs), then falls back to user_id if needed
    */

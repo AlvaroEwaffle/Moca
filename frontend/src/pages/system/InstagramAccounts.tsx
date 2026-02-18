@@ -936,6 +936,42 @@ const InstagramAccounts = () => {
     window.location.href = instagramAuthUrl;
   };
 
+  const handleDeleteConnection = async () => {
+    if (accounts.length === 0) return;
+    if (!confirm('¿Eliminar la conexión de Instagram? Perderás acceso a conversaciones y configuración de esta cuenta. Esta acción no se puede deshacer.')) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/instagram/accounts/${accounts[0].accountId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        await fetchAccounts();
+        setConnectionStatus('disconnected');
+        toast({
+          title: "Conexión eliminada",
+          description: "La cuenta de Instagram se ha desconectado correctamente"
+        });
+      } else {
+        const data = await response.json();
+        throw new Error(data.error || 'Error al eliminar');
+      }
+    } catch (error) {
+      console.error('Error deleting connection:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo eliminar la conexión",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRefreshToken = async () => {
     if (accounts.length === 0) return;
     
@@ -1672,6 +1708,15 @@ const InstagramAccounts = () => {
                   >
                     <Instagram className="w-4 h-4 mr-2" />
                     Reconectar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleDeleteConnection}
+                    disabled={loading}
+                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Eliminar conexión
                   </Button>
                 </div>
               </div>
