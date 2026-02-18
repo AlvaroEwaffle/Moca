@@ -30,7 +30,7 @@ const InstagramAuth = () => {
     setError(null);
 
     // Use the Instagram Business OAuth URL provided by Meta
-    const instagramAuthUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=2160534791106844&redirect_uri=https://moca.pages.dev/instagram-callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights`;
+    const instagramAuthUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=2160534791106844&redirect_uri=https://moca.pages.dev/instagram-callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages`;
 
     // Redirect to Instagram Business OAuth
     window.location.href = instagramAuthUrl;
