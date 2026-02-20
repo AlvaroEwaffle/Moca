@@ -166,6 +166,32 @@ router.post('/callback', authenticateToken, async (req, res) => {
       console.error('❌ [OAuth Callback] Error fetching Page-Scoped ID:', error);
     }
 
+    // Optional: try to get Facebook Page ID for webhook matching (GET /me/accounts → page with instagram_business_account)
+    // Instagram-only tokens often don't work on graph.facebook.com; skip if it fails.
+    let pageId: string | null = null;
+    try {
+      const fbAccountsRes = await fetch(
+        `https://graph.facebook.com/v25.0/me/accounts?fields=id,instagram_business_account&access_token=${finalAccessToken}`
+      );
+      if (fbAccountsRes.ok) {
+        const fbData = await fbAccountsRes.json();
+        const pages = fbData.data || [];
+        for (const page of pages) {
+          const igAccount = page.instagram_business_account?.id || page.instagram_business_account;
+          if (igAccount === profileData.id) {
+            pageId = page.id;
+            console.log('✅ [OAuth Callback] Page ID for webhook matching:', pageId);
+            break;
+          }
+        }
+        if (!pageId && pages.length) {
+          console.log('🔧 [OAuth Callback] No page matched IG account id; pageId not set.');
+        }
+      }
+    } catch (err) {
+      console.log('🔧 [OAuth Callback] Facebook Graph /me/accounts not available (Instagram-only token is normal).');
+    }
+
     // Check if account already exists for this user
     const existingAccount = await InstagramAccount.findOne({ 
       accountId: profileData.id, // Use the Instagram Business Account ID from profile
@@ -178,7 +204,8 @@ router.post('/callback', authenticateToken, async (req, res) => {
       existingAccount.tokenExpiry = tokenExpiry;
       existingAccount.isActive = true;
       existingAccount.pageScopedId = pageScopedId; // Update Page-Scoped ID for webhook matching
-      
+      if (pageId) existingAccount.pageId = pageId;
+
       // Update settings with onboarding data if provided
       if (agentBehavior || user?.agentSettings) {
         console.log(`🔧 [OAuth Callback] Updating existing account with agentBehavior:`, JSON.stringify(agentBehavior, null, 2));
@@ -213,6 +240,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       userEmail: req.user!.email,
       accountId: profileData.id, // Use the Instagram Business Account ID from profile
       pageScopedId: pageScopedId, // Page-Scoped ID for webhook matching
+      pageId: pageId || undefined, // Facebook Page ID when available (for webhook matching)
       accountName: profileData.username,
       accessToken: finalAccessToken,
       tokenExpiry: tokenExpiry,

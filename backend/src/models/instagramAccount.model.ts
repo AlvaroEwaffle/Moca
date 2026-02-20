@@ -97,6 +97,8 @@ export interface IInstagramAccount extends Document {
   userEmail: string; // User email for quick access
   accountId: string; // Instagram Business Account ID
   pageScopedId?: string; // Instagram Page-Scoped ID (for webhook matching)
+  pageId?: string; // Facebook Page ID (from GET /me/accounts, for webhook matching when available)
+  alternateRecipientIds?: string[]; // IDs seen as recipient.id in webhooks (IGSID etc.) - resolved via API and cached
   accountName: string; // Instagram username
   accessToken: string; // Instagram Graph API token
   refreshToken?: string; // For token refresh
@@ -169,6 +171,8 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
   userEmail: { type: String, required: true },
   accountId: { type: String, required: true, unique: true },
   pageScopedId: { type: String, required: false },
+  pageId: { type: String, required: false },
+  alternateRecipientIds: { type: [String], default: [] },
   accountName: { type: String, required: true },
   accessToken: { type: String, required: true },
   refreshToken: { type: String, required: false },
