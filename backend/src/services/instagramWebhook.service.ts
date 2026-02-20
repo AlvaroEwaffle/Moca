@@ -1157,13 +1157,22 @@ export class InstagramWebhookService {
    */
   private async resolveRecipientIdViaApiAndCache(recipientId: string): Promise<{ account: any; isBotMessage: false } | null> {
     const allAccounts = await InstagramAccount.find({ isActive: true });
+    console.log(`🔍 [Resolve API] Attempting to resolve recipientId ${recipientId} via Instagram Graph API (trying ${allAccounts.length} accounts)`);
     for (const account of allAccounts) {
-      if (!account.accessToken) continue;
+      if (!account.accessToken) {
+        console.log(`🔍 [Resolve API] Skipping ${account.accountName}: no accessToken`);
+        continue;
+      }
       try {
-        const url = `https://graph.instagram.com/v25.0/${recipientId}?fields=id,username&access_token=${account.accessToken}`;
-        const res = await fetch(url);
-        if (!res.ok) continue;
+        const res = await fetch(`https://graph.instagram.com/v25.0/${recipientId}?fields=id,username&access_token=${account.accessToken}`);
+        const status = res.status;
+        if (!res.ok) {
+          const body = await res.text();
+          console.log(`🔍 [Resolve API] ${account.accountName} GET /${recipientId} → ${status} ${body.substring(0, 200)}`);
+          continue;
+        }
         const data = await res.json();
+        console.log(`🔍 [Resolve API] ${account.accountName} GET /${recipientId} → 200 id=${data.id} username=${data.username}`);
         const matchesAccount = data.id === String(account.accountId) || data.username === account.accountName;
         if (matchesAccount) {
           const existing = account.alternateRecipientIds || [];
@@ -1175,10 +1184,12 @@ export class InstagramWebhookService {
           const fresh = await InstagramAccount.findById(account._id);
           return { account: fresh || account, isBotMessage: false };
         }
-      } catch {
-        // skip and try next account
+        console.log(`🔍 [Resolve API] ${account.accountName} response does not match (expected id=${account.accountId} or username=${account.accountName})`);
+      } catch (err) {
+        console.log(`🔍 [Resolve API] ${account.accountName} error:`, err instanceof Error ? err.message : err);
       }
     }
+    console.log(`🔍 [Resolve API] No account resolved recipientId ${recipientId}`);
     return null;
   }
 
@@ -1217,8 +1228,10 @@ export class InstagramWebhookService {
           }
           
           // Resolve unknown recipientId via API and cache
+          console.log(`🔍 [Account Identification] No candidate match for recipientId ${recipientId}; trying resolve via API...`);
           const resolved = await this.resolveRecipientIdViaApiAndCache(recipientId);
           if (resolved) return resolved;
+          console.log(`🔍 [Account Identification] Resolve API returned no account for recipientId ${recipientId}; falling back to sender PSID.`);
           
           // Fallback: match by SENDER PSID (our message sent manually)
           console.warn(`⚠️ [Account Identification] Recipient ID ${recipientId} not found. Trying to match by sender PSID...`);
