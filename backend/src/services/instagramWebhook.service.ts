@@ -1176,7 +1176,13 @@ export class InstagramWebhookService {
               return { account, isBotMessage: false };
             }
           }
-          
+          // Meta sometimes sends accountId (IG business id) as recipient instead of pageScopedId - match by accountId
+          for (const account of allAccounts) {
+            if (recipientId === String(account.accountId)) {
+              console.log(`👤 [Account Identification] User message to account: ${account.accountName} (${account.userEmail}) - matched by accountId`);
+              return { account, isBotMessage: false };
+            }
+          }
           // If not found, this means the pageScopedId wasn't set during OAuth
           // OR the recipient is an external account not in our system
           // In this case, try to match by SENDER PSID (the account that initiated the conversation)

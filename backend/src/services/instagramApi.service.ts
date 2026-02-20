@@ -380,7 +380,7 @@ class InstagramApiService {
     console.log(`🧪 InstagramApiService: Testing API connection`);
     
     try {
-      const url = `https://graph.facebook.com/v18.0/me?access_token=${this.accessToken}`;
+      const url = `https://graph.instagram.com/v25.0/me?access_token=${this.accessToken}`;
       console.log(`🧪 InstagramApiService: Test URL: ${url}`);
       
       const response = await fetch(url);

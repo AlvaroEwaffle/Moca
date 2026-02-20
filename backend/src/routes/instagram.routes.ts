@@ -55,6 +55,7 @@ router.post('/webhook', async (req, res) => {
       object: payload.object,
       entryCount: payload.entry?.length || 0
     });
+    console.log('📥 [Webhook] Full payload:', JSON.stringify(payload));
 
     // Validate webhook signature if app secret is configured
     const signature = req.headers['x-hub-signature-256'] as string;
