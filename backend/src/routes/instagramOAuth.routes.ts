@@ -89,12 +89,11 @@ router.post('/callback', authenticateToken, async (req, res) => {
       access_token: longTokenParams.access_token ? `${longTokenParams.access_token.substring(0, 10)}...` : 'missing'
     });
     
-    const longTokenResponse = await fetch('https://graph.instagram.com/access_token', {
-      method: 'POST',
+    const longTokenResponse = await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams(longTokenParams)}`, {
+      method: 'GET',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams(longTokenParams)
+      }
     });
 
     let finalAccessToken = access_token;
