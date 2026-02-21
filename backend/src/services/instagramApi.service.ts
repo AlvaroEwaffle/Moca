@@ -344,14 +344,12 @@ class InstagramApiService {
   }
 
   /**
-   * Get user profile information
+   * Get user profile information (Instagram User Profile API - graph.instagram.com)
    */
   async getUserProfile(psid: string): Promise<any> {
     console.log(`👤 InstagramApiService: Getting user profile for PSID: ${psid}`);
-    
-    const url = `https://graph.facebook.com/v18.0/${psid}?fields=id,name,profile_pic&access_token=${this.accessToken}`;
-    
-    console.log(`👤 InstagramApiService: Profile URL: ${url}`);
+    const url = `https://graph.instagram.com/v25.0/${psid}?fields=id,name,username,profile_pic&access_token=${this.accessToken}`;
+    console.log(`👤 InstagramApiService: Profile URL: graph.instagram.com/v25.0/${psid}...`);
 
     try {
       const response = await fetch(url);

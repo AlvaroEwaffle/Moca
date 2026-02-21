@@ -95,8 +95,9 @@ export interface IInstagramAccount extends Document {
   id: string;
   userId: string; // Moca user ID (links to User model)
   userEmail: string; // User email for quick access
-  accountId: string; // Instagram Business Account ID
-  pageScopedId?: string; // Instagram Page-Scoped ID (for webhook matching)
+  accountId: string; // IG_ID from /me user_id - canonical for webhooks and /{IG_ID}/messages
+  appScopedId?: string; // App-scoped id from /me (id field) - kept for reference
+  pageScopedId?: string; // From /{ig_id}?fields=user_id (for sender matching when we send)
   pageId?: string; // Facebook Page ID (from GET /me/accounts, for webhook matching when available)
   alternateRecipientIds?: string[]; // IDs seen as recipient.id in webhooks (IGSID etc.) - resolved via API and cached
   accountName: string; // Instagram username
@@ -170,6 +171,7 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
   userId: { type: String, required: true },
   userEmail: { type: String, required: true },
   accountId: { type: String, required: true, unique: true },
+  appScopedId: { type: String, required: false },
   pageScopedId: { type: String, required: false },
   pageId: { type: String, required: false },
   alternateRecipientIds: { type: [String], default: [] },
