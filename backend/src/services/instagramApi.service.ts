@@ -363,7 +363,7 @@ class InstagramApiService {
         throw new Error(`Profile error: ${response.status}`);
       }
 
-      console.log(`✅ InstagramApiService: User profile retrieved successfully`);
+      console.log(`✅ InstagramApiService: User profile retrieved: id=${data?.id}, username=${data?.username ?? 'n/a'}, name=${data?.name ?? 'n/a'}`);
       return data;
     } catch (error) {
       console.error(`❌ InstagramApiService: Error getting user profile:`, error);

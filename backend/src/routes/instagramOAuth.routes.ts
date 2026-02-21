@@ -195,6 +195,8 @@ router.post('/callback', authenticateToken, async (req, res) => {
       userId: req.user!.userId
     });
     if (existingAccount) {
+      const matchBy = existingAccount.accountId === canonicalId ? 'accountId=canonicalId' : existingAccount.accountId === appScopedId ? 'accountId=appScopedId (legacy)' : 'appScopedId';
+      console.log(`🔧 [OAuth Callback] Found existing account (matched by: ${matchBy}), updating.`);
       existingAccount.accessToken = finalAccessToken;
       existingAccount.accountName = profileData.username;
       existingAccount.tokenExpiry = tokenExpiry;
@@ -232,6 +234,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       });
     }
 
+    console.log('🔧 [OAuth Callback] No existing account found, creating new account.');
     // Create new Instagram account (accountId = IG_ID from /me user_id for webhook matching)
     const newAccount = new InstagramAccount({
       userId: req.user!.userId,
