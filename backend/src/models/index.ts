@@ -9,6 +9,4 @@ export { default as InstagramComment } from './instagramComment.model';
 export { default as FollowUpConfig } from './followUpConfig.model';
 export { default as LeadFollowUp } from './leadFollowUp.model';
 export { default as Integration } from './integration.model';
-export { default as GmailFetchRule } from './gmailFetchRule.model';
-export { default as EmailDraftQueue } from './emailDraftQueue.model';
 export { default as Agent } from './agent.model';
