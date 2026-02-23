@@ -70,6 +70,7 @@ interface InstagramMessage {
   mid: string;
   psid: string;
   recipient?: { id: string };
+  entryId?: string; // entry.id from webhook = our Instagram Professional account ID (Meta docs)
   text?: string;
   is_echo?: boolean; // Indicates if message was sent by your business account
   attachments?: Array<{
@@ -149,9 +150,9 @@ export class InstagramWebhookService {
       for (const entry of payload.entry) {
         // Handle different types of Instagram webhook events
         if (entry.messaging) {
-          // Direct messages (legacy format)
+          // Direct messages (legacy format). entry.id = our Instagram Professional account ID per Meta docs.
           for (const messaging of entry.messaging) {
-            await this.processMessaging(messaging);
+            await this.processMessaging(entry, messaging);
           }
         } else if (entry.changes) {
           // Comments and other changes
@@ -366,11 +367,13 @@ export class InstagramWebhookService {
 
   /**
    * Process individual messaging event
+   * @param entry - Webhook entry; entry.id is our Instagram Professional account ID (Meta docs)
    */
-  private async processMessaging(messaging: any): Promise<void> {
+  private async processMessaging(entry: { id: string }, messaging: any): Promise<void> {
     try {
       const psid = messaging.sender.id;
       const recipientId = messaging.recipient.id;
+      const entryId = entry.id;
       const timestamp = messaging.timestamp * 1000; // Convert to milliseconds
 
       // Determine message type and extract content
@@ -381,7 +384,9 @@ export class InstagramWebhookService {
           mid: messaging.message.mid,
           psid,
           recipient: { id: recipientId },
+          entryId,
           text: messaging.message.text,
+          is_echo: messaging.message.is_echo === true,
           attachments: messaging.message.attachments?.map((att: any) => ({
             type: att.type,
             url: att.payload?.url,
@@ -397,6 +402,7 @@ export class InstagramWebhookService {
           mid: `postback_${timestamp}_${psid}`,
           psid,
           recipient: { id: recipientId },
+          entryId,
           text: messaging.postback.title,
           timestamp,
           type: 'postback'
@@ -482,8 +488,8 @@ export class InstagramWebhookService {
       const isBotMessageByFlags = isEchoFlag || isCommentRelatedDM;
       console.log(`🤖 [Bot Detection] Flags: is_echo=${messageData.is_echo}, isCommentRelatedDM=${isCommentRelatedDM}, isBotMessageByFlags=${isBotMessageByFlags}`);
       
-      // Identify account to check if sender is our account
-      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, isBotMessageByFlags);
+      // Identify account: use recipient.id and/or entry.id (entry.id = our Instagram Professional account ID per Meta docs)
+      const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, isBotMessageByFlags, messageData.entryId);
       if (!accountResult) {
         console.error('❌ [CRITICAL ERROR] Cannot process message - account identification failed');
         console.error('❌ [CRITICAL ERROR] PSID:', messageData.psid);
@@ -1139,12 +1145,13 @@ export class InstagramWebhookService {
 
   /**
    * Build list of candidate IDs for webhook matching (recipient.id / sender.id).
-   * Meta can send pageScopedId, accountId, pageId, or IGSID - we match against all.
+   * Meta can send pageScopedId, accountId, appScopedId, pageId, or IGSID - we match against all.
    */
   private getRecipientIdCandidates(account: any): string[] {
     const candidates: string[] = [];
     if (account.pageScopedId) candidates.push(String(account.pageScopedId));
     if (account.accountId) candidates.push(String(account.accountId));
+    if (account.appScopedId) candidates.push(String(account.appScopedId));
     if (account.pageId) candidates.push(String(account.pageId));
     const alternates = account.alternateRecipientIds || [];
     alternates.forEach((id: string) => candidates.push(String(id)));
@@ -1194,12 +1201,12 @@ export class InstagramWebhookService {
   }
 
   /**
-   * Identify Instagram account by PSID matching (flexible: pageScopedId, accountId, pageId, alternateRecipientIds).
-   * If recipientId unknown, tries to resolve via API and cache for next time.
+   * Identify Instagram account by PSID matching (flexible: pageScopedId, accountId, entryId, pageId, alternateRecipientIds).
+   * Meta docs: entry.id = our Instagram Professional account ID. We use it when recipient.id doesn't match (dynamic recipient ID).
    */
-  private async identifyAccountByPSID(psid: string, recipientId?: string, isBotMessage?: boolean): Promise<any> {
+  private async identifyAccountByPSID(psid: string, recipientId?: string, isBotMessage?: boolean, entryId?: string): Promise<any> {
     try {
-      console.log(`🔍 [Account Identification] Starting account lookup - Sender PSID: ${psid}, Recipient ID: ${recipientId}`);
+      console.log(`🔍 [Account Identification] Starting account lookup - Sender PSID: ${psid}, Recipient ID: ${recipientId}, Entry ID: ${entryId ?? 'n/a'}`);
       
       const allAccounts = await InstagramAccount.find({ isActive: true });
       console.log(`🔍 [Account Identification] Found ${allAccounts.length} active accounts in database`);
@@ -1214,6 +1221,27 @@ export class InstagramWebhookService {
         }
         console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts`);
       } else {
+        // 1) Try match by entry.id first (Meta docs: entry.id = our Instagram Professional account ID)
+        if (entryId) {
+          for (const account of allAccounts) {
+            const candidates = this.getRecipientIdCandidates(account);
+            if (candidates.includes(entryId)) {
+              const matchType = entryId === account.pageScopedId ? 'pageScopedId' : entryId === String(account.accountId) ? 'accountId' : (account as any).appScopedId && entryId === String((account as any).appScopedId) ? 'appScopedId' : (account.pageId && entryId === String(account.pageId)) ? 'pageId' : 'alternateRecipientIds';
+              console.log(`👤 [Account Identification] Matched by entry.id: ${account.accountName} (${account.userEmail}) - ${matchType}`);
+              if (recipientId && recipientId !== entryId) {
+                const existing = (account as any).alternateRecipientIds || [];
+                if (!existing.includes(recipientId)) {
+                  const updated = [...existing, recipientId];
+                  await InstagramAccount.findByIdAndUpdate(account._id, { alternateRecipientIds: updated });
+                  console.log(`✅ [Account Identification] Cached recipient.id ${recipientId} in alternateRecipientIds for future webhooks`);
+                }
+              }
+              const fresh = await InstagramAccount.findById(account._id);
+              return { account: fresh || account, isBotMessage: false };
+            }
+          }
+        }
+
         if (recipientId) {
           console.log(`🔍 [Account Identification] User message - looking for which account received this message: ${recipientId}`);
           
@@ -1231,8 +1259,42 @@ export class InstagramWebhookService {
           console.log(`🔍 [Account Identification] No candidate match for recipientId ${recipientId}; trying resolve via API...`);
           const resolved = await this.resolveRecipientIdViaApiAndCache(recipientId);
           if (resolved) return resolved;
-          console.log(`🔍 [Account Identification] Resolve API returned no account for recipientId ${recipientId}; falling back to sender PSID.`);
-          
+          console.log(`🔍 [Account Identification] Resolve API returned no account for recipientId ${recipientId}.`);
+
+          // Fallback: when only one active account, assume message is for that account and cache recipientId
+          // (Instagram sometimes sends recipient.id that doesn't match /me user_id and isn't resolvable via GET /{id})
+          if (allAccounts.length === 1) {
+            const account = allAccounts[0];
+            const existing = (account as any).alternateRecipientIds || [];
+            if (!existing.includes(recipientId)) {
+              const updated = [...existing, recipientId];
+              await InstagramAccount.findByIdAndUpdate(account._id, { alternateRecipientIds: updated });
+              console.log(`✅ [Account Identification] Single-account fallback: assigned recipientId ${recipientId} to ${account.accountName} and cached for future webhooks`);
+            }
+            const fresh = await InstagramAccount.findById(account._id);
+            return { account: fresh || account, isBotMessage: false };
+          }
+
+          // Fallback: sender (PSID) has existing conversation(s) with exactly one account → use that account and cache recipientId
+          const contactByPsid = await Contact.findOne({ psid, channel: 'instagram' }) || await Contact.findOne({ psid });
+          if (contactByPsid) {
+            const convos = await Conversation.find({ contactId: contactByPsid._id }).select('accountId').lean();
+            const uniqueAccountIds = [...new Set(convos.map((c: any) => String(c.accountId)))];
+            if (uniqueAccountIds.length === 1) {
+              const account = allAccounts.find((a: any) => String(a.accountId) === uniqueAccountIds[0]);
+              if (account) {
+                const existing = (account as any).alternateRecipientIds || [];
+                if (!existing.includes(recipientId)) {
+                  const updated = [...existing, recipientId];
+                  await InstagramAccount.findByIdAndUpdate(account._id, { alternateRecipientIds: updated });
+                  console.log(`✅ [Account Identification] Conversation fallback: sender PSID has conversation with ${account.accountName}, cached recipientId ${recipientId}`);
+                }
+                const fresh = await InstagramAccount.findById(account._id);
+                return { account: fresh || account, isBotMessage: false };
+              }
+            }
+          }
+
           // Fallback: match by SENDER PSID (our message sent manually)
           console.warn(`⚠️ [Account Identification] Recipient ID ${recipientId} not found. Trying to match by sender PSID...`);
           for (const account of allAccounts) {
