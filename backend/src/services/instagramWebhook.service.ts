@@ -490,12 +490,17 @@ export class InstagramWebhookService {
       // Identify account: use recipient.id and/or entry.id (entry.id = our Instagram Professional account ID per Meta docs)
       const accountResult = await this.identifyAccountByPSID(messageData.psid, messageData.recipient?.id, isBotMessageByFlags, messageData.entryId);
       if (!accountResult) {
-        console.error('❌ [CRITICAL ERROR] Cannot process message - account identification failed');
-        console.error('❌ [CRITICAL ERROR] PSID:', messageData.psid);
-        console.error('❌ [CRITICAL ERROR] Recipient ID:', messageData.recipient?.id || 'NOT PROVIDED');
-        console.error('❌ [CRITICAL ERROR] Message MID:', messageData.mid);
-        console.error('❌ [CRITICAL ERROR] Message text:', messageData.text?.substring(0, 100) || 'NO TEXT');
-        console.error('❌ [CRITICAL ERROR] Message will be SKIPPED to prevent incorrect account assignment');
+        if (isBotMessageByFlags) {
+          // Echo messages from unregistered accounts are expected until the account re-authenticates via OAuth
+          console.warn(`⚠️ [Echo Skip] Outgoing echo from unregistered account PSID ${messageData.psid} — connect this account via OAuth to register its webhook ID`);
+        } else {
+          console.error('❌ [CRITICAL ERROR] Cannot process message - account identification failed');
+          console.error('❌ [CRITICAL ERROR] PSID:', messageData.psid);
+          console.error('❌ [CRITICAL ERROR] Recipient ID:', messageData.recipient?.id || 'NOT PROVIDED');
+          console.error('❌ [CRITICAL ERROR] Message MID:', messageData.mid);
+          console.error('❌ [CRITICAL ERROR] Message text:', messageData.text?.substring(0, 100) || 'NO TEXT');
+          console.error('❌ [CRITICAL ERROR] Message will be SKIPPED to prevent incorrect account assignment');
+        }
         return;
       }
 
@@ -1214,8 +1219,10 @@ export class InstagramWebhookService {
       
       if (isBotMessage) {
         console.log(`🤖 [PSID Matching] Bot message detected by is_echo flag`);
+        console.log(`🤖 [PSID Matching] Looking for PSID ${psid} in ${allAccounts.length} accounts:`);
         for (const account of allAccounts) {
           const candidates = this.getRecipientIdCandidates(account);
+          console.log(`🤖 [PSID Matching] ${account.accountName}: candidates=${JSON.stringify(candidates)}`);
           if (candidates.includes(psid)) {
             console.log(`🤖 [PSID Matching] Bot message from account: ${account.accountName} (${account.userEmail}) - matched by PSID ${psid}`);
             return { account, isBotMessage: true };
@@ -1228,7 +1235,8 @@ export class InstagramWebhookService {
           console.log(`🤖 [PSID Matching] Bot message resolved via username for account: ${resolved.account.accountName} — PSID ${psid} cached in alternateRecipientIds`);
           return { account: resolved.account, isBotMessage: true };
         }
-        console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts — ignoring echo`);
+        console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts — ignoring echo (not an error, reconnect account via OAuth to register its webhook ID)`);
+        return null;
       } else {
         // 1) Try match by entry.id first (Meta docs: entry.id = our Instagram Professional account ID)
         if (entryId) {
