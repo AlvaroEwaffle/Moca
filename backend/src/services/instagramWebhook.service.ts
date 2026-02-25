@@ -1179,7 +1179,9 @@ export class InstagramWebhookService {
         }
         const data = await res.json();
         console.log(`🔍 [Resolve API] ${account.accountName} GET /${recipientId} → 200 id=${data.id} username=${data.username}`);
-        const matchesAccount = data.id === String(account.accountId) || data.username === account.accountName;
+        const matchesAccount = data.id === String(account.accountId) ||
+          ((account as any).appScopedId && data.id === String((account as any).appScopedId)) ||
+          (data.username && data.username === account.accountName);
         if (matchesAccount) {
           const existing = account.alternateRecipientIds || [];
           if (!existing.includes(recipientId)) {
@@ -1218,6 +1220,13 @@ export class InstagramWebhookService {
             console.log(`🤖 [PSID Matching] Bot message from account: ${account.accountName} (${account.userEmail}) - matched by PSID ${psid}`);
             return { account, isBotMessage: true };
           }
+        }
+        // ID match failed — resolve via API (tries username match + caches the ID for future webhooks)
+        console.log(`⚠️ [PSID Matching] Bot message PSID ${psid} not found by ID — attempting username resolution via API`);
+        const resolved = await this.resolveRecipientIdViaApiAndCache(psid);
+        if (resolved) {
+          console.log(`🤖 [PSID Matching] Bot message resolved via username for account: ${resolved.account.accountName} — PSID ${psid} cached in alternateRecipientIds`);
+          return { account: resolved.account, isBotMessage: true };
         }
         console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts — ignoring echo`);
       } else {

@@ -141,28 +141,31 @@ router.post('/callback', authenticateToken, async (req, res) => {
     const appScopedId = profileData.id;
     console.log('✅ [OAuth Callback] Canonical IG_ID (user_id) for webhooks:', canonicalId, 'appScopedId (id):', appScopedId);
 
-    // Fetch real IGSID used as entry.id in Meta webhooks — may differ from user_id / id returned by /me
+    // Fetch real IGSID used as entry.id in Meta webhooks.
+    // Must call GET /{appScopedId}?fields=user_id — NOT /{canonicalId} (that just returns itself, circular).
+    // The app-scoped id resolves to the Instagram global user ID Meta sends as entry.id in webhooks.
     let pageScopedId: string | null = null;
     try {
-      const igsidRes = await fetch(`https://graph.instagram.com/v25.0/${canonicalId}?fields=user_id&access_token=${finalAccessToken}`);
+      const igsidRes = await fetch(`https://graph.instagram.com/v25.0/${appScopedId}?fields=user_id&access_token=${finalAccessToken}`);
       if (igsidRes.ok) {
         const igsidData = await igsidRes.json();
         pageScopedId = igsidData.user_id ?? null;
-        console.log(`✅ [OAuth Callback] Real IGSID (webhook entry.id): ${pageScopedId} (canonicalId: ${canonicalId})`);
+        console.log(`✅ [OAuth Callback] Real IGSID (webhook entry.id): ${pageScopedId} (appScopedId: ${appScopedId}, canonicalId: ${canonicalId})`);
       } else {
         const err = await igsidRes.json().catch(() => ({}));
-        console.warn('⚠️ [OAuth Callback] Could not fetch IGSID — webhook account matching may fail for this account:', err);
+        console.warn('⚠️ [OAuth Callback] Could not fetch IGSID — webhook account matching may fall back to username resolution:', err);
       }
     } catch (e) {
       console.warn('⚠️ [OAuth Callback] pageScopedId fetch threw — continuing without it:', e);
     }
 
-    // Find existing account: by canonicalId (user_id), by appScopedId (id), or by old accountId (id) for migration
+    // Find existing account: by canonical ID, app-scoped ID, or username (prevents duplicate accounts on re-auth)
     let existingAccount = await InstagramAccount.findOne({
       $or: [
         { accountId: canonicalId },
         { accountId: appScopedId },
-        { appScopedId: appScopedId }
+        { appScopedId: appScopedId },
+        { accountName: profileData.username }
       ],
       userId: req.user!.userId
     });
