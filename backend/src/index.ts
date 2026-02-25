@@ -46,6 +46,21 @@ if (process.env.INSTAGRAM_VERIFY_TOKEN) {
 const app = express();
 const PORT = process.env.PORT || 3002;
 
+// In-memory circular log buffer — last 500 lines, accessible via /api/debug/logs
+const LOG_BUFFER: { ts: string; level: string; msg: string }[] = [];
+const MAX_LOG_LINES = 500;
+const _origLog = console.log.bind(console);
+const _origErr = console.error.bind(console);
+const _origWarn = console.warn.bind(console);
+const pushLog = (level: string, args: any[]) => {
+  const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+  LOG_BUFFER.push({ ts: new Date().toISOString(), level, msg });
+  if (LOG_BUFFER.length > MAX_LOG_LINES) LOG_BUFFER.shift();
+};
+console.log = (...args: any[]) => { pushLog('inf', args); _origLog(...args); };
+console.error = (...args: any[]) => { pushLog('err', args); _origErr(...args); };
+console.warn = (...args: any[]) => { pushLog('wrn', args); _origWarn(...args); };
+
 console.log('🔧 Express app initialized');
 console.log(`🔧 Server will run on port: ${PORT}`);
 
@@ -67,7 +82,10 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+// Capture raw body before JSON parsing — needed for webhook signature validation
+app.use(express.json({
+  verify: (req: any, _res, buf) => { req.rawBody = buf.toString('utf8'); }
+}));
 app.use(express.urlencoded({ extended: true }));
 console.log('✅ Middleware setup completed');
 
@@ -80,6 +98,17 @@ app.get('/api/health', (req, res) => {
     service: 'Moca Instagram DM Agent API',
     version: '1.0.0'
   });
+});
+
+// Debug log viewer — returns last N lines from in-memory buffer
+// Protected by DEBUG_TOKEN env var. Call: GET /api/debug/logs?token=xxx&n=100
+app.get('/api/debug/logs', (req, res) => {
+  const token = process.env.DEBUG_TOKEN;
+  if (!token || req.query.token !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const n = Math.min(parseInt(req.query.n as string) || 100, MAX_LOG_LINES);
+  res.json({ lines: LOG_BUFFER.slice(-n), total: LOG_BUFFER.length });
 });
 
 // API Routes
