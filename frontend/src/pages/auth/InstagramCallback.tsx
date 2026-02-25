@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { BACKEND_URL } from "@/utils/config";
+import { BACKEND_URL, INSTAGRAM_REDIRECT_URI } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -73,7 +73,7 @@ const InstagramCallback = () => {
         },
         body: JSON.stringify({
           code: authCode,
-          redirectUri: 'https://moca.pages.dev/instagram-callback',
+          redirectUri: INSTAGRAM_REDIRECT_URI,
           businessInfo,
           agentBehavior
         })

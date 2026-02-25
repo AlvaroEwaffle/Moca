@@ -911,9 +911,11 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
 
     // Use a model that supports tools. Default to gpt-4o-mini which has excellent tool support
     const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-    const baseMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '200');
+    // Structured responses include a full responseText DM message — needs much more headroom than
+    // simple classification calls. Use a dedicated env var or fall back to 1500.
+    const baseMaxTokens = parseInt(process.env.OPENAI_STRUCTURED_MAX_TOKENS || process.env.OPENAI_MAX_TOKENS || '1500');
     // Increase max_tokens when tools are available to allow for tool calls and responses
-    const maxTokens = functions.length > 0 ? Math.max(baseMaxTokens, 500) : baseMaxTokens;
+    const maxTokens = functions.length > 0 ? Math.max(baseMaxTokens, 1500) : baseMaxTokens;
 
     const requestConfig: any = {
       model: modelName,
@@ -975,7 +977,7 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
       
       // Get final response with tool results
       const finalModelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-      const finalMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS || '200');
+      const finalMaxTokens = parseInt(process.env.OPENAI_STRUCTURED_MAX_TOKENS || process.env.OPENAI_MAX_TOKENS || '1500');
       const finalRequestConfig: any = {
         model: finalModelName,
         messages,
@@ -994,7 +996,12 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
     }
 
     const aiResponse = response.choices[0]?.message?.content || '';
+    const finishReason = response.choices[0]?.finish_reason;
     console.log('🤖 Raw AI response:', aiResponse);
+
+    if (finishReason === 'length') {
+      console.error('❌ [OpenAI] Response truncated by max_tokens limit — JSON will be invalid. Increase OPENAI_STRUCTURED_MAX_TOKENS.');
+    }
 
     // Parse and validate JSON response
     let structuredResponse: StructuredResponse;

@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  RefreshCw, 
-  Download, 
-  Settings, 
-  TrendingUp, 
-  Users, 
-  MessageSquare, 
+import {
+  RefreshCw,
+  Download,
+  Settings,
+  TrendingUp,
+  Users,
+  MessageSquare,
   Target,
   BarChart3,
   Activity,
@@ -24,6 +24,8 @@ import LeadScoreChart from '@/components/analytics/LeadScoreChart';
 import AgentPerformanceTable from '@/components/analytics/AgentPerformanceTable';
 import SystemStatusWidget from '@/components/analytics/SystemStatusWidget';
 import ConversationTrendsChart from '@/components/analytics/ConversationTrendsChart';
+
+import { BACKEND_URL } from '@/utils/config';
 
 interface DateRange {
   start: Date;
@@ -114,13 +116,13 @@ const AnalyticsDashboard: React.FC = () => {
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
     end: new Date()
   });
-  
+
   const [overviewMetrics, setOverviewMetrics] = useState<OverviewMetrics | null>(null);
   const [agentPerformance, setAgentPerformance] = useState<AgentPerformance[]>([]);
   const [leadScoringAnalytics, setLeadScoringAnalytics] = useState<LeadScoringAnalytics | null>(null);
   const [conversationAnalytics, setConversationAnalytics] = useState<ConversationAnalytics | null>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealthMetrics | null>(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +135,7 @@ const AnalyticsDashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       await Promise.all([
         fetchOverviewMetrics(),
         fetchAgentPerformance(),
@@ -141,7 +143,7 @@ const AnalyticsDashboard: React.FC = () => {
         fetchConversationAnalytics(),
         fetchSystemHealth()
       ]);
-      
+
     } catch (error) {
       console.error('Error fetching analytics data:', error);
       setError('Failed to load analytics data');
@@ -173,9 +175,9 @@ const AnalyticsDashboard: React.FC = () => {
         });
         return;
       }
-      
+
       const response = await fetch(
-        `http://localhost:3002/api/analytics/overview?start=${dateRange.start.toISOString()}&end=${dateRange.end.toISOString()}`,
+        `${BACKEND_URL}/api/analytics/overview?start=${dateRange.start.toISOString()}&end=${dateRange.end.toISOString()}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -236,8 +238,8 @@ const AnalyticsDashboard: React.FC = () => {
         ]);
         return;
       }
-      
-      const response = await fetch('http://localhost:3002/api/analytics/agents', {
+
+      const response = await fetch(`${BACKEND_URL}/api/analytics/agents`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -292,9 +294,9 @@ const AnalyticsDashboard: React.FC = () => {
         });
         return;
       }
-      
+
       const response = await fetch(
-        `http://localhost:3002/api/analytics/leads?start=${dateRange.start.toISOString()}&end=${dateRange.end.toISOString()}`,
+        `${BACKEND_URL}/api/analytics/leads?start=${dateRange.start.toISOString()}&end=${dateRange.end.toISOString()}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -350,9 +352,9 @@ const AnalyticsDashboard: React.FC = () => {
         });
         return;
       }
-      
+
       const response = await fetch(
-        `http://localhost:3002/api/analytics/conversations?start=${dateRange.start.toISOString()}&end=${dateRange.end.toISOString()}`,
+        `${BACKEND_URL}/api/analytics/conversations?start=${dateRange.start.toISOString()}&end=${dateRange.end.toISOString()}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -384,7 +386,7 @@ const AnalyticsDashboard: React.FC = () => {
   const fetchSystemHealth = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('http://localhost:3002/api/analytics/system', {
+      const response = await fetch(`${BACKEND_URL}/api/analytics/system`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -403,7 +405,7 @@ const AnalyticsDashboard: React.FC = () => {
     try {
       const token = localStorage.getItem('accessToken');
       const response = await fetch(
-        `http://localhost:3002/api/analytics/export?type=${type}&start=${dateRange.start.toISOString()}&end=${dateRange.end.toISOString()}`,
+        `${BACKEND_URL}/api/analytics/export?type=${type}&start=${dateRange.start.toISOString()}&end=${dateRange.end.toISOString()}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -411,7 +413,7 @@ const AnalyticsDashboard: React.FC = () => {
           }
         }
       );
-      
+
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -563,7 +565,7 @@ const AnalyticsDashboard: React.FC = () => {
             <LeadScoreChart data={leadScoringAnalytics} />
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">

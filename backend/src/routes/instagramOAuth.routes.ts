@@ -36,10 +36,10 @@ router.post('/callback', authenticateToken, async (req, res) => {
 
     // Exchange code for access token using Instagram Business API
     const tokenParams = {
-      client_id: process.env.INSTAGRAM_CLIENT_ID || '2160534791106844',
-      client_secret: process.env.INSTAGRAM_CLIENT_SECRET || '',
+      client_id: process.env.INSTAGRAM_CLIENT_ID!,
+      client_secret: process.env.INSTAGRAM_CLIENT_SECRET!,
       grant_type: 'authorization_code',
-      redirect_uri: redirectUri,
+      redirect_uri: process.env.INSTAGRAM_REDIRECT_URI!,
       code: code
     };
     
@@ -79,7 +79,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
     // Exchange short-lived token for long-lived token (60 days)
     const longTokenParams = {
       grant_type: 'ig_exchange_token',
-      client_secret: process.env.INSTAGRAM_CLIENT_SECRET || '',
+      client_secret: process.env.INSTAGRAM_CLIENT_SECRET!,
       access_token: access_token
     };
     
@@ -136,54 +136,10 @@ router.post('/callback', authenticateToken, async (req, res) => {
     const profileData = await profileResponse.json();
     console.log('✅ [OAuth Callback] Instagram profile fetched successfully:', profileData);
 
-    // user_id from /me = IG_ID = value used as recipient.id in webhooks (doc). id = app-scoped.
+    // user_id from /me = IG_ID = canonical identifier used as recipient.id in webhooks. id = app-scoped.
     const canonicalId = profileData.user_id ?? profileData.id;
     const appScopedId = profileData.id;
     console.log('✅ [OAuth Callback] Canonical IG_ID (user_id) for webhooks:', canonicalId, 'appScopedId (id):', appScopedId);
-
-    // Optional: get pageScopedId from /{ig_id} for sender matching (e.g. when we send, echo has our sender id)
-    let pageScopedId: string | null = null;
-    try {
-      const nodeId = profileData.user_id ?? profileData.id;
-      console.log(`🔧 [OAuth Callback] Fetching extra fields for: ${nodeId}`);
-      const pageScopedResponse = await fetch(`https://graph.instagram.com/v25.0/${nodeId}?fields=username,user_id&access_token=${finalAccessToken}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (pageScopedResponse.ok) {
-        const pageScopedData = await pageScopedResponse.json();
-        pageScopedId = pageScopedData.user_id ?? null;
-        console.log('✅ [OAuth Callback] Page-Scoped ID (user_id from node):', pageScopedId);
-      }
-    } catch (error) {
-      console.error('❌ [OAuth Callback] Error fetching Page-Scoped ID:', error);
-    }
-
-    // Optional: try to get Facebook Page ID for webhook matching (GET /me/accounts → page with instagram_business_account)
-    // Instagram-only tokens often don't work on graph.facebook.com; skip if it fails.
-    let pageId: string | null = null;
-    try {
-      const fbAccountsRes = await fetch(
-        `https://graph.facebook.com/v25.0/me/accounts?fields=id,instagram_business_account&access_token=${finalAccessToken}`
-      );
-      if (fbAccountsRes.ok) {
-        const fbData = await fbAccountsRes.json();
-        const pages = fbData.data || [];
-        for (const page of pages) {
-          const igAccount = page.instagram_business_account?.id || page.instagram_business_account;
-          if (igAccount === profileData.id) {
-            pageId = page.id;
-            console.log('✅ [OAuth Callback] Page ID for webhook matching:', pageId);
-            break;
-          }
-        }
-        if (!pageId && pages.length) {
-          console.log('🔧 [OAuth Callback] No page matched IG account id; pageId not set.');
-        }
-      }
-    } catch (err) {
-      console.log('🔧 [OAuth Callback] Facebook Graph /me/accounts not available (Instagram-only token is normal).');
-    }
 
     // Find existing account: by canonicalId (user_id), by appScopedId (id), or by old accountId (id) for migration
     let existingAccount = await InstagramAccount.findOne({
@@ -203,8 +159,6 @@ router.post('/callback', authenticateToken, async (req, res) => {
       existingAccount.isActive = true;
       existingAccount.accountId = canonicalId;
       existingAccount.appScopedId = appScopedId;
-      existingAccount.pageScopedId = pageScopedId ?? undefined;
-      if (pageId) existingAccount.pageId = pageId;
 
       // Update settings with onboarding data if provided
       if (agentBehavior || user?.agentSettings) {
@@ -218,7 +172,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       await existingAccount.save();
 
       console.log(`✅ Updated existing Instagram account: ${canonicalId}`);
-      console.log(`✅ [OAuth Callback] accountId (IG_ID)=${canonicalId}, appScopedId=${appScopedId}, pageScopedId=${pageScopedId}`);
+      console.log(`✅ [OAuth Callback] accountId (IG_ID)=${canonicalId}, appScopedId=${appScopedId}`);
 
       return res.json({
         success: true,
@@ -241,8 +195,6 @@ router.post('/callback', authenticateToken, async (req, res) => {
       userEmail: req.user!.email,
       accountId: canonicalId,
       appScopedId: appScopedId,
-      pageScopedId: pageScopedId ?? undefined,
-      pageId: pageId || undefined,
       accountName: profileData.username,
       accessToken: finalAccessToken,
       tokenExpiry: tokenExpiry,
@@ -264,7 +216,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
         ]
       },
       webhook: {
-        verifyToken: process.env.INSTAGRAM_VERIFY_TOKEN || 'default_token',
+        verifyToken: process.env.INSTAGRAM_VERIFY_TOKEN!,
         endpoint: `${req.protocol}://${req.get('host')}/api/instagram/webhook`
       }
     });
@@ -272,7 +224,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
     await newAccount.save();
 
     console.log(`✅ Created new Instagram account for user ${req.user!.email}: ${canonicalId}`);
-    console.log(`✅ [OAuth Callback] accountId (IG_ID)=${canonicalId}, appScopedId=${appScopedId}, pageScopedId=${pageScopedId}`);
+    console.log(`✅ [OAuth Callback] accountId (IG_ID)=${canonicalId}, appScopedId=${appScopedId}`);
     console.log(`🔧 [OAuth Callback] Saved account settings:`, JSON.stringify(newAccount.settings, null, 2));
 
     res.status(201).json({
@@ -358,12 +310,12 @@ router.post('/refresh-token', async (req, res) => {
   }
 });
 
-// Get Instagram OAuth URL
+// Get Instagram OAuth URL — returns the full auth URL built from env vars
 router.get('/auth-url', (req, res) => {
   try {
-    const clientId = process.env.INSTAGRAM_CLIENT_ID || '2160534791106844';
-    const redirectUri = 'https://moca.pages.dev/instagram-callback';
-    
+    const clientId = process.env.INSTAGRAM_CLIENT_ID!;
+    const redirectUri = process.env.INSTAGRAM_REDIRECT_URI!;
+
     const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages`;
 
     res.json({

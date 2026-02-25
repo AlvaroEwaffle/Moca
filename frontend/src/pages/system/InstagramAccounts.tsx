@@ -928,12 +928,17 @@ const InstagramAccounts = () => {
     }
   };
 
-  const handleOAuthConnect = () => {
-    // Use the Instagram Business OAuth URL provided by Meta
-    const instagramAuthUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=2160534791106844&redirect_uri=https://moca.pages.dev/instagram-callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages`;
-    
-    // Redirect to Instagram Business OAuth
-    window.location.href = instagramAuthUrl;
+  const handleOAuthConnect = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/instagram/oauth/auth-url`);
+      const data = await response.json();
+      if (!response.ok || !data.data?.authUrl) {
+        throw new Error(data.error || 'Failed to get Instagram auth URL');
+      }
+      window.location.href = data.data.authUrl;
+    } catch (err) {
+      console.error('Error fetching Instagram auth URL:', err);
+    }
   };
 
   const handleDeleteConnection = async () => {

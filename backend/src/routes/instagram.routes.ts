@@ -57,14 +57,16 @@ router.post('/webhook', async (req, res) => {
     });
     console.log('📥 [Webhook] Full payload:', JSON.stringify(payload));
 
-    // Validate webhook signature if app secret is configured
+    // Validate webhook signature — Meta always sends X-Hub-Signature-256
     const signature = req.headers['x-hub-signature-256'] as string;
-    if (signature) {
-      const isValid = await webhookService.validateSignature(JSON.stringify(payload), signature);
-      if (!isValid) {
-        console.error('❌ Invalid webhook signature');
-        return;
-      }
+    if (!signature) {
+      console.error('❌ [Webhook] Missing X-Hub-Signature-256 header — rejecting request');
+      return;
+    }
+    const isValid = await webhookService.validateSignature(JSON.stringify(payload), signature);
+    if (!isValid) {
+      console.error('❌ [Webhook] Invalid webhook signature — rejecting request');
+      return;
     }
 
     // Process the webhook

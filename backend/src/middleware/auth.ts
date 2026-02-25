@@ -38,7 +38,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret', (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
     if (err) {
       console.log('❌ [Auth Middleware] Invalid token:', err.message);
       console.log('❌ [Auth Middleware] Token error details:', {
@@ -67,7 +67,7 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
     return next();
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret', (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
     if (!err && user) {
       req.user = user;
       console.log('✅ [Optional Auth] Token verified for user:', user.email);

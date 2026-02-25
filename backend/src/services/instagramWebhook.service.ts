@@ -99,8 +99,7 @@ export class InstagramWebhookService {
   async validateSignature(payload: string, signature: string): Promise<boolean> {
     try {
       if (!this.appSecret) {
-        console.warn('No app secret configured, skipping signature validation');
-        return true;
+        throw new Error('INSTAGRAM_APP_SECRET is not configured — refusing to process webhook without signature validation');
       }
 
       const expectedSignature = 'sha256=' + crypto

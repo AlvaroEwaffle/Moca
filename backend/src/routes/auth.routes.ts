@@ -77,13 +77,13 @@ router.post('/register', async (req, res) => {
     // Generate tokens
     const accessToken = jwt.sign(
       { userId: newUser.id, email: newUser.email },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET!,
       { expiresIn: '24h' }
     );
 
     const refreshToken = jwt.sign(
       { userId: newUser.id },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
@@ -148,13 +148,13 @@ router.post('/login', async (req, res) => {
     // Generate tokens
     const accessToken = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET!,
       { expiresIn: '24h' }
     );
 
     const refreshToken = jwt.sign(
       { userId: user.id },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 

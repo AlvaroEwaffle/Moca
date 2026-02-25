@@ -4,13 +4,13 @@ import { Helmet } from 'react-helmet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  ArrowLeft, 
-  Archive, 
-  Trash2, 
-  MessageCircle, 
-  User, 
-  Bot, 
+import {
+  ArrowLeft,
+  Archive,
+  Trash2,
+  MessageCircle,
+  User,
+  Bot,
   TrendingUp,
   ArrowRight,
   Target,
@@ -23,7 +23,7 @@ import {
   UserCheck
 } from 'lucide-react';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from '@/utils/config';
 
 interface Conversation {
   _id: string;
@@ -89,14 +89,14 @@ const ConversationDetail: React.FC = () => {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Milestone management state
   const [editingMilestone, setEditingMilestone] = useState(false);
   const [milestoneTarget, setMilestoneTarget] = useState<'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom'>('link_shared');
   const [customMilestoneTarget, setCustomMilestoneTarget] = useState<string>("");
   const [autoDisableAgent, setAutoDisableAgent] = useState<boolean>(true);
   const [saving, setSaving] = useState(false);
-  
+
   // Delete conversation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -126,7 +126,7 @@ const ConversationDetail: React.FC = () => {
         if (!conversationData) {
           throw new Error('No conversation data received');
         }
-        
+
         // Transform the conversation data to match our interface
         const transformedConversation = {
           ...conversationData,
@@ -210,7 +210,7 @@ const ConversationDetail: React.FC = () => {
     try {
       setDeleting(true);
       setError(null);
-      
+
       const token = localStorage.getItem('accessToken');
       if (!token) {
         throw new Error('No access token found');
@@ -233,7 +233,7 @@ const ConversationDetail: React.FC = () => {
       }
 
       const data = await response.json();
-      
+
       if (data.success) {
         // Navigate back to conversations list
         navigate('/app/conversations');
@@ -268,7 +268,7 @@ const ConversationDetail: React.FC = () => {
 
   const saveMilestone = async () => {
     if (!conversation) return;
-    
+
     setSaving(true);
     try {
       const backendUrl = BACKEND_URL;
@@ -305,7 +305,7 @@ const ConversationDetail: React.FC = () => {
 
   const markMilestoneAchieved = async () => {
     if (!conversation) return;
-    
+
     setSaving(true);
     try {
       const backendUrl = BACKEND_URL;
@@ -357,7 +357,7 @@ const ConversationDetail: React.FC = () => {
   const formatTimeAgo = (date: Date) => {
     const now = new Date();
     const diffInMinutes = Math.floor((now.getTime() - new Date(date).getTime()) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return "Just now";
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
@@ -409,21 +409,21 @@ const ConversationDetail: React.FC = () => {
         {/* Simplified Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
           <div className="flex items-start sm:items-center space-x-3 sm:space-x-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate('/app/conversations')}
               className="flex-shrink-0"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
-            
+
             <div className="flex-1 min-w-0">
               <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 mb-2">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
                   {conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}
-              </h1>
+                </h1>
                 {getStatusBadge(conversation.status)}
               </div>
               <p className="text-sm sm:text-base text-gray-600 break-words">
@@ -437,9 +437,9 @@ const ConversationDetail: React.FC = () => {
               <Archive className="w-4 h-4 mr-2" />
               Archive
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               className="text-red-600 hover:text-red-700 flex-1 sm:flex-none"
               onClick={() => setShowDeleteConfirm(true)}
               disabled={deleting}
@@ -585,9 +585,9 @@ const ConversationDetail: React.FC = () => {
                     Auto-disable agent when milestone is achieved
                   </label>
                 </div>
-                
+
                 <div className="flex space-x-2">
-                  <Button 
+                  <Button
                     onClick={saveMilestone}
                     disabled={saving}
                     size="sm"
@@ -599,8 +599,8 @@ const ConversationDetail: React.FC = () => {
                     )}
                     Save Milestone
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={cancelEditingMilestone}
                     size="sm"
                   >
@@ -619,9 +619,9 @@ const ConversationDetail: React.FC = () => {
                       {conversation.milestone.target === 'custom' && <Target className="w-5 h-5 text-violet-600" />}
                       <div>
                         <p className="text-sm font-medium text-gray-900">
-                          {conversation.milestone.target === 'custom' 
-                            ? conversation.milestone.customTarget 
-                            : conversation.milestone.target 
+                          {conversation.milestone.target === 'custom'
+                            ? conversation.milestone.customTarget
+                            : conversation.milestone.target
                               ? conversation.milestone.target.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
                               : 'Milestone'
                           }
@@ -634,7 +634,7 @@ const ConversationDetail: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    
+
                     {conversation.milestone.notes && (
                       <div className="bg-gray-50 p-3 rounded-lg">
                         <p className="text-sm text-gray-700">{conversation.milestone.notes}</p>
@@ -642,8 +642,8 @@ const ConversationDetail: React.FC = () => {
                     )}
 
                     <div className="flex space-x-2">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         onClick={startEditingMilestone}
                         size="sm"
                       >
@@ -651,7 +651,7 @@ const ConversationDetail: React.FC = () => {
                         Edit Milestone
                       </Button>
                       {conversation.milestone.status === 'pending' && (
-                        <Button 
+                        <Button
                           onClick={markMilestoneAchieved}
                           disabled={saving}
                           size="sm"
@@ -695,11 +695,11 @@ const ConversationDetail: React.FC = () => {
             <CardContent className="h-[600px] overflow-hidden">
               <div className="h-full overflow-y-auto p-6 space-y-4">
                 {(!conversation.messages || conversation.messages.length === 0) ? (
-                <div className="text-center py-8">
-                  <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No messages yet</p>
-                </div>
-              ) : (
+                  <div className="text-center py-8">
+                    <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No messages yet</p>
+                  </div>
+                ) : (
                   conversation.messages
                     .sort((a, b) => {
                       // Use createdAt for sorting as it's more reliable than timestamp
@@ -709,46 +709,45 @@ const ConversationDetail: React.FC = () => {
                       return timeB - timeA; // Most recent first
                     })
                     .map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                        className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
-                        message.sender === 'user'
-                            ? 'bg-violet-600 text-white ml-auto'
-                            : 'bg-gray-100 text-gray-900 mr-auto'
-                      }`}
-                    >
-                      <div className="flex items-start space-x-2">
-                        {message.sender === 'bot' && message.metadata?.isManual ? (
-                            <UserCheck className="w-4 h-4 mt-0.5 text-blue-600 flex-shrink-0" />
-                        ) : message.sender === 'bot' ? (
-                            <Bot className="w-4 h-4 mt-0.5 text-violet-600 flex-shrink-0" />
-                        ) : (
-                            <User className="w-4 h-4 mt-0.5 text-white flex-shrink-0" />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm leading-relaxed break-words">{message.text}</p>
-                            <div className="flex items-center justify-between mt-2">
-                              <span className={`text-xs ${message.sender === 'user' ? 'text-violet-100' : 'text-gray-500'}`}>
-                              {formatTimeAgo(message.timestamp)}
-                            </span>
-                            {message.sender === 'user' && (
-                                <span className="text-xs text-violet-100">
-                                {message.status}
-                              </span>
+                      <div
+                        key={message.id}
+                        className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${message.sender === 'user'
+                              ? 'bg-violet-600 text-white ml-auto'
+                              : 'bg-gray-100 text-gray-900 mr-auto'
+                            }`}
+                        >
+                          <div className="flex items-start space-x-2">
+                            {message.sender === 'bot' && message.metadata?.isManual ? (
+                              <UserCheck className="w-4 h-4 mt-0.5 text-blue-600 flex-shrink-0" />
+                            ) : message.sender === 'bot' ? (
+                              <Bot className="w-4 h-4 mt-0.5 text-violet-600 flex-shrink-0" />
+                            ) : (
+                              <User className="w-4 h-4 mt-0.5 text-white flex-shrink-0" />
                             )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm leading-relaxed break-words">{message.text}</p>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className={`text-xs ${message.sender === 'user' ? 'text-violet-100' : 'text-gray-500'}`}>
+                                  {formatTimeAgo(message.timestamp)}
+                                </span>
+                                {message.sender === 'user' && (
+                                  <span className="text-xs text-violet-100">
+                                    {message.status}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                    ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Enhanced Contact Info with AI Details */}
           <Card>
@@ -782,14 +781,14 @@ const ConversationDetail: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Response Type</span>
-                      <Badge 
+                      <Badge
                         variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
                         className="text-xs"
                       >
                         {conversation.aiResponseMetadata.lastResponseType}
                       </Badge>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Intent</span>
                       <Badge variant="outline" className="text-xs">
@@ -826,7 +825,7 @@ const ConversationDetail: React.FC = () => {
                       <span className="text-sm text-gray-600">Current Score</span>
                       <span className="text-sm font-bold">{conversation.leadScoring.currentScore || 1}/7</span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Previous Score</span>
                       <span className="text-sm font-medium">{conversation.leadScoring.previousScore || 'N/A'}/7</span>
@@ -834,10 +833,10 @@ const ConversationDetail: React.FC = () => {
 
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Progression</span>
-                      <Badge 
+                      <Badge
                         variant={
                           conversation.leadScoring.progression === 'increased' ? 'default' :
-                          conversation.leadScoring.progression === 'decreased' ? 'destructive' : 'secondary'
+                            conversation.leadScoring.progression === 'decreased' ? 'destructive' : 'secondary'
                         }
                         className="text-xs"
                       >
@@ -881,10 +880,10 @@ const ConversationDetail: React.FC = () => {
                     {conversation.analytics.leadProgression && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">Lead Trend</span>
-                        <Badge 
+                        <Badge
                           variant={
                             conversation.analytics.leadProgression.trend === 'improving' ? 'default' :
-                            conversation.analytics.leadProgression.trend === 'declining' ? 'destructive' : 'secondary'
+                              conversation.analytics.leadProgression.trend === 'declining' ? 'destructive' : 'secondary'
                           }
                           className="text-xs"
                         >
@@ -919,8 +918,8 @@ const ConversationDetail: React.FC = () => {
                         </span>
                       </div>
                     )}
+                  </div>
                 </div>
-              </div>
               )}
             </CardContent>
           </Card>

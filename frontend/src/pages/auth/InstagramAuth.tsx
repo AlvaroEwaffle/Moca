@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { BACKEND_URL } from "@/utils/config";
+import { BACKEND_URL, INSTAGRAM_REDIRECT_URI } from "@/utils/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -25,15 +25,22 @@ const InstagramAuth = () => {
     }
   }, [code, errorParam]);
 
-  const handleInstagramLogin = () => {
+  const handleInstagramLogin = async () => {
     setLoading(true);
     setError(null);
 
-    // Use the Instagram Business OAuth URL provided by Meta
-    const instagramAuthUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=2160534791106844&redirect_uri=https://moca.pages.dev/instagram-callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages`;
-
-    // Redirect to Instagram Business OAuth
-    window.location.href = instagramAuthUrl;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/instagram/oauth/auth-url`);
+      const data = await response.json();
+      if (!response.ok || !data.data?.authUrl) {
+        throw new Error(data.error || 'Failed to get Instagram auth URL');
+      }
+      window.location.href = data.data.authUrl;
+    } catch (err) {
+      console.error('Error fetching Instagram auth URL:', err);
+      setError('Failed to initiate Instagram connection');
+      setLoading(false);
+    }
   };
 
   const handleInstagramCallback = async (authCode: string) => {
@@ -55,7 +62,7 @@ const InstagramAuth = () => {
         },
         body: JSON.stringify({
           code: authCode,
-          redirectUri: 'https://moca.pages.dev/instagram-callback',
+          redirectUri: INSTAGRAM_REDIRECT_URI,
           businessInfo,
           agentBehavior
         })
