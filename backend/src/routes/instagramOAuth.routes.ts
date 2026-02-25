@@ -141,6 +141,22 @@ router.post('/callback', authenticateToken, async (req, res) => {
     const appScopedId = profileData.id;
     console.log('✅ [OAuth Callback] Canonical IG_ID (user_id) for webhooks:', canonicalId, 'appScopedId (id):', appScopedId);
 
+    // Fetch real IGSID used as entry.id in Meta webhooks — may differ from user_id / id returned by /me
+    let pageScopedId: string | null = null;
+    try {
+      const igsidRes = await fetch(`https://graph.instagram.com/v25.0/${canonicalId}?fields=user_id&access_token=${finalAccessToken}`);
+      if (igsidRes.ok) {
+        const igsidData = await igsidRes.json();
+        pageScopedId = igsidData.user_id ?? null;
+        console.log(`✅ [OAuth Callback] Real IGSID (webhook entry.id): ${pageScopedId} (canonicalId: ${canonicalId})`);
+      } else {
+        const err = await igsidRes.json().catch(() => ({}));
+        console.warn('⚠️ [OAuth Callback] Could not fetch IGSID — webhook account matching may fail for this account:', err);
+      }
+    } catch (e) {
+      console.warn('⚠️ [OAuth Callback] pageScopedId fetch threw — continuing without it:', e);
+    }
+
     // Find existing account: by canonicalId (user_id), by appScopedId (id), or by old accountId (id) for migration
     let existingAccount = await InstagramAccount.findOne({
       $or: [
@@ -159,6 +175,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       existingAccount.isActive = true;
       existingAccount.accountId = canonicalId;
       existingAccount.appScopedId = appScopedId;
+      if (pageScopedId) existingAccount.pageScopedId = pageScopedId;
 
       // Update settings with onboarding data if provided
       if (agentBehavior || user?.agentSettings) {
@@ -195,6 +212,7 @@ router.post('/callback', authenticateToken, async (req, res) => {
       userEmail: req.user!.email,
       accountId: canonicalId,
       appScopedId: appScopedId,
+      ...(pageScopedId ? { pageScopedId } : {}),
       accountName: profileData.username,
       accessToken: finalAccessToken,
       tokenExpiry: tokenExpiry,

@@ -1213,12 +1213,13 @@ export class InstagramWebhookService {
       if (isBotMessage) {
         console.log(`🤖 [PSID Matching] Bot message detected by is_echo flag`);
         for (const account of allAccounts) {
-          if (psid === String(account.accountId)) {
-            console.log(`🤖 [PSID Matching] Bot message from account: ${account.accountName} (${account.userEmail})`);
+          const candidates = this.getRecipientIdCandidates(account);
+          if (candidates.includes(psid)) {
+            console.log(`🤖 [PSID Matching] Bot message from account: ${account.accountName} (${account.userEmail}) - matched by PSID ${psid}`);
             return { account, isBotMessage: true };
           }
         }
-        console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts`);
+        console.warn(`⚠️ [PSID Matching] Bot message PSID ${psid} not found in active accounts — ignoring echo`);
       } else {
         // 1) Try match by entry.id first (Meta docs: entry.id = our Instagram Professional account ID)
         if (entryId) {
