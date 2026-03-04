@@ -57,12 +57,14 @@ export class InstagramCommentService {
         return;
       }
 
-      // Search for matching keyword in comment text (case-insensitive)
-      const commentTextLower = commentDoc.text.toLowerCase();
+      // Search for matching keyword in comment text (case-insensitive, accent-insensitive)
+      const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const commentTextNormalized = stripAccents(commentDoc.text.toLowerCase());
       let matchedRule = null;
 
       for (const rule of rules) {
-        if (commentTextLower.includes(rule.keyword)) {
+        const normalizedKeyword = stripAccents(rule.keyword.toLowerCase());
+        if (commentTextNormalized.includes(normalizedKeyword)) {
           matchedRule = rule;
           break; // Use first matching rule
         }
