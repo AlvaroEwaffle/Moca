@@ -1424,9 +1424,10 @@ export class InstagramWebhookService {
     senderIsOurAccount: boolean
   ): Promise<{ activated: boolean; keyword?: string }> {
     try {
-      // Normalize message text to lowercase for matching
-      const normalizedText = messageText.toLowerCase().trim();
-      
+      // Normalize message text: lowercase + strip diacritics (accents) so e.g. "Lánding" matches keyword "landing"
+      const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const normalizedText = stripAccents(messageText.toLowerCase().trim());
+
       if (!normalizedText || normalizedText.length === 0) {
         return { activated: false };
       }
@@ -1447,10 +1448,10 @@ export class InstagramWebhookService {
       console.log(`🔍 [Keyword Activation] Sender is our account: ${senderIsOurAccount}`);
       console.log(`🔍 [Keyword Activation] Conversation already activated: ${conversation.settings?.activatedByKeyword || false}`);
 
-      // Check each enabled keyword rule
+      // Check each enabled keyword rule — normalize stored keyword too so rules created with accents also work
       for (const rule of enabledRules) {
-        // Keywords are stored in lowercase, so direct comparison works
-        if (normalizedText.includes(rule.keyword)) {
+        const normalizedKeyword = stripAccents(rule.keyword.toLowerCase());
+        if (normalizedText.includes(normalizedKeyword)) {
           console.log(`✅ [Keyword Activation] Keyword "${rule.keyword}" matched in message!`);
           console.log(`✅ [Keyword Activation] Activating conversation ${conversation.id} with keyword: "${rule.keyword}"`);
           return {
