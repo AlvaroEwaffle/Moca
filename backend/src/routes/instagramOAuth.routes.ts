@@ -180,13 +180,16 @@ router.post('/callback', authenticateToken, async (req, res) => {
       existingAccount.appScopedId = appScopedId;
       if (pageScopedId) existingAccount.pageScopedId = pageScopedId;
 
-      // Update settings with onboarding data if provided
-      if (agentBehavior || user?.agentSettings) {
-        console.log(`🔧 [OAuth Callback] Updating existing account with agentBehavior:`, JSON.stringify(agentBehavior, null, 2));
-        existingAccount.settings.systemPrompt = agentBehavior?.systemPrompt || user?.agentSettings?.systemPrompt || existingAccount.settings.systemPrompt;
-        existingAccount.settings.toneOfVoice = agentBehavior?.toneOfVoice || user?.agentSettings?.toneOfVoice || existingAccount.settings.toneOfVoice;
-        existingAccount.settings.keyInformation = agentBehavior?.keyInformation || user?.agentSettings?.keyInformation || existingAccount.settings.keyInformation;
+      // Only update settings if agentBehavior was explicitly provided (onboarding flow).
+      // On a plain re-auth (e.g. password change), agentBehavior is absent — preserve existing settings.
+      if (agentBehavior) {
+        console.log(`🔧 [OAuth Callback] Updating existing account settings from agentBehavior:`, JSON.stringify(agentBehavior, null, 2));
+        existingAccount.settings.systemPrompt = agentBehavior.systemPrompt || existingAccount.settings.systemPrompt;
+        existingAccount.settings.toneOfVoice = agentBehavior.toneOfVoice || existingAccount.settings.toneOfVoice;
+        existingAccount.settings.keyInformation = agentBehavior.keyInformation || existingAccount.settings.keyInformation;
         console.log(`🔧 [OAuth Callback] Updated settings:`, JSON.stringify(existingAccount.settings, null, 2));
+      } else {
+        console.log(`🔧 [OAuth Callback] No agentBehavior provided — preserving existing account settings (re-auth only).`);
       }
       
       await existingAccount.save();
