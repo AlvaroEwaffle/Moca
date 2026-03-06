@@ -3,7 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface ICommentAutoReplyRule extends Document {
   accountId: string; // Instagram account ID this rule belongs to
   userId: string; // User who owns this rule
-  keyword: string; // Keyword to match in comments (case-insensitive)
+  keyword: string; // Keyword to match in comments (case-insensitive). Empty string = match all comments.
   responseMessage: string; // Message to reply with when keyword is found
   enabled: boolean; // Whether this rule is active
   sendDM: boolean; // Whether to send DM after replying to comment
@@ -25,9 +25,10 @@ const CommentAutoReplyRuleSchema = new Schema<ICommentAutoReplyRule>({
   },
   keyword: {
     type: String,
-    required: true,
+    required: false,
+    default: '',
     trim: true,
-    lowercase: true // Store lowercase for case-insensitive matching
+    lowercase: true // Store lowercase for case-insensitive matching. Empty string = catch-all (match every comment).
   },
   responseMessage: {
     type: String,

@@ -172,43 +172,42 @@ mongoose.connect(MONGODB_URI)
       console.log('✅ Comment worker service started successfully');
 
       console.log('🔄 Starting follow-up worker service...');
-      // Run follow-up processing at 9 AM, 4 PM, and 8 PM
+      // Run follow-up processing every hour from 9 AM to 11 PM
+      const FOLLOWUP_START_HOUR = 9;
+      const FOLLOWUP_END_HOUR = 23;
       const scheduleFollowUpRuns = () => {
         const now = new Date();
-        const times = [9, 16, 20]; // 9 AM, 4 PM, 8 PM in 24-hour format
+        // Align next run to the top of the next hour
+        const nextRun = new Date(now);
+        nextRun.setMinutes(0, 0, 0);
+        nextRun.setHours(nextRun.getHours() + 1);
 
-        times.forEach(hour => {
-          const nextRun = new Date();
-          nextRun.setHours(hour, 0, 0, 0);
+        const delay = nextRun.getTime() - now.getTime();
+        console.log(`⏰ [Follow-up Worker] Next hourly check in ${Math.round(delay / 1000 / 60)} minutes`);
 
-          // If the time has passed today, schedule for tomorrow
-          if (nextRun <= now) {
-            nextRun.setDate(nextRun.getDate() + 1);
+        setTimeout(() => {
+          // Run immediately at the top of the hour if within active window
+          const hour = new Date().getHours();
+          if (hour >= FOLLOWUP_START_HOUR && hour <= FOLLOWUP_END_HOUR) {
+            followUpWorkerService.processFollowUps().catch(err =>
+              console.error('❌ Error in follow-up processing:', err)
+            );
+          } else {
+            console.log(`⏸️ [Follow-up Worker] Outside active hours (${FOLLOWUP_START_HOUR}–${FOLLOWUP_END_HOUR}), skipping`);
           }
-
-          const delay = nextRun.getTime() - now.getTime();
-
-          setTimeout(async () => {
-            try {
-              console.log(`🕘 [Follow-up Worker] Running scheduled follow-up at ${hour}:00`);
-              await followUpWorkerService.processFollowUps();
-
-              // Schedule the next run for the same time tomorrow
-              setInterval(async () => {
-                try {
-                  console.log(`🕘 [Follow-up Worker] Running scheduled follow-up at ${hour}:00`);
-                  await followUpWorkerService.processFollowUps();
-                } catch (error) {
-                  console.error('❌ Error in scheduled follow-up processing:', error);
-                }
-              }, 24 * 60 * 60 * 1000); // 24 hours
-            } catch (error) {
-              console.error('❌ Error in initial follow-up processing:', error);
+          // Then repeat every hour
+          setInterval(async () => {
+            const h = new Date().getHours();
+            if (h >= FOLLOWUP_START_HOUR && h <= FOLLOWUP_END_HOUR) {
+              console.log(`🕘 [Follow-up Worker] Running hourly follow-up at ${h}:00`);
+              await followUpWorkerService.processFollowUps().catch(err =>
+                console.error('❌ Error in follow-up processing:', err)
+              );
+            } else {
+              console.log(`⏸️ [Follow-up Worker] Outside active hours (${FOLLOWUP_START_HOUR}–${FOLLOWUP_END_HOUR}), skipping`);
             }
-          }, delay);
-
-          console.log(`⏰ [Follow-up Worker] Next run scheduled for ${hour}:00 in ${Math.round(delay / 1000 / 60)} minutes`);
-        });
+          }, 60 * 60 * 1000); // every 1 hour
+        }, delay);
       };
 
       scheduleFollowUpRuns();

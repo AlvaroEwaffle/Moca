@@ -228,10 +228,10 @@ const InstagramComments = () => {
   };
 
   const saveRule = async () => {
-    if (!selectedAccountId || !ruleForm.keyword.trim() || !ruleForm.responseMessage.trim()) {
+    if (!selectedAccountId || !ruleForm.responseMessage.trim()) {
       toast({
         title: "Error",
-        description: "Keyword y mensaje de respuesta son requeridos",
+        description: "El mensaje de respuesta es requerido",
         variant: "destructive"
       });
       return;
@@ -671,7 +671,11 @@ const InstagramComments = () => {
                                     </Badge>
                                   )}
                                   <span className="font-medium text-gray-900">
-                                    Si contiene: <span className="text-violet-600">"{rule.keyword}"</span>
+                                    {rule.keyword ? (
+                                      <>Si contiene: <span className="text-violet-600">"{rule.keyword}"</ span></>
+                                    ) : (
+                                      <span className="text-violet-600">Todos los comentarios</span>
+                                    )}
                                   </span>
                                 </div>
                                 <p className="text-sm text-gray-600 line-clamp-2">
@@ -713,16 +717,16 @@ const InstagramComments = () => {
                           </CardHeader>
                           <CardContent className="space-y-4">
                             <div>
-                              <Label htmlFor="keyword">Palabra Clave</Label>
+                              <Label htmlFor="keyword">Palabra Clave <span className="text-gray-400 font-normal">(opcional)</span></Label>
                               <Input
                                 id="keyword"
-                                placeholder="Ej: precio, horario, contacto"
+                                placeholder="Ej: precio, horario, contacto — dejar vacío para responder a todos"
                                 value={ruleForm.keyword}
                                 onChange={(e) => setRuleForm(prev => ({ ...prev, keyword: e.target.value.toLowerCase().trim() }))}
                                 className="mt-2"
                               />
                               <p className="text-xs text-gray-500 mt-1">
-                                El sistema buscará esta palabra en los comentarios (sin distinguir mayúsculas/minúsculas)
+                                Si se deja vacío, la regla se aplica a <strong>todos los comentarios</strong>. Si se especifica una palabra, solo se activará cuando el comentario la contenga.
                               </p>
                             </div>
                             <div>
@@ -784,8 +788,7 @@ const InstagramComments = () => {
                               <Button
                                 onClick={saveRule}
                                 disabled={
-                                  savingConfig || 
-                                  !ruleForm.keyword.trim() || 
+                                  savingConfig ||
                                   !ruleForm.responseMessage.trim() ||
                                   (ruleForm.sendDM && !ruleForm.dmMessage.trim())
                                 }

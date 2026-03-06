@@ -57,14 +57,15 @@ export class InstagramCommentService {
         return;
       }
 
-      // Search for matching keyword in comment text (case-insensitive, accent-insensitive)
+      // Search for matching rule — keyword is optional; empty keyword = catch-all (matches every comment)
       const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const commentTextNormalized = stripAccents(commentDoc.text.toLowerCase());
       let matchedRule = null;
 
       for (const rule of rules) {
-        const normalizedKeyword = stripAccents(rule.keyword.toLowerCase());
-        if (commentTextNormalized.includes(normalizedKeyword)) {
+        const normalizedKeyword = stripAccents((rule.keyword || '').toLowerCase());
+        // Empty keyword = catch-all; otherwise check if comment contains the keyword
+        if (!normalizedKeyword || commentTextNormalized.includes(normalizedKeyword)) {
           matchedRule = rule;
           break; // Use first matching rule
         }
@@ -78,8 +79,8 @@ export class InstagramCommentService {
         return;
       }
 
-      // Keyword matched - mark as detected and reply
-      console.log(`🔍 [Comment Service] Keyword "${matchedRule.keyword}" matched for comment: ${comment.id}`);
+      // Rule matched - mark as detected and reply
+      console.log(`🔍 [Comment Service] Rule matched (keyword: "${matchedRule.keyword || 'catch-all'}") for comment: ${comment.id}`);
       commentDoc.status = 'detected';
       commentDoc.matchedKeyword = matchedRule.keyword;
       commentDoc.matchedRuleId = matchedRule._id;

@@ -318,10 +318,10 @@ router.post('/rules/:accountId', authenticateToken, async (req, res) => {
     const { accountId } = req.params;
     const { keyword, responseMessage, enabled = true, sendDM = false, dmMessage } = req.body;
 
-    if (!keyword || !responseMessage) {
+    if (!responseMessage) {
       return res.status(400).json({
         success: false,
-        error: 'Keyword and response message are required'
+        error: 'Response message is required'
       });
     }
 
@@ -352,7 +352,7 @@ router.post('/rules/:accountId', authenticateToken, async (req, res) => {
     const rule = new CommentAutoReplyRule({
       accountId,
       userId: req.user!.userId,
-      keyword: keyword.trim().toLowerCase(),
+      keyword: keyword ? keyword.trim().toLowerCase() : '',
       responseMessage: responseMessage.trim(),
       enabled: enabled === true,
       sendDM: sendDM === true,
