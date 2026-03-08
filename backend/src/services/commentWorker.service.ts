@@ -2,6 +2,7 @@ import InstagramComment from '../models/instagramComment.model';
 import InstagramAccount from '../models/instagramAccount.model';
 import CommentAutoReplyRule from '../models/commentAutoReplyRule.model';
 import { InstagramCommentService } from './instagramComment.service';
+import { notifyError } from '../utils/slack';
 
 export class CommentWorkerService {
   private isRunning: boolean = false;
@@ -116,6 +117,7 @@ export class CommentWorkerService {
 
     } catch (error) {
       console.error('❌ [Comment Worker] Error in processPendingComments:', error);
+      notifyError({ service: 'CommentWorker', message: 'Error processing pending comments', error });
     }
   }
 

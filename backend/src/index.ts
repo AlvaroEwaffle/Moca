@@ -22,6 +22,7 @@ import debounceWorker from './services/debounceWorker.service';
 import senderWorker from './services/senderWorker.service';
 import commentWorker from './services/commentWorker.service';
 import { followUpWorkerService } from './services/followUpWorker.service';
+import { notifyError } from './utils/slack';
 
 console.log('🚀 Moca Instagram DM Agent: Starting application...');
 
@@ -126,6 +127,12 @@ console.log('✅ API routes setup completed');
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('❌ Error handling middleware triggered:', err);
+  notifyError({
+    service: 'Express',
+    message: `Unhandled error on ${req.method} ${req.originalUrl}`,
+    error: err,
+    context: { method: req.method, url: req.originalUrl }
+  });
   res.status(500).json({
     success: false,
     error: 'Internal server error'
@@ -216,6 +223,7 @@ mongoose.connect(MONGODB_URI)
       console.log('✅ All background services started successfully');
     } catch (error) {
       console.error('❌ Error starting background services:', error);
+      notifyError({ service: 'Startup', message: 'Failed to start background services', error });
       process.exit(1);
     }
 
@@ -233,6 +241,7 @@ mongoose.connect(MONGODB_URI)
   })
   .catch((error) => {
     console.error('❌ MongoDB connection error:', error);
+    notifyError({ service: 'MongoDB', message: 'Database connection failed', error });
     process.exit(1);
   });
 
@@ -255,5 +264,15 @@ const shutdown = async () => {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// Catch unhandled errors and notify via Slack
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled Promise Rejection:', reason);
+  notifyError({ service: 'Process', message: 'Unhandled Promise Rejection', error: reason });
+});
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  notifyError({ service: 'Process', message: 'Uncaught Exception', error });
+});
 
 export default app;

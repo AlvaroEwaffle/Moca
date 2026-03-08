@@ -10,6 +10,7 @@ import { IContact } from '../models/contact.model';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
 import debounceWorkerService from './debounceWorker.service';
+import { notifyError } from '../utils/slack';
 
 // Meta webhook payload interfaces
 interface MetaWebhookPayload {
@@ -171,6 +172,7 @@ export class InstagramWebhookService {
       console.log('✅ Webhook processing completed');
     } catch (error) {
       console.error('❌ Error processing webhook:', error);
+      notifyError({ service: 'Webhook', message: 'Error processing incoming webhook', error });
       throw error;
     }
   }
@@ -500,6 +502,11 @@ export class InstagramWebhookService {
           console.error('❌ [CRITICAL ERROR] Message MID:', messageData.mid);
           console.error('❌ [CRITICAL ERROR] Message text:', messageData.text?.substring(0, 100) || 'NO TEXT');
           console.error('❌ [CRITICAL ERROR] Message will be SKIPPED to prevent incorrect account assignment');
+          notifyError({
+            service: 'Webhook',
+            message: 'CRITICAL: Account identification failed — message skipped',
+            context: { psid: messageData.psid, recipientId: messageData.recipient?.id, mid: messageData.mid }
+          });
         }
         return;
       }
@@ -708,6 +715,7 @@ export class InstagramWebhookService {
       console.log(`✅ User message processed successfully: ${message.id}`);
     } catch (error) {
       console.error('❌ Error processing message:', error);
+      notifyError({ service: 'Webhook', message: 'Error processing incoming message', error });
       throw error;
     }
   }

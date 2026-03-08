@@ -9,6 +9,7 @@ import { IMessage } from '../models/message.model';
 import instagramService from './instagramApi.service';
 import * as openaiService from './openai.service';
 import { generateStructuredResponse } from './openai.service';
+import { notifyError } from '../utils/slack';
 import { 
   ConversationContext, 
   AIResponseConfig, 
@@ -130,6 +131,7 @@ class DebounceWorkerService {
       }
     } catch (error) {
       console.error('❌ DebounceWorkerService: Error in debounce worker process:', error);
+      notifyError({ service: 'DebounceWorker', message: 'Error in debounce worker process', error });
     }
   }
 
@@ -480,6 +482,7 @@ class DebounceWorkerService {
 
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error generating structured response:`, error);
+      notifyError({ service: 'DebounceWorker', message: 'AI response generation failed — using fallback', error });
       return {
         responseText: "Gracias por tu mensaje. Un miembro de nuestro equipo te responderá pronto."
       };

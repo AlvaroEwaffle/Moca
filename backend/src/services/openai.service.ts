@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import { v4 as uuid } from 'uuid'
 import dotenv from 'dotenv'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import { notifyError } from '../utils/slack'
 import { 
   StructuredResponse, 
   ConversationContext, 
@@ -448,7 +449,8 @@ Respuesta:`;
 
   } catch (error) {
     console.error('❌ Error generating Instagram DM response:', error);
-    
+    notifyError({ service: 'OpenAI', message: 'Failed to generate DM response — using fallback', error });
+
     // Fallback to simple rule-based response
     return generateFallbackResponse(context);
   }
@@ -1199,7 +1201,8 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
 
   } catch (error) {
     console.error('❌ Error generating structured response:', error);
-    
+    notifyError({ service: 'OpenAI', message: 'Structured response generation failed — using default', error });
+
     // Return fallback structured response
     return createDefaultResponse();
   }

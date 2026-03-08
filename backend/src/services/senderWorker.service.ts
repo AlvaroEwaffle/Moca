@@ -4,6 +4,7 @@ import Conversation from '../models/conversation.model';
 import InstagramAccount from '../models/instagramAccount.model';
 import { IOutboundQueue } from '../models/outboundQueue.model';
 import instagramService from './instagramApi.service';
+import { notifyError } from '../utils/slack';
 
 class SenderWorkerService {
   private isRunning: boolean = false;
@@ -99,6 +100,7 @@ class SenderWorkerService {
 
     } catch (error) {
       console.error('❌ SenderWorkerService: Error in outbound queue processing:', error);
+      notifyError({ service: 'SenderWorker', message: 'Error in outbound queue processing', error });
     }
   }
 
@@ -154,6 +156,7 @@ class SenderWorkerService {
 
       } catch (error) {
         console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error instanceof Error ? error.message : String(error));
+        notifyError({ service: 'SenderWorker', message: 'Failed to send Instagram message', error, context: { queueItemId: queueItem.id } });
         
         // Check if this is a "user not found" error
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

@@ -2,6 +2,7 @@ import { FollowUpConfig, LeadFollowUp, Conversation, Contact, InstagramAccount, 
 import { OutboundQueue } from '../models';
 import instagramApiService from './instagramApi.service';
 import { generateFollowUpSuggestion } from './openai.service';
+import { notifyError } from '../utils/slack';
 
 export class FollowUpWorkerService {
   private static instance: FollowUpWorkerService;
@@ -35,6 +36,7 @@ export class FollowUpWorkerService {
       console.log('✅ [FollowUp Worker] Follow-up processing completed');
     } catch (error) {
       console.error('❌ [FollowUp Worker] Error in processFollowUps:', error);
+      notifyError({ service: 'FollowUpWorker', message: 'Error in follow-up processing', error });
     }
   }
 
