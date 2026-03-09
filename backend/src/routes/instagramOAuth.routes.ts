@@ -1,5 +1,8 @@
 import express from 'express';
 import InstagramAccount from '../models/instagramAccount.model';
+import { Conversation, Message, OutboundQueue, InstagramComment, LeadFollowUp, FollowUpConfig } from '../models';
+import KeywordActivationRule from '../models/keywordActivationRule.model';
+import CommentAutoReplyRule from '../models/commentAutoReplyRule.model';
 import User from '../models/user.model';
 import { authenticateToken } from '../middleware/auth';
 
@@ -172,12 +175,32 @@ router.post('/callback', authenticateToken, async (req, res) => {
     if (existingAccount) {
       const matchBy = existingAccount.accountId === canonicalId ? 'accountId=canonicalId' : existingAccount.accountId === appScopedId ? 'accountId=appScopedId (legacy)' : 'appScopedId';
       console.log(`🔧 [OAuth Callback] Found existing account (matched by: ${matchBy}), updating.`);
+      const oldAccountId = existingAccount.accountId;
       existingAccount.accessToken = finalAccessToken;
       existingAccount.accountName = profileData.username;
       existingAccount.tokenExpiry = tokenExpiry;
       existingAccount.isActive = true;
       existingAccount.accountId = canonicalId;
       existingAccount.appScopedId = appScopedId;
+
+      // If accountId changed (e.g. migrating from appScopedId to canonicalId),
+      // update all related documents so conversations are not orphaned.
+      if (oldAccountId !== canonicalId) {
+        console.log(`🔧 [OAuth Callback] accountId changed from ${oldAccountId} to ${canonicalId} — migrating related documents...`);
+        const migrationResults = await Promise.all([
+          Conversation.updateMany({ accountId: oldAccountId }, { $set: { accountId: canonicalId } }),
+          Message.updateMany({ accountId: oldAccountId }, { $set: { accountId: canonicalId } }),
+          OutboundQueue.updateMany({ accountId: oldAccountId }, { $set: { accountId: canonicalId } }),
+          InstagramComment.updateMany({ accountId: oldAccountId }, { $set: { accountId: canonicalId } }),
+          LeadFollowUp.updateMany({ accountId: oldAccountId }, { $set: { accountId: canonicalId } }),
+        ]);
+        // Collections with unique compound indexes on accountId — delete stale copies
+        await FollowUpConfig.deleteMany({ accountId: oldAccountId });
+        await KeywordActivationRule.deleteMany({ accountId: oldAccountId });
+        await CommentAutoReplyRule.deleteMany({ accountId: oldAccountId });
+        const totalMigrated = migrationResults.reduce((sum, r) => sum + r.modifiedCount, 0);
+        console.log(`✅ [OAuth Callback] Migrated ${totalMigrated} documents from accountId ${oldAccountId} → ${canonicalId}`);
+      }
       if (pageScopedId) existingAccount.pageScopedId = pageScopedId;
 
       // Only update settings if agentBehavior was explicitly provided (onboarding flow).
