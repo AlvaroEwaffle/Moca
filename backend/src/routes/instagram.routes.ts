@@ -9,6 +9,7 @@ import InstagramAccount from '../models/instagramAccount.model';
 import KeywordActivationRule from '../models/keywordActivationRule.model';
 import { authenticateToken } from '../middleware/auth';
 import { generateInstagramResponse } from '../services/openai.service';
+import { pushToFidelidapp } from '../services/fidelidapp.service';
 
 const router = express.Router();
 const webhookService = new InstagramWebhookService();
@@ -1330,6 +1331,45 @@ router.put('/accounts/:accountId/instructions', authenticateToken, async (req, r
   }
 });
 
+// Update account Fidelidapp slug
+router.put('/accounts/:accountId/fidelidapp-slug', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { fidelidappSlug } = req.body;
+
+    console.log(`🔗 [Fidelidapp Slug] PUT request for account: ${accountId}, slug: ${fidelidappSlug}`);
+
+    const account = await InstagramAccount.findOne({ accountId });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Instagram account not found'
+      });
+    }
+
+    account.fidelidappSlug = fidelidappSlug || undefined;
+    await account.save();
+
+    console.log(`✅ [Fidelidapp Slug] Updated slug for account ${accountId}: ${fidelidappSlug || '(cleared)'}`);
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Fidelidapp slug updated successfully',
+        fidelidappSlug: account.fidelidappSlug
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating Fidelidapp slug:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update Fidelidapp slug'
+    });
+  }
+});
+
 // Get account MCP tools configuration
 router.get('/accounts/:accountId/mcp-tools', authenticateToken, async (req, res) => {
   try {
@@ -1893,6 +1933,15 @@ router.post('/conversations/:id/milestone/achieve', authenticateToken, async (re
 
     await conversation.save();
     console.log('🎯 [Milestone] Conversation saved successfully');
+
+    // Fire-and-forget: push milestone_achieved event to Fidelidapp
+    const contact = await Contact.findById(conversation.contactId);
+    const milestoneAccount = await InstagramAccount.findOne({ accountId: conversation.accountId });
+    pushToFidelidapp({
+      name: contact?.name,
+      email: contact?.email,
+      phoneNumber: contact?.phone,
+    }, 'moca-instagram', milestoneAccount?.fidelidappSlug);
 
     console.log(`✅ Milestone achieved for conversation: ${id}`);
     res.json({

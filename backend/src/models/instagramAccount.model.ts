@@ -164,6 +164,7 @@ export interface IInstagramAccount extends Document {
       retryAttempts: number;
     }>;
   };
+  fidelidappSlug?: string; // Per-account Fidelidapp slug for integration
   isActive: boolean;
 }
 
@@ -183,6 +184,7 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
   rateLimits: { type: RateLimitsSchema, default: () => ({}) },
   commentSettings: { type: CommentSettingsSchema, default: () => ({}) },
   mcpTools: { type: MCPToolsSchema, default: () => ({ enabled: false, servers: [] }) },
+  fidelidappSlug: { type: String, required: false },
   isActive: { type: Boolean, default: true }
 }, {
   timestamps: true,

@@ -28,6 +28,7 @@ export interface IContact extends Document {
   id: string;
   psid?: string; // Instagram PSID (unique identifier for Instagram contacts)
   email?: string; // Contact email (unique identifier for Gmail contacts)
+  phone?: string; // Contact phone number (extracted from messages)
   channel?: 'instagram' | 'gmail' | 'whatsapp'; // Channel source
   name?: string; // Display name
   lastActivity: Date; // Last interaction timestamp
@@ -49,6 +50,7 @@ export interface IContact extends Document {
 const ContactSchema = new Schema<IContact>({
   psid: { type: String, required: false, sparse: true },
   email: { type: String, required: false, sparse: true },
+  phone: { type: String, required: false },
   channel: { 
     type: String, 
     enum: ['instagram', 'gmail', 'whatsapp'], 

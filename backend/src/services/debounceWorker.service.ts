@@ -18,6 +18,8 @@ import {
 } from '../types/aiResponse';
 import { LeadScoringService } from './leadScoring.service';
 import { GlobalAgentRulesService } from './globalAgentRules.service';
+import { pushToFidelidapp } from './fidelidapp.service';
+import { extractContactData } from './contactDataExtractor.service';
 
 class DebounceWorkerService {
   private isRunning: boolean = false;
@@ -703,6 +705,57 @@ class DebounceWorkerService {
 
       await conversation.save();
       console.log('✅ DebounceWorkerService: Conversation updated with structured response data');
+
+      // Progressive lead enrichment: extract email/phone from recent messages and push to Fidelidapp
+      try {
+        const contact = await Contact.findById(conversation.contactId);
+        if (contact) {
+          // Get recent user messages for this conversation to extract contact data
+          const recentMessages = await Message.find({
+            conversationId: conversation.id,
+            role: 'user'
+          }).sort({ createdAt: -1 }).limit(20);
+
+          const allMessageText = recentMessages.map(m => m.content?.text || '').join(' ');
+          const extracted = extractContactData(allMessageText);
+
+          let emailUpdated = false;
+          let phoneUpdated = false;
+
+          // Update contact email if currently empty and we found one
+          if (!contact.email && extracted.emails.length > 0) {
+            contact.email = extracted.emails[0];
+            emailUpdated = true;
+            console.log(`🔗 DebounceWorkerService: Extracted email for contact ${contact.id}: ${contact.email}`);
+          }
+
+          // Update contact phone if currently empty and we found one
+          if (!contact.phone && extracted.phones.length > 0) {
+            contact.phone = extracted.phones[0];
+            phoneUpdated = true;
+            console.log(`🔗 DebounceWorkerService: Extracted phone for contact ${contact.id}: ${contact.phone}`);
+          }
+
+          // Save contact if any field was updated
+          if (emailUpdated || phoneUpdated) {
+            await contact.save();
+            console.log(`✅ DebounceWorkerService: Contact ${contact.id} enriched with extracted data`);
+          }
+
+          // Push to Fidelidapp only if contact has email AND new data was just extracted
+          if (contact.email && (emailUpdated || phoneUpdated)) {
+            // Fetch account to get per-account fidelidappSlug
+            const account = await InstagramAccount.findOne({ accountId: conversation.accountId });
+            pushToFidelidapp({
+              name: contact.name,
+              email: contact.email,
+              phoneNumber: contact.phone,
+            }, 'moca-instagram', account?.fidelidappSlug);
+          }
+        }
+      } catch (enrichmentError) {
+        console.error('❌ DebounceWorkerService: Error in progressive lead enrichment (non-blocking):', enrichmentError);
+      }
 
     } catch (error) {
       console.error('❌ DebounceWorkerService: Error updating conversation with structured response:', error);

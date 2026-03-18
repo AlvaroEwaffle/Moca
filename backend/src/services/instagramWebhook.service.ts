@@ -11,6 +11,7 @@ import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
 import debounceWorkerService from './debounceWorker.service';
 import { notifyError } from '../utils/slack';
+// pushToFidelidapp import removed — push now handled in debounceWorker after lead enrichment
 
 // Meta webhook payload interfaces
 interface MetaWebhookPayload {
@@ -711,6 +712,9 @@ export class InstagramWebhookService {
         console.error(`❌ Webhook: Error triggering message collection:`, error);
         // Don't fail the webhook if batching fails - fallback to immediate processing
       }
+
+      // Fidelidapp push removed from webhook — now handled in debounceWorker
+      // after progressive lead enrichment (email/phone extraction from message text)
 
       console.log(`✅ User message processed successfully: ${message.id}`);
     } catch (error) {

@@ -70,6 +70,7 @@ interface InstagramAccount {
     dmMessage: string;
     replyDelay: number;
   };
+  fidelidappSlug?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -205,6 +206,11 @@ const InstagramAccounts = () => {
   const [healthCheckResult, setHealthCheckResult] = useState<{ success: boolean; message: string } | null>(null);
   const [fetchingTools, setFetchingTools] = useState(false);
   const [discoveredTools, setDiscoveredTools] = useState<Array<{name: string; description: string; parameters?: any}>>([]);
+
+  // Fidelidapp integration state
+  const [fidelidappSlug, setFidelidappSlug] = useState<string>("");
+  const [editingFidelidappSlug, setEditingFidelidappSlug] = useState<string | null>(null);
+  const [savingFidelidappSlug, setSavingFidelidappSlug] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
@@ -1288,6 +1294,55 @@ const InstagramAccounts = () => {
       setError('Failed to save system prompt');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Fidelidapp slug functions
+  const startEditingFidelidappSlug = (account: InstagramAccount) => {
+    setEditingFidelidappSlug(account.accountId);
+    setFidelidappSlug(account.fidelidappSlug || "");
+  };
+
+  const cancelEditingFidelidappSlug = () => {
+    setEditingFidelidappSlug(null);
+    setFidelidappSlug("");
+  };
+
+  const saveFidelidappSlug = async (accountId: string) => {
+    setSavingFidelidappSlug(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const backendUrl = BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/instagram/accounts/${accountId}/fidelidapp-slug`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({ fidelidappSlug: fidelidappSlug.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setAccounts(accounts.map(account =>
+          account.accountId === accountId
+            ? { ...account, fidelidappSlug: fidelidappSlug.trim() || undefined }
+            : account
+        ));
+        setEditingFidelidappSlug(null);
+        setFidelidappSlug("");
+        setSuccess('Fidelidapp slug updated successfully');
+      } else {
+        setError(data.error || 'Failed to update Fidelidapp slug');
+      }
+    } catch (error) {
+      console.error('Error saving Fidelidapp slug:', error);
+      setError('Failed to save Fidelidapp slug');
+    } finally {
+      setSavingFidelidappSlug(false);
     }
   };
 
@@ -3141,6 +3196,111 @@ const InstagramAccounts = () => {
                               </Button>
                             </div>
                         </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Fidelidapp Integration */}
+                  <div className="border-t pt-4">
+                    <button
+                      className="flex items-center justify-between w-full text-left"
+                      onClick={() => toggleAccordion(account.accountId, 'fidelidapp')}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Plug className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                        <span className="text-sm font-medium">Fidelidapp Integration</span>
+                        {account.fidelidappSlug && (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            Connected
+                          </Badge>
+                        )}
+                      </div>
+                      {isAccordionExpanded(account.accountId, 'fidelidapp') ? (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
+
+                    {isAccordionExpanded(account.accountId, 'fidelidapp') && (
+                      <div className="mt-3 space-y-4">
+                        <p className="text-xs text-gray-500">
+                          Connect this Instagram account to a Fidelidapp loyalty program. Emails and phone numbers extracted from DMs will be automatically pushed to your Fidelidapp account.
+                        </p>
+                        {editingFidelidappSlug === account.accountId ? (
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="fidelidapp-slug">Fidelidapp Slug</Label>
+                              <Input
+                                id="fidelidapp-slug"
+                                placeholder="e.g. my-business"
+                                value={fidelidappSlug}
+                                onChange={(e) => setFidelidappSlug(e.target.value)}
+                                className="mt-2"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                The slug of your business in Fidelidapp (found in your Fidelidapp dashboard URL).
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                              <Button
+                                onClick={() => saveFidelidappSlug(account.accountId)}
+                                disabled={savingFidelidappSlug}
+                                size="sm"
+                                className="w-full sm:w-auto"
+                              >
+                                {savingFidelidappSlug ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                ) : (
+                                  <Save className="w-4 h-4 mr-2" />
+                                )}
+                                Save
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={cancelEditingFidelidappSlug}
+                                size="sm"
+                                className="w-full sm:w-auto"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {account.fidelidappSlug ? (
+                              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                <div className="flex items-center space-x-2">
+                                  <Plug className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                  <span className="text-sm text-gray-700 font-mono">{account.fidelidappSlug}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-gray-50 p-4 rounded-lg text-center">
+                                <Plug className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                <p className="text-sm text-gray-500">
+                                  No Fidelidapp slug configured. Leads will not be pushed.
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="flex justify-between items-center">
+                              <div className="text-xs text-gray-500">
+                                {account.fidelidappSlug ? 'Configured' : 'Not configured'}
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => startEditingFidelidappSlug(account)}
+                                className="text-xs"
+                              >
+                                <Plug className="w-3 h-3 mr-1" />
+                                {account.fidelidappSlug ? 'Edit' : 'Configure'}
+                              </Button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
