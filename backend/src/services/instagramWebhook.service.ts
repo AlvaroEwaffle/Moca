@@ -570,12 +570,22 @@ export class InstagramWebhookService {
         console.log(`✅ [Manual Message] Created message record with role='assistant': ${message.id}`);
         console.log(`✅ [Manual Message] Message will appear in UI but won't trigger AI response.`);
         
-        // Update conversation metadata but don't trigger AI response
-        conversation.timestamps.lastBotMessage = new Date(messageData.timestamp || Date.now());
-        conversation.timestamps.lastActivity = new Date(messageData.timestamp || Date.now());
-        conversation.metrics.totalMessages += 1;
-        conversation.metrics.botMessages += 1;
-        
+        // Update conversation counters atomically to avoid race conditions
+        const msgTimestamp = new Date(messageData.timestamp || Date.now());
+        await Conversation.updateOne(
+          { _id: conversation._id },
+          {
+            $inc: {
+              'metrics.totalMessages': 1,
+              'metrics.botMessages': 1
+            },
+            $set: {
+              'timestamps.lastBotMessage': msgTimestamp,
+              'timestamps.lastActivity': msgTimestamp
+            }
+          }
+        );
+
         // Check for keyword activation in manual messages (e.g., if owner sends "LANDING" message)
         // This allows the owner to activate the agent by sending a keyword manually
         if (messageData.text && !conversation.settings?.activatedByKeyword) {
@@ -585,7 +595,7 @@ export class InstagramWebhookService {
             conversation,
             true // senderIsOurAccount = true (this is our message)
           );
-          
+
           if (keywordDetectionResult.activated) {
             console.log(`✅ [Keyword Activation - Manual Message] Conversation ${conversation.id} activated by keyword in manual message: "${keywordDetectionResult.keyword}"`);
             console.log(`✅ [Keyword Activation - Manual Message] Bot will now respond to messages in this conversation`);
@@ -605,10 +615,9 @@ export class InstagramWebhookService {
             conversation.settings.activatedByKeyword = true;
             conversation.settings.activationKeyword = keywordDetectionResult.keyword;
             conversation.settings.aiEnabled = true; // Ensure AI is enabled
+            await conversation.save();
           }
         }
-        
-        await conversation.save();
         
         return; // STOP - Don't trigger AI response for our own messages
       } else {
@@ -1067,40 +1076,44 @@ export class InstagramWebhookService {
    */
   private async updateConversationMetadata(conversationId: string, messageData: InstagramMessage): Promise<void> {
     try {
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation) return;
+      // Build atomic update — use $inc for counters to avoid race conditions
+      const msgTimestamp = new Date(messageData.timestamp);
+      const updateSet: Record<string, any> = {
+        'timestamps.lastUserMessage': msgTimestamp,
+        'timestamps.lastActivity': msgTimestamp
+      };
 
-      // Update timestamps
-      conversation.timestamps.lastUserMessage = new Date(messageData.timestamp);
-      conversation.timestamps.lastActivity = new Date(messageData.timestamp);
-
-      // Update metrics
-      conversation.metrics.totalMessages += 1;
-      conversation.metrics.userMessages += 1;
-      conversation.messageCount += 1;
-      conversation.unreadCount += 1;
-
-      // Update context based on message content
+      // Context analysis based on message content
       if (messageData.text) {
         const text = messageData.text.toLowerCase();
-        
-        // Simple keyword analysis for context
+
         if (text.includes('urgente') || text.includes('asap') || text.includes('inmediato')) {
-          conversation.context.urgency = 'high';
+          updateSet['context.urgency'] = 'high';
         }
-        
+
         if (text.includes('precio') || text.includes('costo') || text.includes('cotización')) {
-          conversation.context.topic = 'pricing';
-          conversation.context.category = 'sales';
+          updateSet['context.topic'] = 'pricing';
+          updateSet['context.category'] = 'sales';
         }
-        
+
         if (text.includes('soporte') || text.includes('ayuda') || text.includes('problema')) {
-          conversation.context.topic = 'support';
-          conversation.context.category = 'customer_service';
+          updateSet['context.topic'] = 'support';
+          updateSet['context.category'] = 'customer_service';
         }
       }
 
-      await conversation.save();
+      await Conversation.updateOne(
+        { _id: conversationId },
+        {
+          $inc: {
+            'metrics.totalMessages': 1,
+            'metrics.userMessages': 1,
+            messageCount: 1,
+            unreadCount: 1
+          },
+          $set: updateSet
+        }
+      );
       console.log(`✅ Updated conversation metadata: ${conversationId}`);
     } catch (error) {
       console.error('❌ Error updating conversation metadata:', error);

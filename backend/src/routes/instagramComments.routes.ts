@@ -5,22 +5,35 @@ import CommentAutoReplyRule from '../models/commentAutoReplyRule.model';
 import { InstagramCommentService } from '../services/instagramComment.service';
 import commentWorkerService from '../services/commentWorker.service';
 import { authenticateToken } from '../middleware/auth';
+import InstagramWebhookService from '../services/instagramWebhook.service';
 
 const router = express.Router();
+const webhookService = new InstagramWebhookService();
 
 /**
- * Process comment webhook
+ * Process comment webhook — validates X-Hub-Signature-256 before accepting
  */
 router.post('/webhook', async (req, res) => {
   try {
-    console.log('📥 [Comment Webhook] Received comment webhook');
-    
-    // This will be handled by the main webhook service
-    // This endpoint is here for future use if needed
+    // Always respond 200 immediately to prevent Meta retries
     res.status(200).json({ success: true, message: 'Comment webhook received' });
+
+    // Validate webhook signature
+    const signature = req.headers['x-hub-signature-256'] as string;
+    if (!signature) {
+      console.error('❌ [Comment Webhook] Missing X-Hub-Signature-256 header — rejecting request');
+      return;
+    }
+    const rawBody = (req as any).rawBody ?? JSON.stringify(req.body);
+    const isValid = await webhookService.validateSignature(rawBody, signature);
+    if (!isValid) {
+      console.error('❌ [Comment Webhook] Invalid webhook signature — rejecting request');
+      return;
+    }
+
+    console.log('📥 [Comment Webhook] Received valid comment webhook');
   } catch (error) {
     console.error('❌ [Comment Webhook] Error:', error);
-    res.status(500).json({ success: false, error: 'Webhook processing failed' });
   }
 });
 

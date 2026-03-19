@@ -314,13 +314,21 @@ router.post('/conversations/:id/messages', async (req, res) => {
 
     await queueItem.save();
 
-    // Update conversation
-    conversation.timestamps.lastBotMessage = new Date();
-    conversation.timestamps.lastActivity = new Date();
-    conversation.metrics.totalMessages += 1;
-    conversation.metrics.botMessages += 1;
-    conversation.messageCount += 1;
-    await conversation.save();
+    // Update conversation — use atomic $inc to avoid race conditions
+    await Conversation.updateOne(
+      { _id: conversation._id },
+      {
+        $inc: {
+          messageCount: 1,
+          'metrics.totalMessages': 1,
+          'metrics.botMessages': 1
+        },
+        $set: {
+          'timestamps.lastBotMessage': new Date(),
+          'timestamps.lastActivity': new Date()
+        }
+      }
+    );
 
     res.json({
       success: true,
@@ -1331,13 +1339,13 @@ router.put('/accounts/:accountId/instructions', authenticateToken, async (req, r
   }
 });
 
-// Update account Fidelidapp slug
-router.put('/accounts/:accountId/fidelidapp-slug', authenticateToken, async (req, res) => {
+// Update account Fidelidapp slug (per-account)
+router.patch('/accounts/:accountId/fidelidapp-slug', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
-    const { fidelidappSlug } = req.body;
+    const { slug } = req.body;
 
-    console.log(`🔗 [Fidelidapp Slug] PUT request for account: ${accountId}, slug: ${fidelidappSlug}`);
+    console.log(`🔗 [Fidelidapp Slug] PATCH request for account: ${accountId}, slug: ${slug}`);
 
     const account = await InstagramAccount.findOne({ accountId });
 
@@ -1348,10 +1356,17 @@ router.put('/accounts/:accountId/fidelidapp-slug', authenticateToken, async (req
       });
     }
 
-    account.fidelidappSlug = fidelidappSlug || undefined;
+    if (slug !== undefined && typeof slug !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'slug must be a string'
+      });
+    }
+
+    account.fidelidappSlug = slug?.trim() || undefined;
     await account.save();
 
-    console.log(`✅ [Fidelidapp Slug] Updated slug for account ${accountId}: ${fidelidappSlug || '(cleared)'}`);
+    console.log(`✅ [Fidelidapp Slug] Updated slug for account ${accountId}: ${account.fidelidappSlug || '(cleared)'}`);
 
     res.json({
       success: true,

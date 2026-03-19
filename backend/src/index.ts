@@ -6,6 +6,7 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
 
 // Import routes
 import instagramRoutes from './routes/instagram.routes';
@@ -88,6 +89,30 @@ app.use(express.json({
   verify: (req: any, _res, buf) => { req.rawBody = buf.toString('utf8'); }
 }));
 app.use(express.urlencoded({ extended: true }));
+
+// Rate limiting — global: 100 requests per 15 minutes per IP
+// Skip webhook endpoints — Meta sends server-to-server bursts that must not be rate-limited
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many requests, please try again later.' },
+  skip: (req) => req.path.includes('/webhook')
+});
+app.use('/api/', apiLimiter);
+
+// Strict rate limit for auth endpoints: 10 requests per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many authentication attempts, please try again later.' }
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+
 console.log('✅ Middleware setup completed');
 
 // Basic health check
