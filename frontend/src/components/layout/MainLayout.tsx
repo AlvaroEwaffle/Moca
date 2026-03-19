@@ -32,7 +32,6 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Mail,
   Settings2,
   Activity,
   MessageCircle
@@ -172,12 +171,6 @@ const MainLayout = () => {
         }
       ]
     },
-    {
-      name: 'Gmail',
-      href: '/app/gmail',
-      icon: Mail,
-      current: location.pathname.startsWith('/app/gmail')
-    }
   ];
 
   const getInitials = (name: string) => {
