@@ -1,10 +1,28 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { User } from '../models';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
+
+// Rate limiters for auth endpoints — brute force protection
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: 'Too many login attempts, please try again after 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  message: { error: 'Too many registration attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Get current user
 router.get('/me', authenticateToken, async (req, res) => {
@@ -34,7 +52,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 });
 
 // Register endpoint
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { name, email, password, businessName, phone, agentSettings } = req.body;
 
@@ -115,7 +133,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login endpoint
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 

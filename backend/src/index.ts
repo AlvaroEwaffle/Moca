@@ -72,14 +72,16 @@ console.log('🔧 Setting up middleware...');
 // CORS configuration
 const corsOptions = {
   origin: [
-    'http://localhost:3000', // Development frontend (default Vite port)
+    'http://localhost:3000', // Development frontend (legacy, kept for compat)
+    'http://localhost:5170', // Development frontend (assigned Vite port)
+    'http://localhost:5174', // Development frontend (legacy Vite port)
     'http://localhost:8080', // Legacy dev port (kept for compatibility)
     'https://moca.pages.dev', // Production frontend
     'https://*.moca.pages.dev', // All Cloudflare Pages subdomains
     'https://*.pages.dev' // All Cloudflare Pages (for dynamic URLs)
   ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token']
 };
 

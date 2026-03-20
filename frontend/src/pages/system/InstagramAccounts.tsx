@@ -1316,12 +1316,12 @@ const InstagramAccounts = () => {
     try {
       const backendUrl = BACKEND_URL;
       const response = await fetch(`${backendUrl}/api/instagram/accounts/${accountId}/fidelidapp-slug`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         },
-        body: JSON.stringify({ fidelidappSlug: fidelidappSlug.trim() })
+        body: JSON.stringify({ slug: fidelidappSlug.trim() })
       });
 
       const data = await response.json();
