@@ -314,6 +314,62 @@ router.post('/callback', authenticateToken, async (req, res) => {
   }
 });
 
+// Backfill pageScopedId (IGSID) for accounts that are missing it.
+// This resolves webhook ID matching failures for accounts where the IGSID fetch failed during OAuth.
+router.post('/backfill-igsid', async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    const accounts = await InstagramAccount.find({
+      userId,
+      isActive: true,
+      $or: [{ pageScopedId: null }, { pageScopedId: '' }, { pageScopedId: { $exists: false } }]
+    });
+
+    if (accounts.length === 0) {
+      return res.json({ success: true, data: { message: 'All accounts already have IGSID', updated: 0 } });
+    }
+
+    console.log(`🔧 [IGSID Backfill] Found ${accounts.length} accounts missing pageScopedId for user ${userId}`);
+    const results: Array<{ accountName: string; status: string; pageScopedId?: string }> = [];
+
+    for (const account of accounts) {
+      const appScopedId = (account as any).appScopedId || account.accountId;
+      try {
+        const igsidRes = await fetch(
+          `https://graph.instagram.com/v25.0/${appScopedId}?fields=user_id&access_token=${account.accessToken}`
+        );
+        if (igsidRes.ok) {
+          const igsidData = await igsidRes.json();
+          const pageScopedId = igsidData.user_id ?? null;
+          if (pageScopedId) {
+            account.pageScopedId = pageScopedId;
+            await account.save();
+            console.log(`✅ [IGSID Backfill] ${account.accountName}: pageScopedId set to ${pageScopedId}`);
+            results.push({ accountName: account.accountName, status: 'updated', pageScopedId });
+          } else {
+            console.warn(`⚠️ [IGSID Backfill] ${account.accountName}: API returned OK but no user_id`);
+            results.push({ accountName: account.accountName, status: 'no_user_id_in_response' });
+          }
+        } else {
+          const err = await igsidRes.json().catch(() => ({}));
+          console.warn(`⚠️ [IGSID Backfill] ${account.accountName}: API error`, err);
+          results.push({ accountName: account.accountName, status: 'api_error' });
+        }
+      } catch (e) {
+        console.error(`❌ [IGSID Backfill] ${account.accountName}: fetch threw`, e);
+        results.push({ accountName: account.accountName, status: 'exception' });
+      }
+    }
+
+    const updated = results.filter(r => r.status === 'updated').length;
+    console.log(`✅ [IGSID Backfill] Done. Updated ${updated}/${accounts.length} accounts.`);
+    res.json({ success: true, data: { message: `Backfilled ${updated} accounts`, results } });
+  } catch (error) {
+    console.error('❌ Error in IGSID backfill:', error);
+    res.status(500).json({ success: false, error: 'Failed to backfill IGSID' });
+  }
+});
+
 // Refresh Instagram access token
 router.post('/refresh-token', async (req, res) => {
   try {

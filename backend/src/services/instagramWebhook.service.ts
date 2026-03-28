@@ -1200,7 +1200,7 @@ export class InstagramWebhookService {
         continue;
       }
       try {
-        const res = await fetch(`https://graph.instagram.com/v25.0/${recipientId}?fields=id,username&access_token=${account.accessToken}`);
+        const res = await fetch(`https://graph.instagram.com/v25.0/${recipientId}?fields=id,username,user_id&access_token=${account.accessToken}`);
         const status = res.status;
         if (!res.ok) {
           const body = await res.text();
@@ -1208,9 +1208,10 @@ export class InstagramWebhookService {
           continue;
         }
         const data = await res.json();
-        console.log(`🔍 [Resolve API] ${account.accountName} GET /${recipientId} → 200 id=${data.id} username=${data.username}`);
-        const matchesAccount = data.id === String(account.accountId) ||
-          ((account as any).appScopedId && data.id === String((account as any).appScopedId)) ||
+        console.log(`🔍 [Resolve API] ${account.accountName} GET /${recipientId} → 200 id=${data.id} username=${data.username} user_id=${data.user_id}`);
+        const idsToCheck = [data.id, data.user_id].filter(Boolean).map(String);
+        const accountIds = [account.accountId, (account as any).appScopedId, account.pageScopedId].filter(Boolean).map(String);
+        const matchesAccount = idsToCheck.some(id => accountIds.includes(id)) ||
           (data.username && data.username === account.accountName);
         if (matchesAccount) {
           const existing = account.alternateRecipientIds || [];
