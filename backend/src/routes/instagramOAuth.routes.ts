@@ -147,19 +147,37 @@ router.post('/callback', authenticateToken, async (req, res) => {
     // Fetch real IGSID used as entry.id in Meta webhooks.
     // Must call GET /{appScopedId}?fields=user_id — NOT /{canonicalId} (that just returns itself, circular).
     // The app-scoped id resolves to the Instagram global user ID Meta sends as entry.id in webhooks.
+    // This is MANDATORY — without it, webhooks cannot be matched to the account.
     let pageScopedId: string | null = null;
-    try {
-      const igsidRes = await fetch(`https://graph.instagram.com/v25.0/${appScopedId}?fields=user_id&access_token=${finalAccessToken}`);
-      if (igsidRes.ok) {
-        const igsidData = await igsidRes.json();
-        pageScopedId = igsidData.user_id ?? null;
-        console.log(`✅ [OAuth Callback] Real IGSID (webhook entry.id): ${pageScopedId} (appScopedId: ${appScopedId}, canonicalId: ${canonicalId})`);
-      } else {
-        const err = await igsidRes.json().catch(() => ({}));
-        console.warn('⚠️ [OAuth Callback] Could not fetch IGSID — webhook account matching may fall back to username resolution:', err);
+    const IGSID_MAX_RETRIES = 3;
+    for (let attempt = 1; attempt <= IGSID_MAX_RETRIES; attempt++) {
+      try {
+        console.log(`🔧 [OAuth Callback] Fetching IGSID (attempt ${attempt}/${IGSID_MAX_RETRIES})...`);
+        const igsidRes = await fetch(`https://graph.instagram.com/v25.0/${appScopedId}?fields=user_id&access_token=${finalAccessToken}`);
+        if (igsidRes.ok) {
+          const igsidData = await igsidRes.json();
+          pageScopedId = igsidData.user_id ?? null;
+          if (pageScopedId) {
+            console.log(`✅ [OAuth Callback] Real IGSID (webhook entry.id): ${pageScopedId} (appScopedId: ${appScopedId}, canonicalId: ${canonicalId})`);
+            break;
+          }
+          console.warn(`⚠️ [OAuth Callback] IGSID response OK but user_id field is missing (attempt ${attempt})`);
+        } else {
+          const err = await igsidRes.json().catch(() => ({}));
+          console.warn(`⚠️ [OAuth Callback] IGSID fetch failed (attempt ${attempt}/${IGSID_MAX_RETRIES}):`, err);
+        }
+      } catch (e) {
+        console.warn(`⚠️ [OAuth Callback] IGSID fetch threw (attempt ${attempt}/${IGSID_MAX_RETRIES}):`, e);
       }
-    } catch (e) {
-      console.warn('⚠️ [OAuth Callback] pageScopedId fetch threw — continuing without it:', e);
+      if (attempt < IGSID_MAX_RETRIES) {
+        const backoffMs = 1000 * attempt;
+        console.log(`🔧 [OAuth Callback] Retrying IGSID fetch in ${backoffMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
+    if (!pageScopedId) {
+      console.error('❌ [OAuth Callback] CRITICAL: Could not fetch IGSID after all retries. Falling back to canonicalId as pageScopedId — webhook matching may be unreliable.');
+      pageScopedId = canonicalId;
     }
 
     // Find existing account: by canonical ID, app-scoped ID, or username (prevents duplicate accounts on re-auth)
