@@ -1,0 +1,201 @@
+{
+  "name": "moca-mcp",
+  "version": "1.0.0",
+  "description": "Moca Instagram DM Agent — MCP Server",
+  "server": {
+    "command": "node",
+    "args": ["dist/src/mcp/index.js"]
+  },
+  "tools": [
+    {
+      "name": "read_conversations",
+      "description": "Get a list of Instagram DM conversations with preview text, lead scores, and metadata. Returns paginated results.",
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "description": "Instagram account ID (user context)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max conversations to return (1-50)",
+          "default": 20
+        },
+        "offset": {
+          "type": "number",
+          "description": "Pagination offset",
+          "default": 0
+        },
+        "filter": {
+          "type": "string",
+          "enum": ["all", "unread", "high_priority"],
+          "description": "Filter conversations by status",
+          "default": "all"
+        }
+      },
+      "required": ["accountId"]
+    },
+    {
+      "name": "read_conversation_history",
+      "description": "Get full conversation thread including all messages, timestamps, and direction (inbound/outbound).",
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "description": "Instagram account ID"
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Conversation ID (psid)"
+        },
+        "maxMessages": {
+          "type": "number",
+          "description": "Max messages to return (1-100)",
+          "default": 50
+        }
+      },
+      "required": ["accountId", "conversationId"]
+    },
+    {
+      "name": "send_message",
+      "description": "Send a direct message reply to an Instagram conversation. Message is sent immediately.",
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "description": "Instagram account ID"
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Conversation ID (psid)"
+        },
+        "message": {
+          "type": "string",
+          "description": "Message text to send"
+        },
+        "messageType": {
+          "type": "string",
+          "enum": ["text", "quick_reply"],
+          "description": "Type of message",
+          "default": "text"
+        }
+      },
+      "required": ["accountId", "conversationId", "message"]
+    },
+    {
+      "name": "update_lead_score",
+      "description": "Update the lead score for a conversation (1-7 scale). Score determines handoff priority.",
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "description": "Instagram account ID"
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Conversation ID (psid)"
+        },
+        "score": {
+          "type": "number",
+          "description": "Lead score (1-7). 7 = ready for handoff",
+          "minimum": 1,
+          "maximum": 7
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for score change"
+        }
+      },
+      "required": ["accountId", "conversationId", "score"]
+    },
+    {
+      "name": "read_conversation_metadata",
+      "description": "Get metadata for a conversation: status, lead_score, tags, last_activity, message_count, etc.",
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "description": "Instagram account ID"
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Conversation ID (psid)"
+        }
+      },
+      "required": ["accountId", "conversationId"]
+    },
+    {
+      "name": "list_conversations",
+      "description": "Get paginated list of all conversations with sorting and filtering options.",
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "description": "Instagram account ID"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Results per page (1-100)",
+          "default": 20
+        },
+        "offset": {
+          "type": "number",
+          "description": "Pagination offset",
+          "default": 0
+        },
+        "sortBy": {
+          "type": "string",
+          "enum": ["recent", "score", "unread"],
+          "description": "Sort order",
+          "default": "recent"
+        }
+      },
+      "required": ["accountId"]
+    },
+    {
+      "name": "create_message_queue_rule",
+      "description": "Create an auto-response rule that triggers on keyword match. Used for automating initial responses.",
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "description": "Instagram account ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Rule name"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Keywords that trigger this rule"
+        },
+        "responseTemplate": {
+          "type": "string",
+          "description": "Auto-response message template"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether rule is active",
+          "default": true
+        }
+      },
+      "required": ["accountId", "name", "keywords", "responseTemplate"]
+    },
+    {
+      "name": "archive_conversation",
+      "description": "Mark a conversation as archived. Archived conversations are hidden from the main list.",
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "description": "Instagram account ID"
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Conversation ID (psid)"
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Archive status (true to archive, false to unarchive)",
+          "default": true
+        }
+      },
+      "required": ["accountId", "conversationId"]
+    }
+  ]
+}
