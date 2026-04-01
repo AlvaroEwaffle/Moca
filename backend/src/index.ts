@@ -75,6 +75,7 @@ const corsOptions = {
     'http://localhost:3000', // Development frontend (legacy, kept for compat)
     'http://localhost:5170', // Development frontend (assigned Vite port)
     'http://localhost:5174', // Development frontend (legacy Vite port)
+    'http://localhost:5180', // Vilo Platform Dashboard
     'http://localhost:8080', // Legacy dev port (kept for compatibility)
     'https://moca.pages.dev', // Production frontend
     'https://*.moca.pages.dev', // All Cloudflare Pages subdomains
