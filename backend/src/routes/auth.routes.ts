@@ -96,13 +96,13 @@ router.post('/register', registerLimiter, async (req, res) => {
     const accessToken = jwt.sign(
       { userId: newUser.id, email: newUser.email },
       process.env.JWT_SECRET!,
-      { expiresIn: '24h' }
+      { expiresIn: '30d' }
     );
 
     const refreshToken = jwt.sign(
       { userId: newUser.id },
       process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' }
     );
 
     console.log(`✅ User registered: ${email}`);
@@ -167,13 +167,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     const accessToken = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET!,
-      { expiresIn: '24h' }
+      { expiresIn: '30d' }
     );
 
     const refreshToken = jwt.sign(
       { userId: user.id },
       process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' }
     );
 
     // Update login tracking
