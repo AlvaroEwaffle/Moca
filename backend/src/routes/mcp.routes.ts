@@ -35,6 +35,17 @@ const MCP_TOOLS = [
     description: 'Obtiene el número de cuentas de Instagram conectadas.',
     schema: { type: 'object', properties: {}, required: [] },
   },
+  {
+    name: 'get_hot_leads',
+    description: 'Retorna conversaciones con score > 2 activas en las últimas 24h, ordenadas por score descendente.',
+    schema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Número de leads a retornar (default 20, max 50)' },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
@@ -128,6 +139,27 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
     case 'get_account_count': {
       const count = await InstagramAccount.countDocuments();
       return { count };
+    }
+
+    case 'get_hot_leads': {
+      const limit = Math.min(Number(args.limit) || 20, 50);
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const leads = await Conversation.find({
+        'leadScoring.currentScore': { $gt: 2 },
+        'timestamps.lastActivity': { $gte: since },
+      })
+        .sort({ 'leadScoring.currentScore': -1, 'timestamps.lastActivity': -1 })
+        .limit(limit)
+        .select('accountId status leadScoring.currentScore leadScoring.currentStep.stepName settings.aiEnabled timestamps.lastActivity metrics.totalMessages context.topic')
+        .lean();
+
+      return {
+        leads,
+        count: leads.length,
+        window: '24h',
+        minScore: 3,
+      };
     }
 
     default:
