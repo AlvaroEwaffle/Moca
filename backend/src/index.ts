@@ -17,6 +17,7 @@ import analyticsRoutes from './routes/analytics.routes';
 import instagramCommentsRoutes from './routes/instagramComments.routes';
 import followUpRoutes from './routes/followUp.routes';
 import agentRoutes from './routes/agents.routes';
+import mcpRoutes from './routes/mcp.routes';
 
 // Import services
 import debounceWorker from './services/debounceWorker.service';
@@ -83,7 +84,7 @@ const corsOptions = {
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token', 'x-platform-key']
 };
 
 app.use(cors(corsOptions));
@@ -150,6 +151,9 @@ app.use('/api/global-agent-config', globalAgentConfigRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/follow-up', followUpRoutes);
 app.use('/api/agents', agentRoutes);
+
+// Platform MCP — service-to-service, protected by X-Platform-Key
+app.use('/api/mcp', mcpRoutes);
 console.log('✅ API routes setup completed');
 
 // Error handling middleware
