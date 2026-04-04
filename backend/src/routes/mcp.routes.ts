@@ -94,12 +94,12 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
     case 'get_recent_conversations': {
       const limit = Math.min(Number(args.limit) || 10, 50);
       const query: Record<string, unknown> = {};
-      if (args.minScore) query['leadScore.score'] = { $gte: args.minScore };
+      if (args.minScore) query['leadScoring.currentScore'] = { $gte: args.minScore };
 
       const conversations = await Conversation.find(query)
-        .sort({ updatedAt: -1 })
+        .sort({ 'timestamps.lastActivity': -1 })
         .limit(limit)
-        .select('igUserId igUsername leadScore agentEnabled status updatedAt')
+        .select('accountId status leadScoring.currentScore leadScoring.currentStep.stepName settings.aiEnabled timestamps.lastActivity metrics.totalMessages context.topic')
         .lean();
 
       return { conversations, count: conversations.length };
@@ -109,7 +109,7 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
       const stats = await Conversation.aggregate([
         {
           $group: {
-            _id: '$leadScore.score',
+            _id: '$leadScoring.currentScore',
             count: { $sum: 1 },
           },
         },
