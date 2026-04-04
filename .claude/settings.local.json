@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(cd /Users/alvarovillena/Desktop/Villelabs/Moca/frontend && npm run deploy 2>&1)",
+      "Bash(node:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(echo No relevant lines found:*)",
+      "Bash(sleep 15:*)",
+      "Bash(tail:*)",
+      "Bash(cd:*)",
+      "Bash(cd /Users/alvarovillena/Desktop/Villelabs/Moca/backend && railway up 2>&1)"
+    ]
+  }
+}

@@ -1,5 +1,7 @@
 import type { Config } from "tailwindcss";
 
+// Design tokens aligned with @vilo/ui design system
+// Source of truth: platform/packages/ui/src/tokens.ts
 export default {
 	darkMode: ["class"],
 	content: [
@@ -25,54 +27,60 @@ export default {
 				background: 'hsl(var(--background))',
 				foreground: 'hsl(var(--foreground))',
 				primary: {
-					DEFAULT: '#28244a',
-					50: '#f5f4f7',
-					100: '#e9e8ed',
-					200: '#d3d1db',
-					300: '#bdbac9',
-					400: '#a7a3b7',
-					500: '#28244a',
-					600: '#201d3b',
-					700: '#18162c',
-					800: '#100f1d',
-					900: '#08070e',
+					DEFAULT: '#2175a1',
+					50: '#f0f9ff',
+					100: '#e0f2fe',
+					200: '#bae6fd',
+					300: '#7dd3fc',
+					400: '#38bdf8',
+					500: '#2175a1',
+					600: '#1b6389',
+					700: '#155071',
+					800: '#103d59',
+					900: '#0b2a41',
 					foreground: '#FFFFFF'
 				},
 				secondary: {
-					DEFAULT: '#fd5a93',
-					50: '#fff1f6',
-					100: '#ffe3ed',
-					200: '#ffc7db',
-					300: '#ffabc9',
-					400: '#ff8fb7',
-					500: '#fd5a93',
-					600: '#e64a83',
-					700: '#cc3a73',
-					800: '#b32a63',
-					900: '#991a53',
-					foreground: '#FFFFFF'
+					DEFAULT: 'hsl(var(--secondary))',
+					50: '#f0f9ff',
+					100: '#e0f2fe',
+					200: '#bae6fd',
+					300: '#7dd3fc',
+					400: '#38bdf8',
+					500: '#1b6389',
+					600: '#155071',
+					700: '#103d59',
+					800: '#0b2a41',
+					900: '#072231',
+					foreground: 'hsl(var(--secondary-foreground))'
 				},
 				destructive: {
 					DEFAULT: 'hsl(var(--destructive))',
 					foreground: 'hsl(var(--destructive-foreground))'
+				},
+				success: {
+					DEFAULT: '#10b981'
+				},
+				warning: {
+					DEFAULT: '#f59e0b'
 				},
 				muted: {
 					DEFAULT: 'hsl(var(--muted))',
 					foreground: 'hsl(var(--muted-foreground))'
 				},
 				accent: {
-					DEFAULT: '#ffb148',
-					50: '#fff8f0',
-					100: '#fff1e1',
-					200: '#ffe3c3',
-					300: '#ffd5a5',
-					400: '#ffc787',
-					500: '#ffb148',
-					600: '#e69f3a',
-					700: '#cc8d2c',
-					800: '#b37b1e',
-					900: '#996910',
-					foreground: '#FFFFFF'
+					DEFAULT: 'hsl(var(--accent))',
+					50: '#f0f9ff',
+					100: '#e0f2fe',
+					200: '#bae6fd',
+					300: '#7dd3fc',
+					400: '#38bdf8',
+					500: '#2175a1',
+					600: '#1b6389',
+					700: '#155071',
+					800: '#103d59',
+					900: '#0b2a41',
+					foreground: 'hsl(var(--accent-foreground))'
 				},
 				popover: {
 					DEFAULT: 'hsl(var(--popover))',
@@ -88,6 +96,11 @@ export default {
 				md: 'calc(var(--radius) - 2px)',
 				sm: 'calc(var(--radius) - 4px)'
 			},
+			fontFamily: {
+				heading: ['Poppins', 'sans-serif'],
+				body: ['Open Sans', 'sans-serif'],
+				mono: ['DM Mono', 'monospace']
+			},
 			keyframes: {
 				'fade-in': {
 					'0%': { opacity: '0', transform: 'translateY(10px)' },
@@ -100,12 +113,22 @@ export default {
 				'slide-up': {
 					'0%': { transform: 'translateY(20px)', opacity: '0' },
 					'100%': { transform: 'translateY(0)', opacity: '1' }
+				},
+				'accordion-down': {
+					from: { height: '0' },
+					to: { height: 'var(--radix-accordion-content-height)' }
+				},
+				'accordion-up': {
+					from: { height: 'var(--radix-accordion-content-height)' },
+					to: { height: '0' }
 				}
 			},
 			animation: {
 				'fade-in': 'fade-in 0.6s ease-out',
 				'scale-in': 'scale-in 0.4s ease-out',
-				'slide-up': 'slide-up 0.5s ease-out'
+				'slide-up': 'slide-up 0.5s ease-out',
+				'accordion-down': 'accordion-down 0.2s ease-out',
+				'accordion-up': 'accordion-up 0.2s ease-out'
 			}
 		}
 	},
