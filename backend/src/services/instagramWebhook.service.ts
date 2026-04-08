@@ -1039,7 +1039,9 @@ export class InstagramWebhookService {
         recipientId: messageData.recipient?.id,
         role: messageRole,
         content: {
-          text: messageData.text || messageData.type,
+          text: messageData.text || (messageData.attachments?.length
+            ? `[${messageData.attachments[0].type ?? 'attachment'}]`
+            : ''),
           attachments: messageData.attachments?.map(att => ({
             type: att.type as any,
             url: att.url || '',
