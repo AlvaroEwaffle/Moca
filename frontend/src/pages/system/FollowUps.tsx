@@ -103,7 +103,7 @@ export default function FollowUps() {
   const fetchConfig = useCallback(async (accountId: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/follow-ups/config/${accountId}`, {
+      const res = await fetch(`${BACKEND_URL}/api/follow-up/config/${accountId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -119,7 +119,7 @@ export default function FollowUps() {
 
   const fetchStats = useCallback(async (accountId: string) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/follow-ups/stats/${accountId}`, {
+      const res = await fetch(`${BACKEND_URL}/api/follow-up/stats/${accountId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -133,7 +133,7 @@ export default function FollowUps() {
 
   const fetchHistory = useCallback(async (accountId: string) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/follow-ups/history/${accountId}?limit=10`, {
+      const res = await fetch(`${BACKEND_URL}/api/follow-up/history/${accountId}?limit=10`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -194,7 +194,7 @@ export default function FollowUps() {
     if (!selectedAccountId) return;
     setSending(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/follow-ups/send/${selectedAccountId}`, {
+      const res = await fetch(`${BACKEND_URL}/api/follow-up/send/${selectedAccountId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
