@@ -37,6 +37,7 @@ interface FollowUpConfig {
   timeSinceLastAnswer: number;
   messageMode: 'template' | 'ai';
   messageTemplate: string;
+  aiInstruction: string;
 }
 
 interface FollowUpStats {
@@ -173,7 +174,8 @@ export default function FollowUps() {
           maxFollowUps: config.maxFollowUps,
           timeSinceLastAnswer: config.timeSinceLastAnswer,
           messageMode: config.messageMode,
-          messageTemplate: config.messageTemplate
+          messageTemplate: config.messageTemplate,
+          aiInstruction: config.aiInstruction
         })
       });
       if (res.ok) {
@@ -356,13 +358,14 @@ export default function FollowUps() {
               <Label>Hours Since Last Answer</Label>
               <Input
                 type="number"
-                min={1}
+                min={0.25}
                 max={168}
+                step={0.25}
                 value={config.timeSinceLastAnswer}
-                onChange={(e) => setConfig({ ...config, timeSinceLastAnswer: parseInt(e.target.value) || 12 })}
+                onChange={(e) => setConfig({ ...config, timeSinceLastAnswer: parseFloat(e.target.value) || 1 })}
               />
               <p className="text-xs text-muted-foreground">
-                Wait this many hours after last activity before sending a follow-up.
+                Wait this many hours after last activity before sending a follow-up. Use decimals for minutes (0.25 = 15 min, 0.5 = 30 min, 1 = 1 hour).
               </p>
             </div>
 
@@ -397,6 +400,22 @@ export default function FollowUps() {
                   : 'AI generates contextual follow-ups based on conversation history.'}
               </p>
             </div>
+
+            {/* AI Instruction */}
+            {config.messageMode === 'ai' && (
+              <div className="space-y-2">
+                <Label>AI Instruction</Label>
+                <Textarea
+                  value={config.aiInstruction || ''}
+                  onChange={(e) => setConfig({ ...config, aiInstruction: e.target.value })}
+                  placeholder="Ej: Enfócate en agendar una reunión. Menciona que tenemos una promoción vigente. No ofrezcas descuentos."
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Custom instruction that guides the AI when generating follow-up messages. The AI also uses the account's system prompt and conversation history.
+                </p>
+              </div>
+            )}
 
             {/* Template editor */}
             {config.messageMode === 'template' && (

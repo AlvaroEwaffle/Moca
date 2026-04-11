@@ -472,6 +472,7 @@ export async function generateFollowUpSuggestion(context: {
     toneOfVoice?: string;
     keyInformation?: string;
   };
+  aiInstruction?: string;
 }): Promise<string> {
   try {
     console.log('🤖 [OpenAI] Generating AI follow-up suggestion');
@@ -487,7 +488,11 @@ Mantén el tono profesional pero cercano. Responde en español por defecto.`;
       ? `\nTono de voz: ${context.agentBehavior.toneOfVoice}\n`
       : '';
 
-    const systemPrompt = baseSystemPrompt + keyInfoSection + toneInstruction + `
+    const customInstruction = context.aiInstruction
+      ? `\n\nINSTRUCCIÓN PERSONALIZADA DEL USUARIO:\n${context.aiInstruction}\n`
+      : '';
+
+    const systemPrompt = baseSystemPrompt + keyInfoSection + toneInstruction + customInstruction + `
 
 INSTRUCCIONES PARA EL MENSAJE DE SEGUIMIENTO:
 - Genera UN solo mensaje breve (2-4 frases máximo)

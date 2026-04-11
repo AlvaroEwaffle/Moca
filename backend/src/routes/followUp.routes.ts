@@ -49,7 +49,7 @@ router.put('/config/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const userId = req.user?.userId;
-    const { enabled, minLeadScore, maxFollowUps, timeSinceLastAnswer, messageMode, messageTemplate } = req.body;
+    const { enabled, minLeadScore, maxFollowUps, timeSinceLastAnswer, messageMode, messageTemplate, aiInstruction } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated' });
@@ -69,8 +69,8 @@ router.put('/config/:accountId', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Max follow-ups must be between 1 and 10' });
     }
 
-    if (timeSinceLastAnswer < 1 || timeSinceLastAnswer > 168) {
-      return res.status(400).json({ error: 'Time since last answer must be between 1 and 168 hours' });
+    if (timeSinceLastAnswer < 0.25 || timeSinceLastAnswer > 168) {
+      return res.status(400).json({ error: 'Time since last answer must be between 0.25 (15 min) and 168 hours' });
     }
 
     const updateData: any = {
@@ -78,7 +78,8 @@ router.put('/config/:accountId', authenticateToken, async (req, res) => {
       minLeadScore: Number(minLeadScore),
       maxFollowUps: Number(maxFollowUps),
       timeSinceLastAnswer: Number(timeSinceLastAnswer),
-      messageTemplate: String(messageTemplate || '')
+      messageTemplate: String(messageTemplate || ''),
+      aiInstruction: String(aiInstruction || '')
     };
     if (messageMode !== undefined) {
       updateData.messageMode = messageMode;

@@ -273,7 +273,8 @@ export class FollowUpWorkerService {
         conversationHistory,
         hoursSinceLastActivity,
         leadScore: lead.leadScoring?.currentScore,
-        agentBehavior
+        agentBehavior,
+        aiInstruction: config.aiInstruction || undefined
       });
 
       return message;
