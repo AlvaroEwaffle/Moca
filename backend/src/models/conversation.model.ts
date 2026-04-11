@@ -179,6 +179,7 @@ export interface IConversation extends Document {
     notes?: string;
     autoDisableAgent: boolean;
   };
+  isSupport: boolean; // Whether this conversation is support (not a lead)
   messageCount: number; // Total number of messages
   unreadCount: number; // Number of unread messages
 }
@@ -195,6 +196,7 @@ const ConversationSchema = new Schema<IConversation>({
   aiResponseMetadata: { type: AIResponseMetadataSchema, default: () => ({}) },
   analytics: { type: ConversationAnalyticsSchema, default: () => ({}) },
   milestone: { type: ConversationMilestoneSchema, default: () => ({}) },
+  isSupport: { type: Boolean, default: false },
   messageCount: { type: Number, default: 0 },
   unreadCount: { type: Number, default: 0 }
 }, {
@@ -225,15 +227,32 @@ ConversationSchema.index({ 'milestone.status': 1 });
 ConversationSchema.index({ 'milestone.target': 1 });
 ConversationSchema.index({ 'milestone.achievedAt': -1 });
 
-// Pre-save middleware to update timestamps and metrics
+// Pre-save middleware to update timestamps, metrics, and validate timestamps
 ConversationSchema.pre('save', function(next) {
   this.timestamps.lastActivity = new Date();
-  
+
   // Update metrics if message count changed
   if (this.isModified('messageCount')) {
     this.metrics.totalMessages = this.messageCount;
   }
-  
+
+  // R2.6: Validate timestamps — fix corrupted values (year > 2100)
+  const maxValidDate = new Date('2100-01-01').getTime();
+  const timestampFields: Array<'createdAt' | 'lastUserMessage' | 'lastBotMessage' | 'lastActivity'> = [
+    'createdAt', 'lastUserMessage', 'lastBotMessage', 'lastActivity'
+  ];
+  for (const field of timestampFields) {
+    const value = this.timestamps[field];
+    if (value && value.getTime() > maxValidDate) {
+      // Likely a Unix timestamp in milliseconds treated as seconds — divide by 1000
+      const corrected = new Date(value.getTime() / 1000);
+      if (corrected.getFullYear() >= 2020 && corrected.getFullYear() <= 2100) {
+        console.log(`🔧 [Conversation] Fixed corrupted timestamp ${field}: ${value.toISOString()} → ${corrected.toISOString()}`);
+        this.timestamps[field] = corrected;
+      }
+    }
+  }
+
   next();
 });
 

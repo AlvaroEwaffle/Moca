@@ -893,6 +893,7 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
 {
   "responseText": "string",
   "leadScore": number (1-7),
+  "aiAssessedScore": number (1-7),
   "intent": "string",
   "nextAction": "string",
   "confidence": number (0-1),
@@ -901,7 +902,11 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
     "previousContextReferenced": boolean,
     "businessNameUsed": "string"
   }
-}`;
+}
+
+IMPORTANTE sobre aiAssessedScore: Evalúa el nivel REAL de interés del cliente basándote en el contexto COMPLETO de la conversación (no solo keywords). Usa la escala 1-7:
+1=Contacto recibido, 2=Respondió 1 pregunta, 3=Confirma interés, 4=Milestone logrado, 5=Reminder enviado, 6=Respondió reminder, 7=Venta cerrada.
+El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedScore" debe reflejar tu análisis contextual profundo.`;
 
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: contextualInstructions },
@@ -1196,6 +1201,19 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
                  structuredResponse.leadScore === 6 ? 'Reminder Answered' :
                  structuredResponse.leadScore === 7 ? 'Sales Done' : 'Unknown'
     });
+
+    // R2.2: AI-based contextual scoring — use max(keywordScore, aiAssessedScore)
+    const aiAssessedScore = structuredResponse.aiAssessedScore;
+    if (aiAssessedScore && aiAssessedScore >= 1 && aiAssessedScore <= 7) {
+      const keywordScore = structuredResponse.leadScore;
+      const combinedScore = Math.max(keywordScore, aiAssessedScore);
+      // Apply the same maxAllowedScore ceiling
+      const finalCombinedScore = Math.min(combinedScore, maxAllowedScore);
+      if (finalCombinedScore !== keywordScore) {
+        console.log(`📈 [Lead Scoring] R2.2 AI contextual scoring: keyword=${keywordScore}, ai=${aiAssessedScore}, combined=${finalCombinedScore} (capped by maxAllowed=${maxAllowedScore})`);
+        structuredResponse.leadScore = finalCombinedScore;
+      }
+    }
 
     return structuredResponse;
 

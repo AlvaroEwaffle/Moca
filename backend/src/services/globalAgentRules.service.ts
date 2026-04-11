@@ -56,7 +56,7 @@ export class GlobalAgentRulesService {
     
     // Check milestone rule
     // Note: checkMilestoneRule now validates enableMilestoneAutoDisable internally
-      const milestoneResult = this.checkMilestoneRule(conversation, globalConfig);
+      const milestoneResult = await this.checkMilestoneRule(conversation, globalConfig);
       if (milestoneResult.shouldDisable) {
       console.log('🚫 [Global Agent Rules] Agent disabled by milestone rule');
         return milestoneResult;
@@ -143,26 +143,41 @@ export class GlobalAgentRulesService {
   /**
    * Check milestone rule
    */
-  private static checkMilestoneRule(
+  private static async checkMilestoneRule(
     conversation: IConversation,
     globalConfig: IGlobalAgentConfig
-  ): { shouldDisable: boolean; reason?: string; ruleType?: 'milestone' } {
-    
-    // CRITICAL: If enableMilestoneAutoDisable is false, do NOT evaluate
+  ): Promise<{ shouldDisable: boolean; reason?: string; ruleType?: 'milestone' }> {
+
+    const milestone = conversation.milestone;
+
+    // R1.3: Reset counter on milestone achievement (runs regardless of auto-disable setting)
+    // This is a separate concern: even if we don't auto-disable, we should reset counters
+    if (milestone && milestone.status === 'achieved' && globalConfig.responseLimits.resetCounterOnMilestone) {
+      console.log('🔄 [Global Agent Rules] Milestone achieved — resetting response counter (resetCounterOnMilestone=true)');
+      // Check BEFORE reset whether AI was disabled by response limit (reset clears the flag)
+      const wasDisabledByResponseLimit = conversation.settings?.responseCounter?.disabledByResponseLimit === true;
+      await this.resetResponseCounter(conversation);
+      // Re-enable AI if it was disabled by response limit
+      if (wasDisabledByResponseLimit) {
+        conversation.settings.aiEnabled = true;
+        console.log('✅ [Global Agent Rules] AI re-enabled after milestone reset');
+      }
+      await conversation.save();
+    }
+
+    // CRITICAL: If enableMilestoneAutoDisable is false, do NOT evaluate auto-disable
     // This setting must take precedence over autoDisableOnMilestone
     if (!globalConfig.systemSettings.enableMilestoneAutoDisable) {
       console.log('🔍 [Global Agent Rules] Milestone auto-disable is disabled, skipping check');
       return { shouldDisable: false };
     }
-    
+
     // Also check the legacy autoDisableOnMilestone flag for backwards compatibility
     if (!globalConfig.leadScoring.autoDisableOnMilestone) {
       console.log('🔍 [Global Agent Rules] Auto-disable on milestone setting is false, skipping check');
       return { shouldDisable: false };
     }
-    
-    const milestone = conversation.milestone;
-    
+
     // Log detailed information for debugging
     console.log('🔍 [Global Agent Rules] Checking milestone rule:', {
       conversationId: conversation.id,
@@ -170,7 +185,7 @@ export class GlobalAgentRulesService {
       milestoneStatus: milestone?.status || 'none',
       autoDisableAgent: milestone?.autoDisableAgent || false
     });
-    
+
     if (milestone && milestone.status === 'achieved' && milestone.autoDisableAgent) {
       console.log('🚫 [Global Agent Rules] Milestone achieved and auto-disable enabled:', {
         milestoneTarget: milestone.target,
@@ -182,7 +197,7 @@ export class GlobalAgentRulesService {
         ruleType: 'milestone'
       };
     }
-    
+
     console.log('✅ [Global Agent Rules] Milestone rule check passed, agent will continue');
     return { shouldDisable: false };
   }

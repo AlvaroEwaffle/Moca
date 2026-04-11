@@ -260,6 +260,15 @@ class DebounceWorkerService {
       // Mark messages as processed FIRST to prevent race conditions
       await this.markMessagesAsProcessed(unprocessedMessages.map(msg => msg.id));
 
+      // R1.4: Detect support conversations and set isSupport flag
+      const supportKeywords = ['problema', 'error', 'no funciona', 'ayuda', 'soporte', 'reclamo', 'falla', 'bug', 'queja'];
+      const combinedText = unprocessedMessages.map(m => m.content?.text || '').join(' ').toLowerCase();
+      const isSupport = supportKeywords.some(kw => combinedText.includes(kw));
+      if (isSupport && !conversation.isSupport) {
+        conversation.isSupport = true;
+        console.log(`🏷️ [Debounce] Conversation ${conversation.id} flagged as support`);
+      }
+
       // Generate structured response with full conversation context
       const responseData = await this.generateStructuredResponseForConversation(conversation, unprocessedMessages);
       
@@ -449,7 +458,9 @@ class DebounceWorkerService {
         // Include milestone information for lead score validation
         milestoneTarget: conversation.milestone?.target,
         milestoneStatus: conversation.milestone?.status,
-        milestoneCustomTarget: conversation.milestone?.customTarget
+        milestoneCustomTarget: conversation.milestone?.customTarget,
+        // R1.4: Pass support flag to skip lead scoring for support conversations
+        isSupport: conversation.isSupport
       };
 
       // Create AI response config
@@ -642,16 +653,35 @@ class DebounceWorkerService {
 
       // Update lead scoring
       const previousScore = conversation.leadScoring?.currentScore || 1;
-      const stepInfo = LEAD_SCORING_STEPS[structuredResponse.leadScore as keyof typeof LEAD_SCORING_STEPS];
-      
+
+      // Verify Score 5 eligibility: promote to 5 if a follow-up was actually sent
+      let finalLeadScore = structuredResponse.leadScore;
+      const score5Check = await LeadScoringService.verifyScore5Eligibility(
+        conversationId,
+        finalLeadScore
+      );
+      if (score5Check.score !== finalLeadScore) {
+        console.log(`📈 [Debounce] Score promoted from ${finalLeadScore} to ${score5Check.score}: ${score5Check.reason}`);
+        finalLeadScore = score5Check.score;
+      }
+
+      // R2.4: Slack alert for hot leads (score >= 4)
+      if (finalLeadScore >= 4 && finalLeadScore > previousScore) {
+        this.sendHotLeadSlackAlert(conversation, finalLeadScore, conversationId).catch(err => {
+          console.warn('⚠️ [Debounce] Slack hot lead alert failed (non-fatal):', err);
+        });
+      }
+
+      const stepInfo = LEAD_SCORING_STEPS[finalLeadScore as keyof typeof LEAD_SCORING_STEPS];
+
       conversation.leadScoring = {
-        currentScore: structuredResponse.leadScore,
+        currentScore: finalLeadScore,
         // previousScore removed from simplified model
         progression: structuredResponse.metadata.leadProgression || 'maintained',
         scoreHistory: [
           ...(conversation.leadScoring?.scoreHistory || []),
           {
-            score: structuredResponse.leadScore,
+            score: finalLeadScore,
             timestamp: new Date(),
             reason: `Intent: ${structuredResponse.intent}, Action: ${structuredResponse.nextAction}`,
             stepName: stepInfo?.name || 'Contact Received'
@@ -660,7 +690,7 @@ class DebounceWorkerService {
         // lastScoredAt removed from simplified model
         confidence: structuredResponse.confidence,
         currentStep: {
-          stepNumber: structuredResponse.leadScore,
+          stepNumber: finalLeadScore,
           stepName: stepInfo?.name || 'Contact Received',
           stepDescription: stepInfo?.description || 'Initial contact from customer'
         }
@@ -1065,6 +1095,64 @@ class DebounceWorkerService {
     // Simple keyword matching for custom milestones
     const keywords = customTarget.toLowerCase().split(' ').filter(word => word.length > 2);
     return keywords.some(keyword => messageText.includes(keyword));
+  }
+
+  /**
+   * R2.4: Send Slack notification for hot leads (score >= 4)
+   */
+  private async sendHotLeadSlackAlert(
+    conversation: IConversation,
+    score: number,
+    conversationId: string
+  ): Promise<void> {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+    if (!webhookUrl) {
+      // Graceful skip — no crash if SLACK_WEBHOOK_URL is not configured
+      return;
+    }
+
+    try {
+      // Get contact name
+      const contact = await Contact.findById(conversation.contactId);
+      const contactName = contact?.name || contact?.metadata?.instagramData?.username || 'Unknown';
+
+      // Get last 3 messages for summary
+      const recentMessages = await Message.find({
+        conversationId,
+        role: { $in: ['user', 'assistant'] }
+      })
+        .sort({ 'metadata.timestamp': -1 })
+        .limit(3)
+        .lean();
+
+      const messageSummary = recentMessages
+        .reverse()
+        .map((m: any) => `${m.role === 'user' ? 'Customer' : 'Agent'}: ${(m.content?.text || '').substring(0, 80)}`)
+        .join('\n');
+
+      const stepInfo = LEAD_SCORING_STEPS[score as keyof typeof LEAD_SCORING_STEPS];
+
+      const text = [
+        `*Hot Lead Alert* (Score ${score}/7 — ${stepInfo?.name || 'Unknown'})`,
+        `*Contact:* ${contactName}`,
+        `*Account:* ${conversation.accountId}`,
+        ``,
+        `*Recent messages:*`,
+        messageSummary,
+        ``,
+        `_Conversation ID: ${conversationId}_`
+      ].join('\n');
+
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+
+      console.log(`📢 [Debounce] Hot lead Slack alert sent for ${contactName} (score ${score})`);
+    } catch (error) {
+      console.warn('⚠️ [Debounce] Failed to send hot lead Slack alert:', error);
+    }
   }
 }
 

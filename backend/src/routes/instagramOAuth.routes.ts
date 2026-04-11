@@ -270,6 +270,30 @@ router.post('/callback', authenticateToken, async (req, res) => {
 
     await newAccount.save();
 
+    // R1.5: Auto-create FollowUpConfig with follow-ups enabled by default for new accounts
+    try {
+      const existingFollowUpConfig = await FollowUpConfig.findOne({
+        userId: req.user!.userId,
+        accountId: canonicalId
+      });
+      if (!existingFollowUpConfig) {
+        const defaultFollowUpConfig = new FollowUpConfig({
+          userId: req.user!.userId,
+          accountId: canonicalId,
+          enabled: true,
+          minLeadScore: 2,
+          maxFollowUps: 3,
+          timeSinceLastAnswer: 12,
+          messageMode: 'template',
+          messageTemplate: "Hola {name}! Vi que te interesaste en nuestros servicios. Me encantaria contarte mas detalles. Estoy aqui para ayudarte!"
+        });
+        await defaultFollowUpConfig.save();
+        console.log(`✅ [OAuth Callback] Auto-created FollowUpConfig with follow-ups enabled for account ${canonicalId}`);
+      }
+    } catch (followUpError) {
+      console.warn(`⚠️ [OAuth Callback] Failed to auto-create FollowUpConfig (non-fatal):`, followUpError);
+    }
+
     console.log(`✅ Created new Instagram account for user ${req.user!.email}: ${canonicalId}`);
     console.log(`✅ [OAuth Callback] accountId (IG_ID)=${canonicalId}, appScopedId=${appScopedId}`);
     console.log(`🔧 [OAuth Callback] Saved account settings:`, JSON.stringify(newAccount.settings, null, 2));

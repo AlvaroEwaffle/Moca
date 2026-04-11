@@ -5,9 +5,9 @@
  * lead progression and interest levels.
  */
 
-import { 
-  StructuredResponse, 
-  LeadScoringData, 
+import {
+  StructuredResponse,
+  LeadScoringData,
   ConversationContext,
   LEAD_SCORES,
   LEAD_SCORING_STEPS,
@@ -15,6 +15,7 @@ import {
   NEXT_ACTIONS
 } from '../types/aiResponse';
 import { GENERIC_AI_INSTRUCTIONS } from '../templates/aiInstructions';
+import LeadFollowUp from '../models/leadFollowUp.model';
 
 export class LeadScoringService {
   
@@ -64,9 +65,24 @@ export class LeadScoringService {
    * Calculate lead score based on message content and context
    */
   static calculateLeadScore(
-    message: string, 
+    message: string,
     conversationContext: ConversationContext
   ): LeadScoringData {
+    // R1.4: If conversation is flagged as support, do not increment lead score
+    if (conversationContext.isSupport) {
+      const previousScore = conversationContext.leadHistory[conversationContext.leadHistory.length - 1] || 1;
+      console.log(`⏭️ [Lead Scoring] Skipping score increment for support conversation`);
+      return {
+        currentScore: previousScore,
+        previousScore,
+        progression: 'maintained',
+        reasons: ['Support conversation — lead scoring skipped'],
+        confidence: 0.5,
+        stepName: LEAD_SCORING_STEPS[previousScore as keyof typeof LEAD_SCORING_STEPS]?.name || 'Contact Received',
+        stepDescription: LEAD_SCORING_STEPS[previousScore as keyof typeof LEAD_SCORING_STEPS]?.description || 'Initial contact from customer'
+      };
+    }
+
     const lowerMessage = message.toLowerCase();
     let maxScore = 1;
     const reasons: string[] = [];
@@ -114,14 +130,14 @@ export class LeadScoringService {
     
     // SPECIAL RULE: Score 5 (Reminder Sent) should only be assigned when a reminder is actually sent
     // This score represents an action by the agent, not just keywords in the message
+    // The async verification (verifyScore5Eligibility) must be called separately with conversationId
     if (maxScore === 5) {
-      // TODO: Check if a reminder was actually sent in the conversation history
-      // For now, we'll limit it to 4 if milestone is pending
-      if (conversationContext.milestoneStatus === 'pending' && maxAllowedScore <= 4) {
-        console.log(`⚠️ [Lead Scoring] Score 5 (Reminder Sent) not allowed - milestone pending and no reminder sent. Limiting to 4.`);
-        maxScore = 4;
-        reasons.push('Score 5 (Reminder Sent) requires milestone achievement or actual reminder sent');
-      }
+      // Score 5 cannot be assigned by keyword matching alone.
+      // It requires a follow-up to have been sent (verified asynchronously).
+      // Limit to 4 here; the debounce worker will promote to 5 via verifyScore5Eligibility.
+      console.log(`⚠️ [Lead Scoring] Score 5 (Reminder Sent) cannot be assigned by keywords alone. Limiting to 4.`);
+      maxScore = 4;
+      reasons.push('Score 5 (Reminder Sent) requires actual follow-up sent — will be verified asynchronously');
     }
     
     // Calculate progression
@@ -145,6 +161,43 @@ export class LeadScoringService {
     };
   }
   
+  /**
+   * Verify if a conversation is eligible for Score 5 (Reminder Sent).
+   * Score 5 requires that a follow-up message was actually sent to this conversation
+   * via the follow-up worker system (recorded in LeadFollowUp collection).
+   *
+   * @returns The verified score: 5 if a follow-up was sent, or the currentScore unchanged.
+   */
+  static async verifyScore5Eligibility(
+    conversationId: string,
+    currentScore: number
+  ): Promise<{ score: number; reason?: string }> {
+    // Only relevant for conversations at score 4 that might qualify for 5
+    if (currentScore < 4) {
+      return { score: currentScore };
+    }
+
+    try {
+      const sentFollowUps = await LeadFollowUp.countDocuments({
+        conversationId,
+        status: { $in: ['sent', 'delivered', 'responded'] }
+      });
+
+      if (sentFollowUps > 0) {
+        console.log(`✅ [Lead Scoring] Score 5 verified — ${sentFollowUps} follow-up(s) sent to conversation ${conversationId}`);
+        return {
+          score: 5,
+          reason: `Follow-up reminder sent (${sentFollowUps} sent)`
+        };
+      }
+
+      return { score: currentScore };
+    } catch (error) {
+      console.error(`❌ [Lead Scoring] Error verifying score 5 eligibility:`, error);
+      return { score: currentScore };
+    }
+  }
+
   /**
    * Determine customer intent from message content
    */

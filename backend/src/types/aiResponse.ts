@@ -5,6 +5,7 @@
 export interface StructuredResponse {
   responseText: string; // Actual response to customer
   leadScore: number; // Customer interest level (1-7)
+  aiAssessedScore?: number; // R2.2: AI-assessed lead score (1-7) based on full conversation context
   intent: string; // Customer's apparent intent
   nextAction: string; // Recommended next step
   confidence: number; // Confidence in assessment (0-1)
@@ -44,6 +45,7 @@ export interface ConversationContext {
   milestoneTarget?: 'link_shared' | 'meeting_scheduled' | 'demo_booked' | 'custom';
   milestoneStatus?: 'pending' | 'achieved' | 'failed';
   milestoneCustomTarget?: string;
+  isSupport?: boolean; // Whether this conversation is support (not a lead)
 }
 
 export interface AIResponseConfig {

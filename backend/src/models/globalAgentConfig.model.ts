@@ -4,11 +4,11 @@ import mongoose, { Document, Schema } from 'mongoose';
 const GlobalAgentConfigSchema = new Schema({
   // Response limit configuration
   responseLimits: {
-    maxResponsesPerConversation: { 
-      type: Number, 
-      default: 3, 
-      min: 1, 
-      max: 20 
+    maxResponsesPerConversation: {
+      type: Number,
+      default: 10,
+      min: 1,
+      max: 50
     },
     resetCounterOnMilestone: { 
       type: Boolean, 

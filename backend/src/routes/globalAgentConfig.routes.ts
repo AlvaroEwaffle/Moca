@@ -60,10 +60,10 @@ router.put('/', authenticateToken, async (req, res) => {
     }
     
     // Validate response limits
-    if (responseLimits.maxResponsesPerConversation < 1 || responseLimits.maxResponsesPerConversation > 20) {
+    if (responseLimits.maxResponsesPerConversation < 1 || responseLimits.maxResponsesPerConversation > 50) {
       return res.status(400).json({
         success: false,
-        error: 'maxResponsesPerConversation must be between 1 and 20'
+        error: 'maxResponsesPerConversation must be between 1 and 50'
       });
     }
     

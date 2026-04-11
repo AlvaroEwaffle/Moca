@@ -1,6 +1,8 @@
 import express from 'express';
 import { AnalyticsService } from '../services/analytics.service';
 import { authenticateToken } from '../middleware/auth';
+import Conversation from '../models/conversation.model';
+import { LeadFollowUp } from '../models';
 
 const router = express.Router();
 
@@ -261,6 +263,140 @@ router.get('/export', authenticateToken, async (req, res) => {
       success: false, 
       error: 'Failed to export data' 
     });
+  }
+});
+
+// R2.3: GET conversion funnel — score distribution with conversion rates
+router.get('/funnel', authenticateToken, async (req, res) => {
+  try {
+    console.log('📊 [Analytics] GET funnel request received');
+
+    const distribution = await Conversation.aggregate([
+      { $match: { status: { $in: ['open', 'closed'] } } },
+      {
+        $group: {
+          _id: '$leadScoring.currentScore',
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    const total = distribution.reduce((sum: number, d: { count: number }) => sum + d.count, 0);
+
+    // Build funnel with conversion rates
+    const funnel = [];
+    for (let score = 1; score <= 7; score++) {
+      const entry = distribution.find((d: { _id: number }) => d._id === score);
+      const count = entry?.count || 0;
+      const percentage = total > 0 ? Math.round((count / total) * 1000) / 10 : 0;
+
+      // Conversion rate: how many of the previous step advanced to this one
+      const prevEntry = distribution.find((d: { _id: number }) => d._id === score - 1);
+      const prevCount = prevEntry?.count || 0;
+      const conversionRate = score === 1
+        ? 100
+        : prevCount > 0
+          ? Math.round((count / prevCount) * 1000) / 10
+          : 0;
+
+      const stepNames: Record<number, string> = {
+        1: 'Contact Received',
+        2: 'Answers 1 Question',
+        3: 'Confirms Interest',
+        4: 'Milestone Met',
+        5: 'Reminder Sent',
+        6: 'Reminder Answered',
+        7: 'Sales Done'
+      };
+
+      funnel.push({
+        score,
+        stepName: stepNames[score] || `Step ${score}`,
+        count,
+        percentage,
+        conversionRate
+      });
+    }
+
+    console.log('✅ [Analytics] Funnel data fetched successfully');
+    res.json({ success: true, data: { funnel, total } });
+  } catch (error) {
+    console.error('❌ [Analytics] Error fetching funnel:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch funnel data' });
+  }
+});
+
+// R2.5: GET follow-up effectiveness stats
+router.get('/follow-up-stats', authenticateToken, async (req, res) => {
+  try {
+    console.log('📊 [Analytics] GET follow-up-stats request received');
+
+    const totalSent = await LeadFollowUp.countDocuments({
+      status: { $in: ['sent', 'delivered', 'responded', 'converted'] }
+    });
+    const totalResponded = await LeadFollowUp.countDocuments({ status: 'responded' });
+    const totalConverted = await LeadFollowUp.countDocuments({ status: 'converted' });
+    const totalFailed = await LeadFollowUp.countDocuments({ status: 'failed' });
+    const totalPending = await LeadFollowUp.countDocuments({ status: 'pending' });
+
+    const responseRate = totalSent > 0 ? Math.round((totalResponded / totalSent) * 1000) / 10 : 0;
+    const conversionRate = totalSent > 0 ? Math.round((totalConverted / totalSent) * 1000) / 10 : 0;
+
+    res.json({
+      success: true,
+      data: {
+        totalSent,
+        totalResponded,
+        totalConverted,
+        totalFailed,
+        totalPending,
+        responseRate,
+        conversionRate
+      }
+    });
+  } catch (error) {
+    console.error('❌ [Analytics] Error fetching follow-up stats:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch follow-up stats' });
+  }
+});
+
+// R2.5: GET average response time by score level
+router.get('/response-time', authenticateToken, async (req, res) => {
+  try {
+    console.log('📊 [Analytics] GET response-time request received');
+
+    const responseTimeByScore = await Conversation.aggregate([
+      { $match: { status: { $in: ['open', 'closed'] }, 'timestamps.lastUserMessage': { $exists: true }, 'timestamps.lastBotMessage': { $exists: true } } },
+      {
+        $project: {
+          score: '$leadScoring.currentScore',
+          responseTimeMs: {
+            $subtract: ['$timestamps.lastBotMessage', '$timestamps.lastUserMessage']
+          }
+        }
+      },
+      { $match: { responseTimeMs: { $gt: 0, $lt: 86400000 } } }, // Filter valid (0-24h)
+      {
+        $group: {
+          _id: '$score',
+          avgResponseTimeMs: { $avg: '$responseTimeMs' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    const data = responseTimeByScore.map((entry: { _id: number; avgResponseTimeMs: number; count: number }) => ({
+      score: entry._id,
+      avgResponseTimeMinutes: Math.round(entry.avgResponseTimeMs / 60000),
+      count: entry.count
+    }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('❌ [Analytics] Error fetching response time:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch response time' });
   }
 });
 

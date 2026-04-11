@@ -27,6 +27,10 @@ import InstagramAccounts from "./pages/system/InstagramAccounts";
 
 // Analytics
 import AnalyticsDashboard from "./pages/analytics/AnalyticsDashboard";
+import Funnel from "./pages/analytics/Funnel";
+
+// Follow-ups
+import FollowUps from "./pages/system/FollowUps";
 
 // Instagram OAuth
 import InstagramAuth from "./pages/auth/InstagramAuth";
@@ -88,6 +92,10 @@ function App() {
 
                 {/* Analytics */}
                 <Route path="analytics" element={<AnalyticsDashboard />} />
+                <Route path="analytics/funnel" element={<Funnel />} />
+
+                {/* Follow-ups */}
+                <Route path="follow-ups" element={<FollowUps />} />
               </Route>
 
               {/* Catch all */}
