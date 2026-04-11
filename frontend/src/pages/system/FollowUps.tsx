@@ -162,7 +162,7 @@ export default function FollowUps() {
     if (!config || !selectedAccountId) return;
     setSaving(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/follow-ups/config/${selectedAccountId}`, {
+      const res = await fetch(`${BACKEND_URL}/api/follow-up/config/${selectedAccountId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
