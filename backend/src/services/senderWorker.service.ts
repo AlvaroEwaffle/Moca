@@ -330,8 +330,14 @@ class SenderWorkerService {
    */
   private async updateMessageStatus(messageId: string, status: string, externalId?: string): Promise<void> {
     console.log(`📝 SenderWorkerService: Updating message status: ${messageId} -> ${status}`);
-    
+
     try {
+      // Skip Message update for follow-up/rescue messages (they don't have a Message document)
+      if (messageId.startsWith('followup_')) {
+        console.log(`⏭️ SenderWorkerService: Skipping Message update for follow-up message: ${messageId}`);
+        return;
+      }
+
       const updateData: any = { status };
       if (externalId) {
         updateData['metadata.instagramResponse.messageId'] = externalId;
