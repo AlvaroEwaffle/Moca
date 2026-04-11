@@ -46,7 +46,10 @@ export class FollowUpWorkerService {
   private async processAccountFollowUps(config: any): Promise<void> {
     console.log(`🔄 [FollowUp Worker] Processing account ${config.accountId}...`);
 
-    // Get leads that need follow-up
+    // First: rescue unanswered conversations (user wrote, no assistant reply)
+    await this.rescueUnansweredConversations(config);
+
+    // Then: get leads that need follow-up (nurturing)
     const leads = await this.getLeadsForFollowUp(config);
     console.log(`📊 [FollowUp Worker] Found ${leads.length} leads for follow-up`);
 
@@ -348,6 +351,77 @@ export class FollowUpWorkerService {
 
     await LeadFollowUp.findByIdAndUpdate(followUpId, updateData);
     console.log(`✅ [FollowUp Worker] Updated follow-up ${followUpId} status to ${status}`);
+  }
+
+  /**
+   * Rescue conversations where the user wrote but never got a response.
+   * This catches cases where the AI failed, hit the response limit, or crashed.
+   * Re-queues the conversation for AI processing via the debounce worker pattern.
+   */
+  private async rescueUnansweredConversations(config: any): Promise<void> {
+    try {
+      const now = new Date();
+      const instagramWindowStart = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+      // Only rescue if unanswered for at least 5 minutes (avoid racing with debounceWorker)
+      const minWait = new Date(now.getTime() - (5 * 60 * 1000));
+
+      // Find open conversations within 24h window
+      const conversations = await Conversation.find({
+        accountId: config.accountId,
+        status: 'open',
+        'timestamps.lastActivity': { $gte: instagramWindowStart, $lt: minWait }
+      }).populate('contactId');
+
+      let rescued = 0;
+      for (const conv of conversations) {
+        // Get the last message in this conversation
+        const lastMessage = await Message.findOne({ conversationId: conv._id })
+          .sort({ 'metadata.timestamp': -1 })
+          .lean();
+
+        if (!lastMessage) continue;
+
+        // If last message is from the user (not assistant), it's unanswered
+        if (lastMessage.role === 'user') {
+          // Check if there's already a pending outbound for this conversation
+          const pendingOutbound = await OutboundQueue.findOne({
+            conversationId: conv._id,
+            status: { $in: ['pending', 'processing'] }
+          });
+
+          if (pendingOutbound) continue; // Already being handled
+
+          console.log(`🚨 [FollowUp Worker] RESCUE: Unanswered conversation ${conv._id} (${conv.contactId?.name || 'Unknown'}) — last user message at ${lastMessage.metadata?.timestamp || 'unknown'}`);
+
+          // Generate a response using the follow-up AI (uses account system prompt + conversation context)
+          const message = await this.generateAiFollowUpMessage(conv, config);
+
+          // Create a follow-up record tagged as 'rescue'
+          const followUp = new LeadFollowUp({
+            conversationId: conv._id,
+            contactId: conv.contactId?._id,
+            accountId: config.accountId,
+            userId: config.userId,
+            status: 'pending',
+            scheduledAt: new Date(),
+            messageTemplate: `[RESCUE] ${message}`,
+            followUpNumber: 0 // rescue, not a numbered follow-up
+          });
+          await followUp.save();
+
+          // Queue the message
+          await this.addToOutboundQueue(conv, message, followUp._id.toString());
+          rescued++;
+        }
+      }
+
+      if (rescued > 0) {
+        console.log(`🚨 [FollowUp Worker] Rescued ${rescued} unanswered conversations for account ${config.accountId}`);
+      }
+    } catch (error) {
+      console.error(`❌ [FollowUp Worker] Error in rescueUnansweredConversations:`, error);
+      // Don't throw — rescue is best-effort, don't block regular follow-ups
+    }
   }
 
   /**
