@@ -827,88 +827,62 @@ export class InstagramWebhookService {
   private async upsertContact(psid: string, messageData: InstagramMessage, instagramAccount?: any): Promise<IContact> {
     try {
       console.log(`🔍 [Contact Lookup] Looking for contact with PSID: ${psid}`);
-      // Try to find contact by psid and channel first (new format), then fallback to psid only (backward compatibility)
-      let contact = await Contact.findOne({ psid, channel: 'instagram' }) || await Contact.findOne({ psid });
-      console.log(`🔍 [Contact Lookup] Found contact:`, contact ? contact.id : 'null');
+      const messageTimestamp = this.validateTimestamp(messageData.timestamp);
 
-      if (!contact) {
-        console.log(`👤 Creating new contact for PSID: ${psid}`);
-        
-        // Fetch Instagram username if account is available
-        let instagramData = undefined;
-        if (instagramAccount?.accessToken) {
-          const username = await this.getInstagramUsername(psid, instagramAccount.accessToken);
-          if (username) {
-            instagramData = {
-              username,
-              lastFetched: new Date(),
-              // isVerified removed from simplified model
-              isPrivate: false
-            };
+      // Fetch Instagram username if account is available (used for both create and refresh)
+      let fetchedUsername: string | undefined;
+      const shouldFetchUsername = !!instagramAccount?.accessToken;
+
+      // Atomic upsert: avoids race condition when two webhooks for the same PSID arrive simultaneously.
+      // If the contact exists, update lastSeen/messageCount/lastActivity atomically.
+      // If not, create it with defaults. $setOnInsert only applies on insert.
+      const contact = await Contact.findOneAndUpdate(
+        { psid, channel: 'instagram' },
+        {
+          $set: {
+            channel: 'instagram',
+            lastActivity: messageTimestamp,
+            'metadata.lastSeen': messageTimestamp,
+          },
+          $inc: { 'metadata.messageCount': 1 },
+          $setOnInsert: {
+            psid,
+            preferences: {
+              language: 'es',
+              timezone: 'America/Santiago',
+              contactMethod: 'instagram'
+            },
+            status: 'active',
           }
-        }
-        
-        // Validate and fix timestamp
-        const messageTimestamp = this.validateTimestamp(messageData.timestamp);
-        
-        contact = new Contact({
-          psid,
-          channel: 'instagram', // Set channel for new contacts
-          metadata: {
-            firstSeen: messageTimestamp,
-            lastSeen: messageTimestamp,
-            messageCount: 1,
-            responseCount: 0,
-            source: 'instagram_dm',
-            instagramData
-          },
-          preferences: {
-            language: 'es', // Default to Spanish
-            timezone: 'America/Santiago',
-            contactMethod: 'instagram'
-          },
-          status: 'active',
-          lastActivity: messageTimestamp
-        });
+        },
+        { upsert: true, new: true }
+      );
 
-        console.log(`🔍 [Contact Creation] Instagram data being saved:`, instagramData);
-        await contact.save();
-        console.log(`✅ Created new contact: ${contact.id}`);
-        console.log(`🔍 [Contact Creation] Saved contact metadata:`, contact.metadata);
+      const wasInserted = contact.metadata.messageCount === 1;
+
+      if (wasInserted) {
+        console.log(`✅ Created new contact via upsert: ${contact.id}`);
       } else {
-        console.log(`👤 Updating existing contact: ${contact.id}`);
-        
-        // Ensure channel is set for backward compatibility (migrate old contacts)
-        if (!contact.channel) {
-          contact.channel = 'instagram';
-        }
-        
-        // Update last seen and message count with validated timestamp
-        const messageTimestamp = this.validateTimestamp(messageData.timestamp);
-        contact.metadata.lastSeen = messageTimestamp;
-        contact.metadata.messageCount += 1;
-        contact.lastActivity = messageTimestamp;
+        console.log(`👤 Updated existing contact via upsert: ${contact.id}`);
+      }
 
-        // Fetch username if not already stored or if it's been a while
-        if (instagramAccount?.accessToken && (!contact.metadata.instagramData?.username || 
-            (Date.now() - contact.metadata.instagramData.lastFetched.getTime()) > 24 * 60 * 60 * 1000)) { // 24 hours
-          console.log(`🔍 [Contact Update] Fetching username for existing contact: ${contact.id}`);
-          const username = await this.getInstagramUsername(psid, instagramAccount.accessToken);
-          if (username) {
-            console.log(`🔍 [Contact Update] Username fetched: ${username}`);
-            contact.metadata.instagramData = {
-              username,
-              lastFetched: new Date(),
-              // isVerified removed from simplified model
-              // isPrivate removed from simplified model
-              ...contact.metadata.instagramData
-            };
-            console.log(`🔍 [Contact Update] Updated instagramData:`, contact.metadata.instagramData);
-          }
-        }
+      // Fetch/refresh Instagram username outside the atomic operation (non-critical)
+      const needsUsernameFetch = shouldFetchUsername && (
+        !contact.metadata.instagramData?.username ||
+        !contact.metadata.instagramData?.lastFetched ||
+        (Date.now() - new Date(contact.metadata.instagramData.lastFetched).getTime()) > 24 * 60 * 60 * 1000
+      );
 
-        await contact.save();
-        console.log(`🔍 [Contact Update] Saved contact metadata for PSID: ${psid}`);
+      if (needsUsernameFetch) {
+        fetchedUsername = await this.getInstagramUsername(psid, instagramAccount.accessToken);
+        if (fetchedUsername) {
+          contact.metadata.instagramData = {
+            username: fetchedUsername,
+            lastFetched: new Date(),
+          };
+          await contact.save();
+          console.log(`🔍 [Contact] Username updated: ${fetchedUsername}`);
+        }
       }
 
       return contact;
