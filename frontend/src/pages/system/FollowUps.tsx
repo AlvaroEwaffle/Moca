@@ -89,8 +89,8 @@ export default function FollowUps() {
       });
       if (res.ok) {
         const data = await res.json();
-        const accts = data.data || data;
-        setAccounts(accts);
+        const accts = data.data?.accounts || data.data || data;
+        setAccounts(Array.isArray(accts) ? accts : []);
         if (accts.length > 0 && !selectedAccountId) {
           setSelectedAccountId(accts[0].accountId);
         }
