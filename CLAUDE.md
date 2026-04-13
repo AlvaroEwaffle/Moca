@@ -1,5 +1,7 @@
 # Moca — Launch Readiness Analysis
 
+Canonical context: read `/Users/alvarovillena/Desktop/FILES/Vilo/AGENTS.md` first, then `/Users/alvarovillena/Desktop/FILES/Vilo/ViloAgent/context/`. This file is a product-specific readiness note; current priority still comes from weekly revenue-first planning.
+
 > Generated: 2026-02-24. This document is the product of a full codebase audit and serves as the authoritative pre-launch gap analysis for Moca.
 
 ---
