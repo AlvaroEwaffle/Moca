@@ -158,13 +158,19 @@ class SenderWorkerService {
         console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error instanceof Error ? error.message : String(error));
         notifyError({ service: 'SenderWorker', message: 'Failed to send Instagram message', error, context: { queueItemId: queueItem.id } });
         
-        // Check if this is a "user not found" error
+        // Check for permanent failures (don't retry these)
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         if (errorMessage.includes('The requested user cannot be found')) {
           console.log(`🚫 SenderWorkerService: User not found for PSID ${contact.psid}, marking as failed permanently`);
           await this.updateQueueItemStatus(queueItem.id, 'failed');
           await this.updateMessageStatus(queueItem.messageId, 'failed');
-          return false; // Don't retry for user not found errors
+          return false;
+        }
+        if (errorMessage.includes('outside of allowed window') || errorMessage.includes('error_subcode":2534022')) {
+          console.log(`🚫 SenderWorkerService: Instagram 24h window expired for PSID ${contact.psid}, marking as failed permanently`);
+          await this.updateQueueItemStatus(queueItem.id, 'failed');
+          await this.updateMessageStatus(queueItem.messageId, 'failed');
+          return false;
         }
         
         await this.handleError(queueItem, errorMessage);

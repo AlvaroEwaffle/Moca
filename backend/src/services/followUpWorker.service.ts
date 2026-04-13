@@ -364,16 +364,29 @@ export class FollowUpWorkerService {
       const instagramWindowStart = new Date(now.getTime() - (24 * 60 * 60 * 1000));
       // Only rescue if unanswered for at least 5 minutes (avoid racing with debounceWorker)
       const minWait = new Date(now.getTime() - (5 * 60 * 1000));
+      // Upper bound: reject corrupted timestamps (year > 2030)
+      const maxValidDate = new Date('2030-01-01T00:00:00Z');
 
-      // Find open conversations within 24h window
+      // Find open conversations within 24h window, excluding corrupted timestamps
       const conversations = await Conversation.find({
         accountId: config.accountId,
         status: 'open',
-        'timestamps.lastActivity': { $gte: instagramWindowStart, $lt: minWait }
+        'timestamps.lastActivity': {
+          $gte: instagramWindowStart,
+          $lt: minWait,
+          $lte: maxValidDate // Filter out corrupted timestamps (year 58249, etc.)
+        }
       }).populate('contactId');
 
       let rescued = 0;
       for (const conv of conversations) {
+        // Check if we already rescued this conversation (avoid infinite re-rescue)
+        const existingRescue = await LeadFollowUp.findOne({
+          conversationId: conv._id,
+          messageTemplate: { $regex: /^\[RESCUE\]/ }
+        });
+        if (existingRescue) continue; // Already rescued once, don't repeat
+
         // Get the last message in this conversation
         const lastMessage = await Message.findOne({ conversationId: conv._id })
           .sort({ 'metadata.timestamp': -1 })
