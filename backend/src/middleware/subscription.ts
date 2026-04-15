@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { Subscription } from '../models';
-import { checkMessageLimit } from '../services/usageTracking.service';
+import type { ISubscription } from '../models/subscription.model';
+import { checkMessageLimit as checkUsageMessageLimit } from '../services/usageTracking.service';
+
+type SubscriptionFeature = keyof ISubscription['features'];
 
 /**
  * Middleware to check if subscription is valid and not expired
@@ -68,18 +71,19 @@ export async function checkMessageLimit(
 
     // Check if subscription is active/trial
     if (!['active', 'trial'].includes(subscription.status)) {
-      return res.status(402).json({
+      res.status(402).json({
         success: false,
         error: 'Subscription is not active',
         code: 'SUBSCRIPTION_INACTIVE',
         upgradeUrl: '/pricing'
       });
+      return;
     }
 
-    const { allowed, currentUsage, limit } = await checkMessageLimit(accountId, userId);
+    const { allowed, currentUsage, limit } = await checkUsageMessageLimit(accountId, userId);
 
     if (!allowed && limit !== -1) {
-      return res.status(402).json({
+      res.status(402).json({
         success: false,
         error: 'Daily message limit exceeded',
         code: 'LIMIT_EXCEEDED',
@@ -89,6 +93,7 @@ export async function checkMessageLimit(
         },
         upgradeUrl: '/pricing'
       });
+      return;
     }
 
     next();
@@ -101,7 +106,7 @@ export async function checkMessageLimit(
 /**
  * Middleware to check feature access (customPrompts, analytics, etc)
  */
-export async function checkFeatureAccess(feature: keyof any) {
+export function checkFeatureAccess(feature: SubscriptionFeature) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
@@ -114,22 +119,24 @@ export async function checkFeatureAccess(feature: keyof any) {
       const subscription = await Subscription.findOne({ userId, accountId }).lean();
 
       if (!subscription) {
-        return res.status(403).json({
+        res.status(403).json({
           success: false,
           error: 'Subscription not found'
         });
+        return;
       }
 
-      const hasFeature = (subscription.features as any)[feature];
+      const hasFeature = subscription.features[feature];
 
       if (!hasFeature) {
-        return res.status(403).json({
+        res.status(403).json({
           success: false,
           error: `Feature "${feature}" is not available in your plan`,
           code: 'FEATURE_NOT_AVAILABLE',
           requiredPlan: getPlanForFeature(feature),
           upgradeUrl: '/pricing'
         });
+        return;
       }
 
       next();
@@ -143,8 +150,8 @@ export async function checkFeatureAccess(feature: keyof any) {
 /**
  * Helper to determine which plan includes a feature
  */
-function getPlanForFeature(feature: string): string {
-  const featureMap: Record<string, string> = {
+function getPlanForFeature(feature: SubscriptionFeature): string {
+  const featureMap: Partial<Record<SubscriptionFeature, string>> = {
     customPrompts: 'starter',
     analytics: 'pro',
     prioritySupport: 'pro'

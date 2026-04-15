@@ -3,13 +3,15 @@ import { Subscription } from '../models';
 
 interface IUsageRecord {
   accountId: string;
+  userId: string;
   date: Date;
   messageCount: number;
+  createdAt: Date;
   _id?: any;
 }
 
 // In-memory collection schema (can be replaced with MongoDB model if needed)
-const usageSchema = new mongoose.Schema({
+const usageSchema = new mongoose.Schema<IUsageRecord>({
   accountId: { type: String, required: true, index: true },
   userId: { type: String, required: true },
   date: { type: Date, required: true, index: true },
@@ -18,7 +20,9 @@ const usageSchema = new mongoose.Schema({
 });
 
 // Create or use existing model
-const UsageModel = mongoose.models.Usage || mongoose.model('Usage', usageSchema);
+const UsageModel: mongoose.Model<IUsageRecord> =
+  (mongoose.models.Usage as mongoose.Model<IUsageRecord> | undefined) ||
+  mongoose.model<IUsageRecord>('Usage', usageSchema);
 
 /**
  * Track a message usage for an account

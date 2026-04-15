@@ -5,6 +5,7 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import mongoose from 'mongoose';
 import rateLimit from 'express-rate-limit';
 
@@ -71,18 +72,42 @@ console.log(`🔧 Server will run on port: ${PORT}`);
 // Middleware
 console.log('🔧 Setting up middleware...');
 
+app.use(helmet());
+
 // CORS configuration
+const configuredFrontendOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+const productionOrigins = [
+  'https://moca.pages.dev',
+  ...configuredFrontendOrigins
+];
+const developmentOrigins = [
+  'http://localhost:3000', // Development frontend (legacy, kept for compat)
+  'http://localhost:5170', // Development frontend (assigned Vite port)
+  'http://localhost:5174', // Development frontend (legacy Vite port)
+  'http://localhost:5180', // Vilo Platform Dashboard
+  'http://localhost:8080' // Legacy dev port (kept for compatibility)
+];
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? productionOrigins
+  : [...developmentOrigins, ...productionOrigins];
+const mocaPagesPreviewOrigin = /^https:\/\/([a-z0-9-]+\.)?moca\.pages\.dev$/i;
 const corsOptions = {
-  origin: [
-    'http://localhost:3000', // Development frontend (legacy, kept for compat)
-    'http://localhost:5170', // Development frontend (assigned Vite port)
-    'http://localhost:5174', // Development frontend (legacy Vite port)
-    'http://localhost:5180', // Vilo Platform Dashboard
-    'http://localhost:8080', // Legacy dev port (kept for compatibility)
-    'https://moca.pages.dev', // Production frontend
-    'https://*.moca.pages.dev', // All Cloudflare Pages subdomains
-    'https://*.pages.dev' // All Cloudflare Pages (for dynamic URLs)
-  ],
+  origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin) || mocaPagesPreviewOrigin.test(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`Origin ${origin} is not allowed by CORS`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token', 'x-platform-key']
