@@ -93,6 +93,18 @@ const MCP_TOOLS = [
       required: ['accountId'],
     },
   },
+  {
+    name: 'send_message',
+    description: 'Enviar un DM de Instagram a una conversación existente. El mensaje se encola y el SenderWorker lo entrega en ≤30s.',
+    schema: {
+      type: 'object',
+      properties: {
+        conversationId: { type: 'string', description: 'ID de la conversación (required)' },
+        message: { type: 'string', description: 'Texto del mensaje a enviar (required, max 1000 chars)' },
+      },
+      required: ['conversationId', 'message'],
+    },
+  },
 ];
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
@@ -258,6 +270,64 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
         .lean();
 
       return { conversations, count: conversations.length, accountId: args.accountId };
+    }
+
+    case 'send_message': {
+      if (!args.conversationId) throw new Error('conversationId is required');
+      if (!args.message) throw new Error('message is required');
+
+      const text = String(args.message).trim();
+      if (text.length === 0) throw new Error('message cannot be empty');
+      if (text.length > 1000) throw new Error('message exceeds 1000 character limit');
+
+      // 1. Find conversation to get contactId and accountId
+      const conversation = await Conversation.findById(args.conversationId)
+        .select('contactId accountId')
+        .lean();
+      if (!conversation) throw new Error('Conversation not found');
+
+      const contactId = (conversation as any).contactId;
+      const accountId = (conversation as any).accountId;
+      if (!contactId || !accountId) throw new Error('Conversation missing contactId or accountId');
+
+      // 2. Create Message record
+      const mid = `mcp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const newMessage = await Message.create({
+        mid,
+        conversationId: args.conversationId,
+        contactId,
+        accountId,
+        role: 'assistant',
+        content: { text },
+        metadata: {
+          timestamp: new Date(),
+          processed: true,
+          aiGenerated: false,
+          isManual: true,
+        },
+        status: 'queued',
+      });
+
+      // 3. Create OutboundQueue entry — SenderWorker picks it up in ≤30s
+      await OutboundQueue.create({
+        messageId: newMessage.mid,
+        conversationId: args.conversationId,
+        contactId,
+        accountId,
+        priority: 'high',
+        status: 'pending',
+        content: { text },
+      });
+
+      console.log(`📤 [MCP send_message] Queued message for conversation ${args.conversationId} (mid: ${mid})`);
+
+      return {
+        success: true,
+        messageId: mid,
+        conversationId: args.conversationId,
+        status: 'queued',
+        estimatedDelivery: '≤30s',
+      };
     }
 
     default:
