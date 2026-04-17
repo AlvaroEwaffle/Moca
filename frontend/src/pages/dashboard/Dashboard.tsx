@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Users, Send, Clock, TrendingUp, AlertCircle, CheckCircle, XCircle, Activity } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { useToast } from "@/hooks/use-toast";
+import { formatSafeDate, normalizeConversationSummary, toSafeDate } from "@/utils/conversationDisplay";
 
 interface DashboardStats {
   totalConversations: number;
@@ -28,7 +29,7 @@ interface RecentConversation {
   id: string;
   contactName: string;
   lastMessage: string;
-  timestamp: string;
+  timestamp: Date | null;
   status: string;
   unreadCount: number;
 }
@@ -192,7 +193,7 @@ const Dashboard = () => {
               accountId: account.accountId,
               accountName: account.accountName,
               isActive: account.isActive,
-              lastSync: account.metadata.lastSync
+              lastSync: account.metadata?.lastSync
             });
           }
         }
@@ -227,14 +228,23 @@ const Dashboard = () => {
         });
         if (conversationsResponse.ok) {
           const conversationsData = await conversationsResponse.json();
-          setRecentConversations(conversationsData.data.conversations.slice(0, 5));
+          const normalizedConversations = (conversationsData.data?.conversations || []).map(normalizeConversationSummary);
+          setRecentConversations(normalizedConversations.slice(0, 5).map((conversation: any) => ({
+            id: conversation.id,
+            contactName: conversation.contact.name,
+            lastMessage: conversation.lastMessage.text,
+            timestamp: conversation.lastMessage.timestamp || conversation.updatedAt,
+            status: conversation.status,
+            unreadCount: conversation.unreadCount
+          })));
           
           // Calculate stats from conversations
-          const totalConversations = conversationsData.data.conversations.length;
-          const activeConversations = conversationsData.data.conversations.filter((c: any) => c.status === 'open').length;
-          const newToday = conversationsData.data.conversations.filter((c: any) => {
+          const totalConversations = normalizedConversations.length;
+          const activeConversations = normalizedConversations.filter((c: any) => c.status === 'open').length;
+          const newToday = normalizedConversations.filter((c: any) => {
             const today = new Date().toDateString();
-            return new Date(c.timestamps.createdAt).toDateString() === today;
+            const createdAt = toSafeDate(c.createdAt);
+            return createdAt?.toDateString() === today;
           }).length;
           
           setStats(prev => ({
@@ -253,17 +263,6 @@ const Dashboard = () => {
       console.error('Error fetching dashboard data:', error);
       setLoading(false);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-CL', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const getConversationStatusBadge = (status: string) => {
@@ -410,7 +409,7 @@ const Dashboard = () => {
                           </div>
                           <div>
                             <p className="font-medium text-sm">{conversation.contactName}</p>
-                            <p className="text-xs text-gray-500">{formatDate(conversation.timestamp)}</p>
+                            <p className="text-xs text-gray-500">{formatSafeDate(conversation.timestamp)}</p>
                             <p className="text-xs text-gray-500 truncate max-w-48">{conversation.lastMessage}</p>
                           </div>
                         </div>
@@ -565,4 +564,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-

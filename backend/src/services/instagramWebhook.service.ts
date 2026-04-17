@@ -13,6 +13,12 @@ import debounceWorkerService from './debounceWorker.service';
 import { notifyError } from '../utils/slack';
 // pushToFidelidapp import removed — push now handled in debounceWorker after lead enrichment
 
+function maskSecret(value: string): string {
+  if (!value) return 'NOT SET';
+  if (value.length <= 6) return '***';
+  return `${value.slice(0, 3)}...${value.slice(-3)}`;
+}
+
 // Meta webhook payload interfaces
 interface MetaWebhookPayload {
   object: string;
@@ -123,8 +129,12 @@ export class InstagramWebhookService {
    * Handle webhook verification challenge
    */
   handleVerification(mode: string, token: string, challenge: string): string | null {
-    console.log('🔍 [Webhook Verification] Received:', { mode, token, challenge });
-    console.log('🔍 [Webhook Verification] Expected token:', this.verifyToken || 'NOT SET');
+    console.log('🔍 [Webhook Verification] Received:', {
+      mode,
+      token: maskSecret(token),
+      challengePresent: Boolean(challenge)
+    });
+    console.log('🔍 [Webhook Verification] Expected token:', maskSecret(this.verifyToken));
     console.log('🔍 [Webhook Verification] Token match:', token === this.verifyToken);
     
     if (mode === 'subscribe' && token === this.verifyToken) {
@@ -897,11 +907,11 @@ export class InstagramWebhookService {
           if (username) {
             console.log(`🔍 [Contact Update] Username fetched: ${username}`);
             contact.metadata.instagramData = {
+              ...contact.metadata.instagramData,
               username,
-              lastFetched: new Date(),
+              lastFetched: new Date()
               // isVerified removed from simplified model
               // isPrivate removed from simplified model
-              ...contact.metadata.instagramData
             };
             console.log(`🔍 [Contact Update] Updated instagramData:`, contact.metadata.instagramData);
           }

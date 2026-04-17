@@ -46,11 +46,13 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { BACKEND_URL } from "@/utils/config";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 const MainLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { user, accessToken, loading: authLoading } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [userData, setUserData] = useState<any>(null);
@@ -59,12 +61,20 @@ const MainLayout = () => {
   const [isActiveLoading, setIsActiveLoading] = useState(false);
 
   useEffect(() => {
-    const user = localStorage.getItem('userData');
-    if (user) {
-      setUserData(JSON.parse(user));
+    const storedUser = localStorage.getItem('userData');
+    if (storedUser) {
+      setUserData(JSON.parse(storedUser));
+    } else if (!authLoading && accessToken && user) {
+      setUserData(user);
     }
-    fetchInstagramAccount();
-  }, []);
+    if (!authLoading && !accessToken) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    if (accessToken) {
+      fetchInstagramAccount();
+    }
+  }, [accessToken, authLoading, navigate, user]);
 
   const fetchInstagramAccount = async () => {
     try {
@@ -183,7 +193,11 @@ const MainLayout = () => {
   };
 
   if (!userData) {
-    return null; // or loading spinner
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-sm text-gray-600">Cargando sesión...</div>
+      </div>
+    );
   }
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import { BACKEND_URL } from '@/utils/config';
+import { formatSafeDateTime, formatSafeTimeAgo, normalizeConversationSummary, normalizeMessage } from '@/utils/conversationDisplay';
 
 interface Conversation {
   _id: string;
@@ -39,6 +40,7 @@ interface Conversation {
   timestamps?: {
     createdAt?: Date;
     lastUserMessage?: Date;
+    lastBotMessage?: Date;
     lastActivity?: Date;
   };
   leadScoring?: {
@@ -74,9 +76,10 @@ interface Message {
   id: string;
   text: string;
   sender: 'user' | 'bot';
-  timestamp: Date;
-  createdAt: Date;
+  timestamp: Date | null;
+  createdAt: Date | null;
   status: string;
+  hasVisibleContent?: boolean;
   metadata?: {
     isManual?: boolean;
     [key: string]: any;
@@ -100,12 +103,17 @@ const ConversationDetail: React.FC = () => {
   // Delete conversation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (id) {
       fetchConversation();
     }
   }, [id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [conversation?.messages?.length]);
 
   const fetchConversation = async () => {
     try {
@@ -127,25 +135,17 @@ const ConversationDetail: React.FC = () => {
           throw new Error('No conversation data received');
         }
 
+        const normalizedConversation = normalizeConversationSummary(conversationData);
+
         // Transform the conversation data to match our interface
         const transformedConversation = {
           ...conversationData,
           // Map contact information correctly with safe access
           contact: {
-            name: conversationData?.contactId?.metadata?.instagramData?.username || 'Unknown Contact',
-            username: conversationData?.contactId?.metadata?.instagramData?.username || 'unknown',
-            psid: conversationData?.contactId?.psid || '',
+            ...normalizedConversation.contact,
             metadata: conversationData?.contactId?.metadata || {}
           },
-          messages: messages.map((msg: any) => ({
-            id: msg._id || msg.id,
-            text: msg.text || msg.content?.text || '',
-            sender: msg.role === 'assistant' ? 'bot' : (msg.role === 'user' ? 'user' : (msg.isFromBot ? 'bot' : 'user')),
-            timestamp: msg.metadata?.timestamp || msg.createdAt || new Date(),
-            createdAt: msg.createdAt || new Date(),
-            status: msg.status || 'sent',
-            metadata: msg.metadata
-          })),
+          messages: messages.map(normalizeMessage),
           // Add structured AI response fields
           leadScoring: conversationData?.leadScoring ? {
             currentScore: conversationData.analytics?.leadProgression?.peakScore || 1,
@@ -177,11 +177,7 @@ const ConversationDetail: React.FC = () => {
             } : undefined
           } : undefined,
           // Add timestamps with safe access
-          timestamps: {
-            createdAt: conversationData?.timestamps?.createdAt ? new Date(conversationData.timestamps.createdAt) : new Date(),
-            lastUserMessage: conversationData?.timestamps?.lastUserMessage ? new Date(conversationData.timestamps.lastUserMessage) : new Date(),
-            lastActivity: conversationData?.timestamps?.lastActivity ? new Date(conversationData.timestamps.lastActivity) : new Date()
-          },
+          timestamps: normalizedConversation.timestamps,
           // Add milestone data
           milestone: conversationData?.milestone ? {
             target: conversationData.milestone.target,
@@ -350,19 +346,8 @@ const ConversationDetail: React.FC = () => {
     }
   };
 
-  const formatTime = (date: Date) => {
-    return new Date(date).toLocaleString();
-  };
-
-  const formatTimeAgo = (date: Date) => {
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - new Date(date).getTime()) / (1000 * 60));
-
-    if (diffInMinutes < 1) return "Just now";
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
-  };
+  const formatTime = formatSafeDateTime;
+  const formatTimeAgo = formatSafeTimeAgo;
 
   if (loading) {
     return (
@@ -427,7 +412,7 @@ const ConversationDetail: React.FC = () => {
                 {getStatusBadge(conversation.status)}
               </div>
               <p className="text-sm sm:text-base text-gray-600 break-words">
-                @{conversation.contact?.username || 'unknown'} • Last contact: {formatTimeAgo(conversation.timestamps?.lastUserMessage || conversation.timestamps?.lastActivity || new Date())}
+                {conversation.contact?.username ? `@${conversation.contact.username}` : conversation.contact?.name || 'Contacto sin nombre'} • Last contact: {formatTimeAgo(conversation.timestamps?.lastUserMessage || conversation.timestamps?.lastActivity)}
               </p>
             </div>
           </div>
@@ -704,9 +689,9 @@ const ConversationDetail: React.FC = () => {
                     .sort((a, b) => {
                       // Use createdAt for sorting as it's more reliable than timestamp
                       // The timestamp field has corrupted dates for user messages
-                      const timeA = new Date(a.createdAt || a.metadata?.timestamp || 0).getTime();
-                      const timeB = new Date(b.createdAt || b.metadata?.timestamp || 0).getTime();
-                      return timeB - timeA; // Most recent first
+                      const timeA = (a.timestamp || a.createdAt)?.getTime() || 0;
+                      const timeB = (b.timestamp || b.createdAt)?.getTime() || 0;
+                      return timeA - timeB;
                     })
                     .map((message) => (
                       <div
@@ -728,7 +713,9 @@ const ConversationDetail: React.FC = () => {
                               <User className="w-4 h-4 mt-0.5 text-white flex-shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm leading-relaxed break-words">{message.text}</p>
+                              <p className={`text-sm leading-relaxed break-words ${message.hasVisibleContent === false ? 'italic opacity-80' : ''}`}>
+                                {message.text}
+                              </p>
                               <div className="flex items-center justify-between mt-2">
                                 <span className={`text-xs ${message.sender === 'user' ? 'text-violet-100' : 'text-gray-500'}`}>
                                   {formatTimeAgo(message.timestamp)}
@@ -745,6 +732,7 @@ const ConversationDetail: React.FC = () => {
                       </div>
                     ))
                 )}
+                <div ref={messagesEndRef} />
               </div>
             </CardContent>
           </Card>
@@ -762,7 +750,9 @@ const ConversationDetail: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Username</p>
-                  <p className="text-lg font-semibold">@{conversation.contact?.username || 'unknown'}</p>
+                  <p className="text-lg font-semibold">
+                    {conversation.contact?.username ? `@${conversation.contact.username}` : conversation.contact?.name || 'Contacto sin nombre'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">First Contact</p>

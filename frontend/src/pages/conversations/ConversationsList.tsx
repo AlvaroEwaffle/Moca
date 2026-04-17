@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link as LinkIcon, Presentation, CheckCircle, XCircle, Info, LayoutGrid, Key, Send, Loader2, AlertTriangle } from "lucide-react";
 import { Helmet } from "react-helmet";
 import LeadScoreIndicator from "@/components/LeadScoreIndicator";
+import { formatSafeTimeAgo, normalizeConversationSummary } from "@/utils/conversationDisplay";
 
 interface Conversation {
   id: string;
@@ -24,7 +25,7 @@ interface Conversation {
   status: 'open' | 'closed' | 'archived';
   lastMessage: {
     text: string;
-    timestamp: Date;
+    timestamp: Date | null;
     sender: 'user' | 'bot';
   };
   contact: {
@@ -33,8 +34,8 @@ interface Conversation {
     profilePicture?: string;
   };
   messageCount: number;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | null;
+  updatedAt: Date | null;
   agentEnabled?: boolean;
   leadScoring?: {
     currentScore: number;
@@ -196,59 +197,7 @@ const ConversationsList = () => {
         const data = await response.json();
         console.log('📥 Conversations data:', data);
         
-        // Transform the data to match our interface
-        const transformedConversations = (data.data?.conversations || []).map((conv: any) => ({
-          id: conv._id || conv.id,
-          contactId: conv.contactId,
-          accountId: conv.accountId,
-          status: conv.status || 'open',
-          lastMessage: {
-            text: conv.lastMessage?.text || 'No messages yet',
-            timestamp: conv.lastMessage?.timestamp || conv.timestamps?.lastActivity || new Date(),
-            sender: conv.lastMessage?.sender || 'user'
-          },
-          contact: {
-            name: conv.contactId?.name || 'Unknown Contact',
-            username: conv.contactId?.metadata?.instagramData?.username || conv.contactId?.psid || 'unknown',
-            profilePicture: conv.contactId?.profilePicture
-          },
-          messageCount: conv.messageCount || 0,
-          createdAt: conv.createdAt || new Date(),
-          updatedAt: conv.updatedAt || conv.timestamps?.lastActivity || new Date(),
-          agentEnabled: conv.settings?.aiEnabled !== false, // Default to true if not specified
-          // Add structured AI response fields
-          leadScoring: conv.leadScoring ? {
-            currentScore: conv.leadScoring.currentScore || 1,
-            previousScore: conv.leadScoring.previousScore,
-            progression: conv.leadScoring.progression || 'maintained',
-            confidence: conv.leadScoring.confidence || 0.5
-          } : undefined,
-          aiResponseMetadata: conv.aiResponseMetadata ? {
-            lastResponseType: conv.aiResponseMetadata.lastResponseType || 'fallback',
-            lastIntent: conv.aiResponseMetadata.lastIntent,
-            lastNextAction: conv.aiResponseMetadata.lastNextAction,
-            repetitionDetected: conv.aiResponseMetadata.repetitionDetected || false,
-            contextAwareness: conv.aiResponseMetadata.contextAwareness || false,
-            responseQuality: conv.aiResponseMetadata.responseQuality || 0.5
-          } : undefined,
-          analytics: conv.analytics ? {
-            leadProgression: conv.analytics.leadProgression ? {
-              trend: conv.analytics.leadProgression.trend || 'stable',
-              averageScore: conv.analytics.leadProgression.averageScore || 1,
-              peakScore: conv.analytics.leadProgression.peakScore || 1
-            } : undefined,
-            repetitionPatterns: conv.analytics.repetitionPatterns || []
-          } : undefined,
-          // Add milestone data
-          milestone: conv.milestone ? {
-            target: conv.milestone.target,
-            customTarget: conv.milestone.customTarget,
-            status: conv.milestone.status || 'pending',
-            achievedAt: conv.milestone.achievedAt ? new Date(conv.milestone.achievedAt) : undefined,
-            notes: conv.milestone.notes,
-            autoDisableAgent: conv.milestone.autoDisableAgent ?? true
-          } : undefined
-        }));
+        const transformedConversations = (data.data?.conversations || []).map(normalizeConversationSummary);
         
         setConversations(transformedConversations);
       } else {
@@ -282,9 +231,9 @@ const ConversationsList = () => {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "recent":
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          return (b.updatedAt?.getTime() || 0) - (a.updatedAt?.getTime() || 0);
         case "oldest":
-          return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+          return (a.updatedAt?.getTime() || 0) - (b.updatedAt?.getTime() || 0);
         case "most_messages":
           return b.messageCount - a.messageCount;
         case "name":
@@ -371,15 +320,7 @@ const ConversationsList = () => {
     );
   };
 
-  const formatTimeAgo = (date: Date) => {
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - new Date(date).getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return "Just now";
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
-  };
+  const formatTimeAgo = formatSafeTimeAgo;
 
   const truncateText = (text: string, maxLength: number = 50) => {
     return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
@@ -714,8 +655,8 @@ const ConversationsList = () => {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <span className="text-gray-500 text-sm font-medium">
-                              @{conversation.contact?.username || 'unknown'}
+                            <span className="text-gray-700 text-sm font-medium">
+                              {conversation.contact?.username ? `@${conversation.contact.username}` : conversation.contact?.name || 'Contacto sin nombre'}
                             </span>
                             {getStatusBadge(conversation.status)}
                             {conversation.milestone && getMilestoneBadge(conversation.milestone)}
@@ -928,7 +869,7 @@ const ConversationsList = () => {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm">
-                                @{conv.contact.username}
+                                {conv.contact.username ? `@${conv.contact.username}` : conv.contact.name || 'Contacto sin nombre'}
                               </span>
                               {conv.contact.name && conv.contact.name !== conv.contact.username && (
                                 <span className="text-xs text-gray-500">

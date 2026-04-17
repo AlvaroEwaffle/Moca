@@ -16,6 +16,117 @@ const webhookService = new InstagramWebhookService();
 
 console.log('🔧 [Instagram Routes] Router initialized with custom instructions endpoint');
 
+const MIN_DISPLAY_YEAR = 2020;
+const MAX_DISPLAY_YEAR = 2030;
+
+function toPlain(value: any): any {
+  return value?.toObject ? value.toObject({ virtuals: true }) : value;
+}
+
+function toSafeDate(value: any): Date | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const year = date.getFullYear();
+  if (year < MIN_DISPLAY_YEAR || year > MAX_DISPLAY_YEAR) return null;
+
+  return date;
+}
+
+function cleanText(value: any): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeContact(contactValue: any) {
+  const contact = toPlain(contactValue) || {};
+  const instagramData = contact.metadata?.instagramData || {};
+  const username = cleanText(instagramData.username).replace(/^@/, '');
+  const name = cleanText(contact.name);
+  const psid = cleanText(contact.psid);
+  const displayName = name || (username ? `@${username}` : psid ? `Instagram ${psid.slice(-6)}` : 'Contacto sin nombre');
+
+  return {
+    id: contact._id?.toString?.() || contact.id || '',
+    name: name || displayName,
+    displayName,
+    username: username || null,
+    psid: psid || null,
+    profilePicture: contact.profilePicture,
+    metadata: contact.metadata || {}
+  };
+}
+
+function normalizeMessage(messageValue: any) {
+  if (!messageValue) return null;
+
+  const message = toPlain(messageValue);
+  const content = message.content || {};
+  const rawText = cleanText(message.text || content.text);
+  const isPlaceholderText = rawText.toLowerCase() === 'message';
+  const attachmentCount = Array.isArray(content.attachments) ? content.attachments.length : 0;
+  const text = rawText && !isPlaceholderText
+    ? rawText
+    : attachmentCount > 0
+      ? '[Adjunto]'
+      : '';
+  const timestamp = toSafeDate(message.metadata?.timestamp) || toSafeDate(message.createdAt);
+  const createdAt = toSafeDate(message.createdAt) || timestamp;
+  const sender = message.role === 'assistant' ? 'bot' : message.role === 'user' ? 'user' : 'system';
+
+  return {
+    ...message,
+    id: message._id?.toString?.() || message.id,
+    text,
+    sender,
+    timestamp,
+    createdAt,
+    hasVisibleContent: Boolean(text),
+    contentIssue: text ? null : isPlaceholderText ? 'placeholder_text' : 'missing_text'
+  };
+}
+
+function normalizeConversation(conversationValue: any, lastMessageValue?: any) {
+  const conversation = toPlain(conversationValue);
+  const contact = normalizeContact(conversation.contactId);
+  const timestamps = conversation.timestamps || {};
+  const normalizedTimestamps = {
+    createdAt: toSafeDate(timestamps.createdAt) || toSafeDate(conversation.createdAt),
+    lastUserMessage: toSafeDate(timestamps.lastUserMessage),
+    lastBotMessage: toSafeDate(timestamps.lastBotMessage),
+    lastActivity: toSafeDate(timestamps.lastActivity) || toSafeDate(conversation.updatedAt)
+  };
+  const lastMessage = normalizeMessage(lastMessageValue);
+
+  return {
+    ...conversation,
+    id: conversation._id?.toString?.() || conversation.id,
+    contact,
+    displayName: contact.displayName,
+    username: contact.username,
+    psid: contact.psid,
+    lastMessage,
+    lastActivity: normalizedTimestamps.lastActivity || normalizedTimestamps.lastUserMessage || normalizedTimestamps.createdAt,
+    messageCount: conversation.messageCount || conversation.metrics?.totalMessages || 0,
+    unreadCount: conversation.unreadCount || 0,
+    timestamps: normalizedTimestamps
+  };
+}
+
+async function getUserAccountIds(userId: string): Promise<string[]> {
+  const accounts = await InstagramAccount.find({ userId }).select('accountId');
+  return accounts.map(account => account.accountId);
+}
+
+async function getUserContactIds(userId: string): Promise<any[]> {
+  const accountIds = await getUserAccountIds(userId);
+  if (accountIds.length === 0) return [];
+
+  return Conversation.distinct('contactId', {
+    accountId: { $in: accountIds }
+  });
+}
+
 // Webhook verification and message reception
 router.get('/webhook', (req, res) => {
   try {
@@ -82,11 +193,12 @@ router.post('/webhook', async (req, res) => {
 });
 
 // Get all contacts
-router.get('/contacts', async (req, res) => {
+router.get('/contacts', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 20, status, tag, search } = req.query;
+    const contactIds = await getUserContactIds(req.user!.userId);
     
-    const query: any = {};
+    const query: any = { _id: { $in: contactIds } };
     if (status) query.status = status;
     if (tag) query.tags = tag;
     if (search) {
@@ -130,8 +242,21 @@ router.get('/contacts', async (req, res) => {
 });
 
 // Get contact by ID
-router.get('/contacts/:id', async (req, res) => {
+router.get('/contacts/:id', authenticateToken, async (req, res) => {
   try {
+    const userAccountIds = await getUserAccountIds(req.user!.userId);
+    const hasAccess = await Conversation.exists({
+      contactId: req.params.id,
+      accountId: { $in: userAccountIds }
+    });
+
+    if (!hasAccess) {
+      return res.status(404).json({
+        success: false,
+        error: 'Contact not found'
+      });
+    }
+
     const contact = await Contact.findById(req.params.id);
     
     if (!contact) {
@@ -190,12 +315,27 @@ router.get('/conversations', authenticateToken, async (req, res) => {
       console.log(`🔍 [API] Found ${existingContacts.length} existing contacts`);
     }
 
+    const conversationIds = conversations.map(conversation => conversation._id.toString());
+    const lastMessages = conversationIds.length > 0
+      ? await Message.aggregate([
+        { $match: { conversationId: { $in: conversationIds } } },
+        { $sort: { 'metadata.timestamp': -1, createdAt: -1 } },
+        { $group: { _id: '$conversationId', message: { $first: '$$ROOT' } } }
+      ])
+      : [];
+    const lastMessageByConversation = new Map(
+      lastMessages.map((item: any) => [item._id, item.message])
+    );
+    const normalizedConversations = conversations.map(conversation =>
+      normalizeConversation(conversation, lastMessageByConversation.get(conversation._id.toString()))
+    );
+
     const total = await Conversation.countDocuments(query);
 
     res.json({
       success: true,
       data: {
-        conversations,
+        conversations: normalizedConversations,
         pagination: {
           page: parseInt(page as string),
           limit: parseInt(limit as string),
@@ -215,9 +355,13 @@ router.get('/conversations', authenticateToken, async (req, res) => {
 });
 
 // Get conversation by ID with messages
-router.get('/conversations/:id', async (req, res) => {
+router.get('/conversations/:id', authenticateToken, async (req, res) => {
   try {
-    const conversation = await Conversation.findById(req.params.id)
+    const userAccountIds = await getUserAccountIds(req.user!.userId);
+    const conversation = await Conversation.findOne({
+      _id: req.params.id,
+      accountId: { $in: userAccountIds }
+    })
       .populate('contactId', 'name psid email profilePicture metadata')
       .select('+leadScoring +aiResponseMetadata +analytics');
 
@@ -229,15 +373,18 @@ router.get('/conversations/:id', async (req, res) => {
     }
 
     // Get messages for this conversation
-    const messages = await Message.find({ conversationId: req.params.id })
+    const messages = await Message.find({
+      conversationId: req.params.id,
+      accountId: { $in: userAccountIds }
+    })
       .sort({ 'metadata.timestamp': 1 })
       .select('-__v');
 
     res.json({
       success: true,
       data: {
-        conversation,
-        messages
+        conversation: normalizeConversation(conversation, messages[messages.length - 1]),
+        messages: messages.map(normalizeMessage)
       }
     });
 
@@ -251,7 +398,7 @@ router.get('/conversations/:id', async (req, res) => {
 });
 
 // Send manual message
-router.post('/conversations/:id/messages', async (req, res) => {
+router.post('/conversations/:id/messages', authenticateToken, async (req, res) => {
   try {
     const { content, priority = 'normal' } = req.body;
     const conversationId = req.params.id;
@@ -263,7 +410,11 @@ router.post('/conversations/:id/messages', async (req, res) => {
       });
     }
 
-    const conversation = await Conversation.findById(conversationId);
+    const userAccountIds = await getUserAccountIds(req.user!.userId);
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      accountId: { $in: userAccountIds }
+    });
     if (!conversation) {
       return res.status(404).json({
         success: false,
@@ -724,9 +875,15 @@ router.post('/conversations/bulk-message', authenticateToken, async (req, res) =
 });
 
 // Get outbound queue status
-router.get('/queue/status', async (req, res) => {
+router.get('/queue/status', authenticateToken, async (req, res) => {
   try {
+    const userAccountIds = await getUserAccountIds(req.user!.userId);
     const stats = await OutboundQueue.aggregate([
+      {
+        $match: {
+          accountId: { $in: userAccountIds }
+        }
+      },
       {
         $group: {
           _id: '$status',
@@ -764,13 +921,25 @@ router.get('/queue/status', async (req, res) => {
 });
 
 // Retry failed messages
-router.post('/queue/retry', async (req, res) => {
+router.post('/queue/retry', authenticateToken, async (req, res) => {
   try {
-    const failedItems = await OutboundQueue.findNeedingRetry();
+    const userAccountIds = await getUserAccountIds(req.user!.userId);
+    const now = new Date();
+    const failedItems = await OutboundQueue.find({
+      accountId: { $in: userAccountIds },
+      status: 'failed',
+      $or: [
+        { 'metadata.nextAttempt': { $lte: now } },
+        { 'metadata.nextAttempt': { $exists: false } }
+      ]
+    }).limit(200);
     
     let retryCount = 0;
     for (const item of failedItems) {
       try {
+        if (item.metadata?.attempts >= item.metadata?.maxAttempts) {
+          continue;
+        }
         item.status = 'pending';
         await item.save();
         retryCount++;
@@ -1127,12 +1296,15 @@ router.put('/accounts/:accountId/ai-enabled', authenticateToken, async (req, res
   }
 });
 
-router.put('/accounts/:accountId', async (req, res) => {
+router.put('/accounts/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const { accessToken, refreshToken, rateLimits, settings } = req.body;
 
-    const account = await InstagramAccount.findOne({ accountId });
+    const account = await InstagramAccount.findOne({
+      accountId,
+      userId: req.user!.userId
+    });
     if (!account) {
       return res.status(404).json({
         success: false,
