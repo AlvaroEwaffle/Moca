@@ -1,9 +1,16 @@
 import express, { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import Conversation from '../models/conversation.model';
 import Message from '../models/message.model';
+import Contact from '../models/contact.model';
 import InstagramAccount from '../models/instagramAccount.model';
 import OutboundQueue from '../models/outboundQueue.model';
 import GlobalAgentConfig from '../models/globalAgentConfig.model';
+import CalendarIntegration from '../models/calendarIntegration.model';
+import {
+  getAvailability as getCalendarAvailability,
+  createMeetingEvent as createCalendarMeetingEvent,
+} from '../services/googleCalendar.service';
 
 const router = express.Router();
 
@@ -65,13 +72,20 @@ const MCP_TOOLS = [
     schema: { type: 'object', properties: {}, required: [] },
   },
   {
-    name: 'get_messages',
-    description: 'Mensajes de una conversación específica.',
+    name: 'get_conversation_detail',
+    description:
+      'Get full conversation detail for a specific Instagram lead — metadata, message history, scoring, lead context',
     schema: {
       type: 'object',
       properties: {
-        conversationId: { type: 'string', description: 'ID de la conversación' },
-        limit: { type: 'number', description: 'Default 20, max 50' },
+        conversationId: {
+          type: 'string',
+          description: 'ID de la conversación (MongoDB ObjectId). Mismo id que en get_recent_conversations / get_hot_leads',
+        },
+        messageLimit: {
+          type: 'number',
+          description: 'Últimos N mensajes (default 30, max 100)',
+        },
       },
       required: ['conversationId'],
     },
@@ -103,6 +117,65 @@ const MCP_TOOLS = [
         message: { type: 'string', description: 'Texto del mensaje a enviar (required, max 1000 chars)' },
       },
       required: ['conversationId', 'message'],
+    },
+  },
+  {
+    name: 'get_calendar_availability',
+    description:
+      'Listar slots disponibles en el Google Calendar del dueño de la cuenta, respetando workingHours, buffer y eventos existentes.',
+    schema: {
+      type: 'object',
+      properties: {
+        accountId: { type: 'string', description: 'Instagram account ID (IG_ID canonical)' },
+        fromIso: { type: 'string', description: 'Inicio del rango (ISO 8601)' },
+        toIso: { type: 'string', description: 'Fin del rango (ISO 8601, máx 30 días después de fromIso)' },
+        durationMin: {
+          type: 'number',
+          description: 'Duración de cada slot en minutos (override del config). Default: meetingDurationMinutes',
+        },
+      },
+      required: ['accountId', 'fromIso', 'toIso'],
+    },
+  },
+  {
+    name: 'schedule_meeting',
+    description:
+      'Crear un evento en Google Calendar con Google Meet y enviar invite por email al lead. Devuelve meetLink + eventId.',
+    schema: {
+      type: 'object',
+      properties: {
+        accountId: { type: 'string', description: 'Instagram account ID (required)' },
+        conversationId: {
+          type: 'string',
+          description: 'ID de la conversación Moca (opcional, para metadata/link en description)',
+        },
+        leadId: { type: 'string', description: 'ID del contacto/lead (opcional, metadata)' },
+        attendeeName: { type: 'string', description: 'Nombre del lead (required)' },
+        attendeeEmail: { type: 'string', description: 'Email del lead (required, valid email)' },
+        startIso: { type: 'string', description: 'Inicio del evento en ISO 8601 (required)' },
+        endIso: {
+          type: 'string',
+          description:
+            'Fin del evento en ISO 8601 (opcional — si no se provee, se usa startIso + meetingDurationMinutes)',
+        },
+        topic: {
+          type: 'string',
+          description: 'Tema de la reunión (usado en summary + description). Default: "Reunión con <attendeeName>"',
+        },
+      },
+      required: ['accountId', 'attendeeName', 'attendeeEmail', 'startIso'],
+    },
+  },
+  {
+    name: 'get_calendar_config',
+    description:
+      'Devuelve la configuración de Calendar (timezone, workingHours, duración default, buffer, enabled) y estado de conexión Google.',
+    schema: {
+      type: 'object',
+      properties: {
+        accountId: { type: 'string', description: 'Instagram account ID (required)' },
+      },
+      required: ['accountId'],
     },
   },
 ];
@@ -230,17 +303,149 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
       return { pending, sent, failed, total };
     }
 
-    case 'get_messages': {
+    case 'get_conversation_detail': {
       if (!args.conversationId) throw new Error('conversationId is required');
-      const limit = Math.min(Number(args.limit) || 20, 50);
+      const rawId = String(args.conversationId);
+      if (!mongoose.Types.ObjectId.isValid(rawId)) {
+        throw new Error(`Invalid conversationId format: ${rawId}`);
+      }
 
-      const messages = await Message.find({ conversationId: args.conversationId })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .select('content direction createdAt')
+      const messageLimit = Math.min(Math.max(Number(args.messageLimit) || 30, 1), 100);
+
+      // 1. Load conversation
+      const conversation = await Conversation.findById(rawId).lean();
+      if (!conversation) {
+        return { found: false, error: `Conversation not found: ${rawId}` };
+      }
+
+      const conv = conversation as any;
+
+      // 2. Load contact (for igUsername / participantHandle)
+      let igUsername: string | undefined;
+      let participantHandle: string | undefined;
+      if (conv.contactId) {
+        const contact = await Contact.findById(conv.contactId)
+          .select('name psid metadata.instagramData')
+          .lean();
+        if (contact) {
+          const c = contact as any;
+          igUsername = c.metadata?.instagramData?.username;
+          participantHandle = igUsername || c.name || c.psid;
+        }
+      }
+
+      // 3. Load last N messages. Conversation stores id as ObjectId but Message.conversationId
+      //    is a string — match on the string form.
+      const rawMessages = await Message.find({ conversationId: rawId })
+        .sort({ 'metadata.timestamp': -1, createdAt: -1 })
+        .limit(messageLimit)
         .lean();
 
-      return { messages, count: messages.length };
+      // Chronological ascending
+      rawMessages.reverse();
+
+      const messages = rawMessages.map((m: any) => ({
+        id: String(m._id),
+        mid: m.mid,
+        direction: m.role === 'user' ? 'inbound' : 'outbound',
+        role: m.role,
+        body: m.content?.text || '',
+        timestamp:
+          m.metadata?.timestamp?.toISOString?.() ||
+          m.createdAt?.toISOString?.() ||
+          null,
+        type: m.metadata?.isManual
+          ? 'manual'
+          : m.metadata?.aiGenerated
+          ? 'ai'
+          : m.role === 'user'
+          ? 'inbound'
+          : 'system',
+        status: m.status,
+      }));
+
+      // 4. Compute metrics from loaded window (fallback to denormalized counters)
+      const inboundCount = messages.filter((x) => x.direction === 'inbound').length;
+      const outboundCount = messages.filter((x) => x.direction === 'outbound').length;
+      const lastMessage = messages[messages.length - 1];
+      const lastInbound = [...messages].reverse().find((x) => x.direction === 'inbound');
+
+      const metrics = {
+        totalMessages: conv.metrics?.totalMessages ?? conv.messageCount ?? messages.length,
+        inboundCount: conv.metrics?.userMessages ?? inboundCount,
+        outboundCount: conv.metrics?.botMessages ?? outboundCount,
+        lastMessageAt:
+          lastMessage?.timestamp ||
+          conv.timestamps?.lastActivity?.toISOString?.() ||
+          null,
+        lastInboundAt:
+          lastInbound?.timestamp ||
+          conv.timestamps?.lastUserMessage?.toISOString?.() ||
+          null,
+      };
+
+      // 5. Status freshness derivation (active vs stale)
+      const lastActivity = conv.timestamps?.lastActivity
+        ? new Date(conv.timestamps.lastActivity)
+        : null;
+      const hoursSince = lastActivity
+        ? (Date.now() - lastActivity.getTime()) / (1000 * 60 * 60)
+        : null;
+      const freshness =
+        hoursSince == null
+          ? 'unknown'
+          : hoursSince <= 24
+          ? 'active'
+          : hoursSince <= 72
+          ? 'cooling'
+          : 'stale';
+
+      // 6. Score history (already stored in the model)
+      const scoreHistory = Array.isArray(conv.leadScoring?.scoreHistory)
+        ? conv.leadScoring.scoreHistory.map((h: any) => ({
+            score: h.score,
+            stepName: h.stepName,
+            reason: h.reason,
+            timestamp: h.timestamp?.toISOString?.() || h.timestamp,
+          }))
+        : [];
+
+      // 7. Lead context — richer scoring/intent metadata
+      const leadContext = {
+        currentStep: conv.leadScoring?.currentStep,
+        progression: conv.leadScoring?.progression,
+        confidence: conv.leadScoring?.confidence,
+        urgency: conv.context?.urgency,
+        category: conv.context?.category,
+        lastIntent: conv.aiResponseMetadata?.lastIntent,
+        lastNextAction: conv.aiResponseMetadata?.lastNextAction,
+        lastResponseType: conv.aiResponseMetadata?.lastResponseType,
+        repetitionDetected: conv.aiResponseMetadata?.repetitionDetected,
+        responseQuality: conv.aiResponseMetadata?.responseQuality,
+        milestone: conv.milestone,
+        analytics: conv.analytics,
+        activatedByKeyword: conv.settings?.activatedByKeyword,
+        activationKeyword: conv.settings?.activationKeyword,
+        responseCounter: conv.settings?.responseCounter,
+        isSupport: conv.isSupport,
+      };
+
+      return {
+        id: String(conv._id),
+        accountId: conv.accountId,
+        igUsername,
+        participantHandle,
+        status: conv.status,
+        freshness,
+        score: conv.leadScoring?.currentScore ?? 1,
+        scoreHistory,
+        topic: conv.context?.topic,
+        lastTopic: conv.context?.topic,
+        metrics,
+        leadContext,
+        messages,
+        aiEnabled: conv.settings?.aiEnabled ?? false,
+      };
     }
 
     case 'get_daily_activity': {
@@ -327,6 +532,95 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
         conversationId: args.conversationId,
         status: 'queued',
         estimatedDelivery: '≤30s',
+      };
+    }
+
+    case 'get_calendar_availability': {
+      if (!args.accountId) throw new Error('accountId is required');
+      if (!args.fromIso) throw new Error('fromIso is required');
+      if (!args.toIso) throw new Error('toIso is required');
+
+      const result = await getCalendarAvailability(String(args.accountId), {
+        from: String(args.fromIso),
+        to: String(args.toIso),
+        durationMin: typeof args.durationMin === 'number' ? args.durationMin : undefined,
+      });
+      return result;
+    }
+
+    case 'schedule_meeting': {
+      const accountId = args.accountId ? String(args.accountId) : '';
+      const attendeeName = args.attendeeName ? String(args.attendeeName) : '';
+      const attendeeEmail = args.attendeeEmail ? String(args.attendeeEmail) : '';
+      const startIso = args.startIso ? String(args.startIso) : '';
+      const topic = args.topic ? String(args.topic) : `Reunión con ${attendeeName}`;
+
+      if (!accountId) throw new Error('accountId is required');
+      if (!attendeeName) throw new Error('attendeeName is required');
+      if (!attendeeEmail) throw new Error('attendeeEmail is required');
+      if (!startIso) throw new Error('startIso is required');
+      if (!/^\S+@\S+\.\S+$/.test(attendeeEmail)) throw new Error('attendeeEmail is not a valid email');
+
+      // Resolve integration to derive end from duration config when endIso is absent.
+      const integration = await CalendarIntegration.findOne({ accountId });
+      if (!integration) throw new Error(`No Google Calendar integration for accountId=${accountId}`);
+
+      let endIso = args.endIso ? String(args.endIso) : '';
+      if (!endIso) {
+        const start = new Date(startIso);
+        if (Number.isNaN(start.getTime())) throw new Error('Invalid startIso');
+        const durationMs = (integration.meetingDurationMinutes || 30) * 60_000;
+        endIso = new Date(start.getTime() + durationMs).toISOString();
+      }
+
+      // Surface useful metadata in event description (conversation / lead linkage).
+      const descLines: string[] = [];
+      if (topic) descLines.push(topic);
+      if (args.conversationId) descLines.push(`\nMoca conversation: ${args.conversationId}`);
+      if (args.leadId) descLines.push(`Moca lead: ${args.leadId}`);
+      descLines.push('\n(Agendado automáticamente por Moca — agente de Instagram DM)');
+
+      const event = await createCalendarMeetingEvent(accountId, {
+        summary: topic,
+        description: descLines.join('\n'),
+        startIso,
+        endIso,
+        attendees: [{ email: attendeeEmail, name: attendeeName }],
+      });
+
+      console.log(
+        `📅 [MCP schedule_meeting] Created event ${event.eventId} for ${attendeeEmail} on ${startIso}`
+      );
+
+      return {
+        success: true,
+        accountId,
+        eventId: event.eventId,
+        meetLink: event.meetLink,
+        htmlLink: event.htmlLink,
+        start: event.start,
+        end: event.end,
+        attendee: { name: attendeeName, email: attendeeEmail },
+        conversationId: args.conversationId || null,
+        leadId: args.leadId || null,
+      };
+    }
+
+    case 'get_calendar_config': {
+      if (!args.accountId) throw new Error('accountId is required');
+      const accountId = String(args.accountId);
+      const integration = await CalendarIntegration.findOne({ accountId });
+
+      if (!integration) {
+        return {
+          connected: false,
+          accountId,
+        };
+      }
+
+      return {
+        connected: integration.status === 'connected' && integration.enabled,
+        ...integration.toSafeObject(),
       };
     }
 
