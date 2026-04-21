@@ -20,6 +20,7 @@ import followUpRoutes from './routes/followUp.routes';
 import agentRoutes from './routes/agents.routes';
 import mcpRoutes from './routes/mcp.routes';
 import subscriptionRoutes from './routes/subscription.routes';
+import calendarOAuthRoutes from './routes/calendarOAuth.routes';
 
 // Import services
 import debounceWorker from './services/debounceWorker.service';
@@ -177,6 +178,7 @@ app.use('/api/global-agent-config', globalAgentConfigRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/follow-up', followUpRoutes);
 app.use('/api/agents', agentRoutes);
+app.use('/api/calendar', calendarOAuthRoutes);
 app.use(subscriptionRoutes);
 
 // Platform MCP — service-to-service, protected by X-Platform-Key
