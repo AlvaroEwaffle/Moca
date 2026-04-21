@@ -32,6 +32,9 @@ import Funnel from "./pages/analytics/Funnel";
 // Follow-ups
 import FollowUps from "./pages/system/FollowUps";
 
+// Integrations
+import CalendarIntegration from "./pages/system/CalendarIntegration";
+
 // Instagram OAuth
 import InstagramAuth from "./pages/auth/InstagramAuth";
 import InstagramCallback from "./pages/auth/InstagramCallback";
@@ -96,6 +99,9 @@ function App() {
 
                 {/* Follow-ups */}
                 <Route path="follow-ups" element={<FollowUps />} />
+
+                {/* Integrations */}
+                <Route path="integrations" element={<CalendarIntegration />} />
               </Route>
 
               {/* Catch all */}

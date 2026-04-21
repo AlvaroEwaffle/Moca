@@ -34,7 +34,8 @@ import {
   ChevronRight,
   Settings2,
   Activity,
-  MessageCircle
+  MessageCircle,
+  Calendar
 } from "lucide-react";
 import {
   Accordion,
@@ -154,6 +155,12 @@ const MainLayout = () => {
       href: '/app/analytics',
       icon: BarChart3,
       current: location.pathname.startsWith('/app/analytics')
+    },
+    {
+      name: 'Integraciones',
+      href: '/app/integrations',
+      icon: Calendar,
+      current: location.pathname.startsWith('/app/integrations')
     },
     {
       name: 'Instagram',
