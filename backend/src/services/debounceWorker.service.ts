@@ -479,11 +479,18 @@ class DebounceWorkerService {
 
       // Generate structured response with account-specific MCP config if available
       const structuredResponse = await generateStructuredResponse(
-        conversationContext, 
+        conversationContext,
         aiConfig,
-        userContext.accountMcpConfig
+        userContext.accountMcpConfig,
+        {
+          accountId: conversation.accountId,
+          conversationId: conversation.id,
+          leadId: conversation.contactId,
+          contactName: userContext.contactName,
+          contactEmail: userContext.contactEmail,
+        }
       );
-      
+
       // Update conversation with structured response data
       await this.updateConversationWithStructuredResponse(conversation.id, structuredResponse);
       

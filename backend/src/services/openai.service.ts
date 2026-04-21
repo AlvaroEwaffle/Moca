@@ -14,6 +14,11 @@ import { generateContextualInstructions } from '../templates/aiInstructions'
 import { LeadScoringService } from './leadScoring.service'
 import { mcpService } from './mcp.service'
 import GlobalAgentConfig from '../models/globalAgentConfig.model'
+import {
+  loadCalendarToolsForAccount,
+  NATIVE_TOOL_NAMES,
+  NativeToolsBundle,
+} from './nativeAgentTools.service'
 
 // Ensure environment variables are loaded
 dotenv.config()
@@ -52,6 +57,13 @@ export async function generateInstagramResponse(context: {
     fallbackRules?: string[];
   };
   accountMcpConfig?: { enabled: boolean; servers: any[] }; // Account-specific MCP configuration
+  agentContext?: {
+    accountId?: string;
+    conversationId?: string;
+    leadId?: string;
+    contactName?: string;
+    contactEmail?: string;
+  };
 }): Promise<string> {
   try {
     console.log('🤖 Generating Instagram DM response with AI');
@@ -59,7 +71,8 @@ export async function generateInstagramResponse(context: {
     // Get MCP tools if enabled (before building prompts)
     let functions: any[] = [];
     let toolsInfo = '';
-    
+    let nativeBundle: NativeToolsBundle | null = null;
+
     try {
       // Use account-specific MCP config if provided
       if (context.accountMcpConfig) {
@@ -79,23 +92,47 @@ export async function generateInstagramResponse(context: {
           }
         }
       }
-      
+
+      // Load native tools (calendar) — only if accountId is in context and integration is active.
+      if (context.agentContext?.accountId) {
+        try {
+          nativeBundle = await loadCalendarToolsForAccount({
+            accountId: context.agentContext.accountId,
+            conversationId: context.agentContext.conversationId,
+            leadId: context.agentContext.leadId,
+            contactName: context.agentContext.contactName,
+            contactEmail: context.agentContext.contactEmail,
+          });
+          if (nativeBundle) {
+            const nativeFns = nativeBundle.tools.map(t => ({
+              name: t.name,
+              description: t.description,
+              parameters: t.parameters,
+            }));
+            functions = [...functions, ...nativeFns];
+            console.log(`📅 [NativeTools] Calendar tools loaded for account ${context.agentContext.accountId} (${nativeFns.length} tools)`);
+          }
+        } catch (err) {
+          console.warn('⚠️ [NativeTools] Error loading calendar tools:', err);
+        }
+      }
+
       if (functions.length > 0) {
         // Build tools information for the system prompt with detailed parameter info
         const toolsList = functions.map((fn: any) => {
             const requiredParams = fn.parameters?.required || [];
             const optionalParams: string[] = [];
             const properties = fn.parameters?.properties || {};
-            
+
             // Separate required and optional parameters
             Object.keys(properties).forEach((param: string) => {
               if (!requiredParams.includes(param)) {
                 optionalParams.push(param);
               }
             });
-            
+
             // Build required params list with examples and constraints
-            const requiredList = requiredParams.length > 0 
+            const requiredList = requiredParams.length > 0
               ? requiredParams.map((param: string) => {
                   const paramInfo = properties[param] || {};
                   const constraints: string[] = [];
@@ -106,28 +143,28 @@ export async function generateInstagramResponse(context: {
                   if (paramInfo.minimum !== undefined) constraints.push(`mínimo: ${paramInfo.minimum}`);
                   if (paramInfo.maximum !== undefined) constraints.push(`máximo: ${paramInfo.maximum}`);
                   if (paramInfo.pattern) constraints.push(`patrón: ${paramInfo.pattern}`);
-                  
+
                   const constraintsStr = constraints.length > 0 ? ` [${constraints.join(', ')}]` : '';
-                  const exampleStr = paramInfo.examples && paramInfo.examples.length > 0 
-                    ? ` (ejemplo: ${paramInfo.examples[0]})` 
+                  const exampleStr = paramInfo.examples && paramInfo.examples.length > 0
+                    ? ` (ejemplo: ${paramInfo.examples[0]})`
                     : (paramInfo.example ? ` (ejemplo: ${paramInfo.example})` : '');
-                  
+
                   return `  - ${param} (${paramInfo.type || 'string'})${constraintsStr}${exampleStr}: ${paramInfo.description || 'Sin descripción'}`;
                 }).join('\n')
               : '  Ninguno';
-            
+
             // Build optional params list with examples
             const optionalList = optionalParams.length > 0
               ? optionalParams.map((param: string) => {
                   const paramInfo = properties[param] || {};
-                  const exampleStr = paramInfo.examples && paramInfo.examples.length > 0 
-                    ? ` (ejemplo: ${paramInfo.examples[0]})` 
+                  const exampleStr = paramInfo.examples && paramInfo.examples.length > 0
+                    ? ` (ejemplo: ${paramInfo.examples[0]})`
                     : (paramInfo.example ? ` (ejemplo: ${paramInfo.example})` : '');
                   const defaultStr = paramInfo.default !== undefined ? ` (default: ${paramInfo.default})` : '';
                   return `  - ${param} (${paramInfo.type || 'string'}, opcional)${exampleStr}${defaultStr}: ${paramInfo.description || 'Sin descripción'}`;
                 }).join('\n')
               : '  Ninguno';
-            
+
             return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔧 ${fn.name}
 ${fn.description || 'Sin descripción'}
@@ -139,11 +176,11 @@ ${requiredList}
 ${optionalList}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
         }).join('\n\n');
-        
-        toolsInfo = `\n\nHERRAMIENTAS DISPONIBLES (MCP Tools):
-Tienes acceso a las siguientes herramientas externas que puedes usar cuando sea apropiado:
 
-${toolsList}
+        toolsInfo = `\n\nHERRAMIENTAS DISPONIBLES:
+Tienes acceso a las siguientes herramientas que puedes usar cuando sea apropiado:
+
+${toolsList}${nativeBundle?.promptAugmentation || ''}
 
 INSTRUCCIONES CRÍTICAS SOBRE EL USO DE HERRAMIENTAS:
 
@@ -387,20 +424,28 @@ Respuesta:`;
             console.log(`🔧 [OpenAI] Tool parameters:`, JSON.stringify(parameters, null, 2));
             
             const toolStartTime = Date.now();
-            const result = await mcpService.executeTool(toolCall.function.name, parameters);
-            const toolDuration = Date.now() - toolStartTime;
-            
-            console.log(`✅ [OpenAI] Tool ${toolCall.function.name} executed in ${toolDuration}ms`);
-            console.log(`📤 [OpenAI] Tool result:`, JSON.stringify(result, null, 2).substring(0, 500));
-            
+            const isNative = NATIVE_TOOL_NAMES.has(toolCall.function.name);
+            let toolContent: string;
+            if (isNative && nativeBundle) {
+              const nativeResult = await nativeBundle.execute(toolCall.function.name, parameters);
+              toolContent = JSON.stringify(nativeResult);
+              console.log(`✅ [NativeTool] ${toolCall.function.name} executed in ${Date.now() - toolStartTime}ms`);
+              console.log(`📤 [NativeTool] Result:`, toolContent.substring(0, 500));
+            } else {
+              const result = await mcpService.executeTool(toolCall.function.name, parameters);
+              toolContent = JSON.stringify(result.success ? result.result : { error: result.error });
+              console.log(`✅ [OpenAI] Tool ${toolCall.function.name} executed in ${Date.now() - toolStartTime}ms`);
+              console.log(`📤 [OpenAI] Tool result:`, JSON.stringify(result, null, 2).substring(0, 500));
+            }
+
             toolResults.push({
               tool_call_id: toolCall.id,
               role: 'tool' as const,
               name: toolCall.function.name,
-              content: JSON.stringify(result.success ? result.result : { error: result.error })
+              content: toolContent
             });
           } catch (error: any) {
-            console.error(`❌ [MCP] Error executing tool ${toolCall.function.name}:`, error);
+            console.error(`❌ [Tool] Error executing ${toolCall.function.name}:`, error);
             toolResults.push({
               tool_call_id: toolCall.id,
               role: 'tool' as const,
@@ -410,11 +455,11 @@ Respuesta:`;
           }
         }
       }
-      
+
       // Add tool results to messages and get final response
       messages.push(response.choices[0].message as ChatCompletionMessageParam);
       messages.push(...toolResults);
-      
+
       console.log(`🔄 [OpenAI] Requesting final response with ${toolResults.length} tool result(s)`);
       
       // Get final response with tool results
@@ -549,7 +594,14 @@ Genera un mensaje breve y natural que siga la conversación. Solo el texto del m
 export async function generateStructuredResponse(
   conversationContext: ConversationContext,
   config: AIResponseConfig,
-  accountMcpConfig?: { enabled: boolean; servers: any[] } // Account-specific MCP configuration
+  accountMcpConfig?: { enabled: boolean; servers: any[] }, // Account-specific MCP configuration
+  agentContext?: {
+    accountId?: string;
+    conversationId?: string;
+    leadId?: string;
+    contactName?: string;
+    contactEmail?: string;
+  }
 ): Promise<StructuredResponse> {
   try {
     console.log('🤖 Generating structured Instagram DM response with AI');
@@ -557,7 +609,8 @@ export async function generateStructuredResponse(
     // Get MCP tools if enabled (before building prompts)
     let functions: any[] = [];
     let toolsInfo = '';
-    
+    let nativeBundle: NativeToolsBundle | null = null;
+
     try {
       // Use account-specific MCP config if provided
       if (accountMcpConfig) {
@@ -577,7 +630,31 @@ export async function generateStructuredResponse(
           }
         }
       }
-      
+
+      // Load native tools (calendar) — only if accountId is in agentContext and integration is active.
+      if (agentContext?.accountId) {
+        try {
+          nativeBundle = await loadCalendarToolsForAccount({
+            accountId: agentContext.accountId,
+            conversationId: agentContext.conversationId,
+            leadId: agentContext.leadId,
+            contactName: agentContext.contactName,
+            contactEmail: agentContext.contactEmail,
+          });
+          if (nativeBundle) {
+            const nativeFns = nativeBundle.tools.map(t => ({
+              name: t.name,
+              description: t.description,
+              parameters: t.parameters,
+            }));
+            functions = [...functions, ...nativeFns];
+            console.log(`📅 [NativeTools] Calendar tools loaded for account ${agentContext.accountId} (${nativeFns.length} tools)`);
+          }
+        } catch (err) {
+          console.warn('⚠️ [NativeTools] Error loading calendar tools:', err);
+        }
+      }
+
       if (functions.length > 0) {
         // Build tools information for the system prompt with detailed parameter info
         const toolsList = functions.map((fn: any) => {
@@ -638,10 +715,10 @@ ${optionalList}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
         }).join('\n\n');
         
-        toolsInfo = `\n\nHERRAMIENTAS DISPONIBLES (MCP Tools):
-Tienes acceso a las siguientes herramientas externas que puedes usar cuando sea apropiado:
+        toolsInfo = `\n\nHERRAMIENTAS DISPONIBLES:
+Tienes acceso a las siguientes herramientas que puedes usar cuando sea apropiado:
 
-${toolsList}
+${toolsList}${nativeBundle?.promptAugmentation || ''}
 
 INSTRUCCIONES CRÍTICAS SOBRE EL USO DE HERRAMIENTAS:
 
@@ -963,13 +1040,22 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
         if (toolCall.type === 'function') {
           try {
             const parameters = JSON.parse(toolCall.function.arguments || '{}');
-            const result = await mcpService.executeTool(toolCall.function.name, parameters);
-            
+            const isNative = NATIVE_TOOL_NAMES.has(toolCall.function.name);
+            let content: string;
+            if (isNative && nativeBundle) {
+              const nativeResult = await nativeBundle.execute(toolCall.function.name, parameters);
+              content = JSON.stringify(nativeResult);
+              console.log(`✅ [NativeTool/Structured] ${toolCall.function.name} ok`);
+            } else {
+              const result = await mcpService.executeTool(toolCall.function.name, parameters);
+              content = JSON.stringify(result.success ? result.result : { error: result.error });
+            }
+
             toolResults.push({
               tool_call_id: toolCall.id,
               role: 'tool' as const,
               name: toolCall.function.name,
-              content: JSON.stringify(result.success ? result.result : { error: result.error })
+              content: content,
             });
           } catch (error: any) {
             console.error(`❌ [MCP] Error executing tool ${toolCall.function.name}:`, error);
