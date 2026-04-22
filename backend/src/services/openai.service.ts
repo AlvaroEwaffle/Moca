@@ -129,6 +129,7 @@ export async function generateInstagramResponse(context: {
             leadId: context.agentContext.leadId,
             contactName: context.agentContext.contactName,
             contactEmail: context.agentContext.contactEmail,
+            currentUserMessage: context.conversationHistory.at(-1)?.content,
           });
           if (nativeBundle) {
             const nativeFns = nativeBundle.tools.map(t => ({
@@ -667,6 +668,7 @@ export async function generateStructuredResponse(
             leadId: agentContext.leadId,
             contactName: agentContext.contactName,
             contactEmail: agentContext.contactEmail,
+            currentUserMessage: conversationContext.lastMessage,
           });
           if (nativeBundle) {
             const nativeFns = nativeBundle.tools.map(t => ({

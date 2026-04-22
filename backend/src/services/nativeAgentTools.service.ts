@@ -11,7 +11,7 @@
  */
 
 import CalendarIntegration from '../models/calendarIntegration.model';
-import { formatInTimeZone } from 'date-fns-tz';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import {
   getAvailability,
   createMeetingEvent,
@@ -23,6 +23,8 @@ export interface NativeToolContext {
   leadId?: string;
   contactEmail?: string;
   contactName?: string;
+  currentUserMessage?: string;
+  now?: Date;
 }
 
 export interface NativeTool {
@@ -36,6 +38,124 @@ export interface NativeToolsBundle {
   promptAugmentation: string;
   execute: (name: string, args: any) => Promise<any>;
 }
+
+interface CalendarDateIntent {
+  date: string;
+  fromIso: string;
+  toIso: string;
+  source: string;
+}
+
+const WEEKDAYS: Record<string, number> = {
+  domingo: 0,
+  lunes: 1,
+  martes: 2,
+  miercoles: 3,
+  jueves: 4,
+  viernes: 5,
+  sabado: 6,
+};
+
+const normalizeText = (text: string): string =>
+  text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const addDaysToDateString = (dateString: string, days: number): string => {
+  const [year, month, day] = dateString.split('-').map((part) => Number(part));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+const getUtcWeekday = (dateString: string): number => {
+  const [year, month, day] = dateString.split('-').map((part) => Number(part));
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+};
+
+const localDayRange = (dateString: string, timezone: string): Pick<CalendarDateIntent, 'fromIso' | 'toIso'> => ({
+  fromIso: fromZonedTime(`${dateString}T00:00:00`, timezone).toISOString(),
+  toIso: fromZonedTime(`${addDaysToDateString(dateString, 1)}T00:00:00`, timezone).toISOString(),
+});
+
+export const extractCalendarDateIntent = (
+  message: string | undefined,
+  timezone: string,
+  now: Date = new Date()
+): CalendarDateIntent | null => {
+  const normalized = normalizeText(message || '');
+  if (!normalized) return null;
+
+  const today = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
+  let requestedDate: string | null = null;
+  let source = '';
+
+  if (/\bpasado\s+manana\b/.test(normalized)) {
+    requestedDate = addDaysToDateString(today, 2);
+    source = 'pasado manana';
+  } else if (/\bmanana\b/.test(normalized)) {
+    requestedDate = addDaysToDateString(today, 1);
+    source = 'manana';
+  } else if (/\bhoy\b/.test(normalized)) {
+    requestedDate = today;
+    source = 'hoy';
+  } else {
+    const weekdayEntry = Object.entries(WEEKDAYS).find(([name]) =>
+      new RegExp(`\\b${name}\\b`).test(normalized)
+    );
+
+    if (weekdayEntry) {
+      const [weekdayName, targetDow] = weekdayEntry;
+      const currentDow = getUtcWeekday(today);
+      let delta = (targetDow - currentDow + 7) % 7;
+      if (delta === 0 || /\b(proximo|proxima|siguiente)\b/.test(normalized)) {
+        delta = delta || 7;
+      }
+      requestedDate = addDaysToDateString(today, delta);
+      source = weekdayName;
+    }
+  }
+
+  if (!requestedDate) return null;
+
+  return {
+    date: requestedDate,
+    source,
+    ...localDayRange(requestedDate, timezone),
+  };
+};
+
+const sameLocalDate = (iso: string, expectedDate: string, timezone: string): boolean => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return false;
+  return formatInTimeZone(date, timezone, 'yyyy-MM-dd') === expectedDate;
+};
+
+const resolveAvailabilityRange = (
+  args: any,
+  intent: CalendarDateIntent | null,
+  timezone: string,
+  now: Date
+): { from: string; to: string; correctedByIntent: boolean } => {
+  if (intent) {
+    return { from: intent.fromIso, to: intent.toIso, correctedByIntent: true };
+  }
+
+  const from = args?.fromIso ? new Date(String(args.fromIso)) : null;
+  const to = args?.toIso ? new Date(String(args.toIso)) : null;
+
+  if (from && to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && from < to) {
+    return { from: from.toISOString(), to: to.toISOString(), correctedByIntent: false };
+  }
+
+  const today = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
+  return {
+    from: now.toISOString(),
+    to: fromZonedTime(`${addDaysToDateString(today, 14)}T23:59:59`, timezone).toISOString(),
+    correctedByIntent: false,
+  };
+};
 
 /**
  * Load calendar tools for a given account, only when the integration is
@@ -51,8 +171,13 @@ export async function loadCalendarToolsForAccount(
     return null;
   }
 
-  const now = new Date();
+  const now = ctx.now || new Date();
   const localNow = formatInTimeZone(now, integration.timezone, "yyyy-MM-dd'T'HH:mm:ssXXX");
+  const requestedDateIntent = extractCalendarDateIntent(
+    ctx.currentUserMessage,
+    integration.timezone,
+    now
+  );
 
   // Tool schemas — NO accountId here (we inject it server-side).
   const tools: NativeTool[] = [
@@ -131,6 +256,7 @@ Contexto de agenda:
 - Fecha/hora actual del calendario: ${localNow}
 - Duración por defecto: ${integration.meetingDurationMinutes || 30} minutos
 - Buffer configurado: ${integration.bufferMinutes ?? 15} minutos
+${requestedDateIntent ? `- Fecha pedida por el lead: ${requestedDateIntent.date} (${requestedDateIntent.source})` : ''}
 
 🚨 REGLA DE EJECUCIÓN CRÍTICA — LEE DOS VECES 🚨
 Estas herramientas se invocan vía **tool_calls** (function calling de OpenAI).
@@ -165,12 +291,16 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
   const execute = async (name: string, args: any): Promise<any> => {
     switch (name) {
       case 'get_calendar_availability': {
-        if (!args?.fromIso) throw new Error('fromIso is required');
-        if (!args?.toIso) throw new Error('toIso is required');
+        const range = resolveAvailabilityRange(args, requestedDateIntent, integration.timezone, now);
+        if (range.correctedByIntent) {
+          console.log(
+            `📅 [NativeTool get_calendar_availability] Overriding model date range with user-requested ${requestedDateIntent!.source}: ${range.from} -> ${range.to}`
+          );
+        }
 
         const result = await getAvailability(ctx.accountId, {
-          from: String(args.fromIso),
-          to: String(args.toIso),
+          from: range.from,
+          to: range.to,
           durationMin: typeof args.durationMin === 'number' ? args.durationMin : undefined,
         });
         const slots = result.slots.slice(0, 12);
@@ -182,6 +312,8 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
           slots,
           totalSlots: result.slots.length,
           moreAvailable: result.slots.length > slots.length,
+          requestedDate: requestedDateIntent?.date,
+          correctedByUserDate: range.correctedByIntent,
           instruction:
             'Offer 2-3 concrete options using slot.label/startLocal. If moreAvailable=true, mention that more options exist.',
         };
@@ -201,6 +333,17 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
           throw new Error('attendeeEmail is not a valid email');
         }
         if (!startIso) throw new Error('startIso is required');
+        if (
+          requestedDateIntent &&
+          !sameLocalDate(startIso, requestedDateIntent.date, integration.timezone)
+        ) {
+          const attemptedDate = Number.isNaN(new Date(startIso).getTime())
+            ? 'invalid-date'
+            : formatInTimeZone(new Date(startIso), integration.timezone, 'yyyy-MM-dd');
+          throw new Error(
+            `Lead requested ${requestedDateIntent.source} (${requestedDateIntent.date}) but startIso is ${attemptedDate}. Call get_calendar_availability for ${requestedDateIntent.date} and use a slot from that date.`
+          );
+        }
 
         const integration2 = await CalendarIntegration.findOne({ accountId: ctx.accountId });
         if (!integration2) {
