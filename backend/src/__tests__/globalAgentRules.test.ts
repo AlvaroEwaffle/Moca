@@ -118,6 +118,92 @@ describe('GlobalAgentRulesService', () => {
   });
 
   describe('response limit with new default', () => {
+    it('treats legacy limit 3 as the new safe default of 10 responses', async () => {
+      const config = await GlobalAgentConfig.create({
+        responseLimits: {
+          maxResponsesPerConversation: 3,
+          resetCounterOnMilestone: false
+        },
+        systemSettings: {
+          enableResponseLimits: true,
+          enableLeadScoreAutoDisable: false,
+          enableMilestoneAutoDisable: false,
+          logAllDecisions: false
+        },
+        metadata: { createdBy: 'test' }
+      });
+
+      const contact = await Contact.create({
+        name: 'Legacy Limit Contact',
+        psid: 'psid-legacy-limit',
+        accountId: 'account-test'
+      });
+
+      const conversation = await Conversation.create({
+        contactId: contact._id,
+        accountId: 'account-test',
+        settings: {
+          aiEnabled: true,
+          responseCounter: {
+            totalResponses: 9,
+            lastResetAt: new Date(),
+            disabledByResponseLimit: false,
+            disabledByLeadScore: false,
+            disabledByMilestone: false
+          }
+        }
+      });
+
+      const result = await GlobalAgentRulesService.shouldDisableAgent(conversation, config);
+      expect(result.shouldDisable).toBe(false);
+
+      conversation.settings.responseCounter.totalResponses = 10;
+      const result2 = await GlobalAgentRulesService.shouldDisableAgent(conversation, config);
+      expect(result2.shouldDisable).toBe(true);
+      expect(result2.reason).toContain('10/10');
+    });
+
+    it('preserves intentional custom limits below the legacy default', async () => {
+      const config = await GlobalAgentConfig.create({
+        responseLimits: {
+          maxResponsesPerConversation: 2,
+          resetCounterOnMilestone: false
+        },
+        systemSettings: {
+          enableResponseLimits: true,
+          enableLeadScoreAutoDisable: false,
+          enableMilestoneAutoDisable: false,
+          logAllDecisions: false
+        },
+        metadata: { createdBy: 'test' }
+      });
+
+      const contact = await Contact.create({
+        name: 'Strict Limit Contact',
+        psid: 'psid-strict-limit',
+        accountId: 'account-test'
+      });
+
+      const conversation = await Conversation.create({
+        contactId: contact._id,
+        accountId: 'account-test',
+        settings: {
+          aiEnabled: true,
+          responseCounter: {
+            totalResponses: 2,
+            lastResetAt: new Date(),
+            disabledByResponseLimit: false,
+            disabledByLeadScore: false,
+            disabledByMilestone: false
+          }
+        }
+      });
+
+      const result = await GlobalAgentRulesService.shouldDisableAgent(conversation, config);
+      expect(result.shouldDisable).toBe(true);
+      expect(result.reason).toContain('2/2');
+    });
+
     it('allows up to 10 responses with new default config', async () => {
       const config = await GlobalAgentConfig.create({
         responseLimits: {

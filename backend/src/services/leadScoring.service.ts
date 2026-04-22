@@ -109,6 +109,12 @@ export class LeadScoringService {
       maxScore = mappedAdditionalScore;
       reasons.push('Additional context indicators detected');
     }
+
+    const engagementFloor = this.getEngagementFloor(lowerMessage, conversationContext);
+    if (engagementFloor.score > maxScore) {
+      maxScore = engagementFloor.score;
+      reasons.push(engagementFloor.reason);
+    }
     
     // CRITICAL: Limit score based on milestone target and status
     // If milestone is pending, score cannot exceed step 4 until milestone is achieved
@@ -382,6 +388,32 @@ export class LeadScoringService {
     }
     
     return Math.min(additionalScore, 10);
+  }
+
+  private static getEngagementFloor(
+    lowerMessage: string,
+    context: ConversationContext
+  ): { score: number; reason: string } {
+    const normalized = lowerMessage.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const hasAssistantContext = context.conversationHistory.some((msg) => msg.role === 'assistant');
+
+    if (/(demo|demostracion|reunion|meeting|llamada|videollamada|agenda|agendar|schedule|cita)/i.test(normalized)) {
+      return { score: 4, reason: 'Explicit meeting or demo intent detected' };
+    }
+
+    if (/(precio|costo|cotiza|cotizacion|presupuesto|budget|propuesta|quote|tarifa|cuanto vale|cuanto cuesta)/i.test(normalized)) {
+      return { score: 4, reason: 'Explicit pricing or proposal intent detected' };
+    }
+
+    if (/(me interesa|interesa|quiero|necesito|busco|estoy buscando|informacion|info|detalles|saber mas|mas datos|cuentame|contratar)/i.test(normalized)) {
+      return { score: 3, reason: 'Explicit commercial interest detected' };
+    }
+
+    if (hasAssistantContext && normalized.length >= 12 && !this.isGreeting(normalized)) {
+      return { score: 2, reason: 'Customer answered after assistant context' };
+    }
+
+    return { score: 1, reason: 'No commercial engagement floor matched' };
   }
   
   private static calculateProgression(current: number, previous: number): 'increased' | 'decreased' | 'maintained' {

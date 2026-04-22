@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link as LinkIcon, Presentation, CheckCircle, XCircle, Info, LayoutGrid, Key, Send, Loader2, AlertTriangle } from "lucide-react";
+import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link as LinkIcon, Presentation, CheckCircle, XCircle, Info, LayoutGrid, Key, Send, Loader2, AlertTriangle, Bot, TrendingUp } from "lucide-react";
 import { Helmet } from "react-helmet";
 import LeadScoreIndicator from "@/components/LeadScoreIndicator";
 import { formatSafeTimeAgo, normalizeConversationSummary } from "@/utils/conversationDisplay";
@@ -249,11 +249,11 @@ const ConversationsList = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'open':
-        return <Badge variant="default" className="bg-green-100 text-green-800">Open</Badge>;
+        return <Badge variant="default" className="bg-green-100 text-green-800">Abierta</Badge>;
       case 'closed':
-        return <Badge variant="secondary">Closed</Badge>;
+        return <Badge variant="secondary">Cerrada</Badge>;
       case 'archived':
-        return <Badge variant="outline">Archived</Badge>;
+        return <Badge variant="outline">Archivada</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -527,16 +527,16 @@ const ConversationsList = () => {
   return (
     <TooltipProvider>
       <Helmet>
-        <title>Conversations | Moca - Instagram DM Agent</title>
-        <meta name="description" content="Manage your Instagram conversations and messages" />
+        <title>Conversaciones | Moca</title>
+        <meta name="description" content="Gestiona conversaciones de Instagram y respuestas del agente Moca" />
       </Helmet>
 
-      <div className="space-y-6 p-6">
+      <div className="max-w-full space-y-6 overflow-x-hidden p-4 sm:p-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold text-gray-900">Conversations</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Conversaciones</h1>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -545,38 +545,38 @@ const ConversationsList = () => {
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <div className="space-y-2">
-                    <p className="font-semibold text-sm">📊 7-Step Lead Scoring Scale:</p>
+                    <p className="font-semibold text-sm">Escala de calificación de leads:</p>
                     <div className="text-xs space-y-1">
-                      <div>1. <strong>Contact Received</strong> - Initial contact from customer</div>
-                      <div>2. <strong>Answers 1 Question</strong> - Customer responds to first question</div>
-                      <div>3. <strong>Confirms Interest</strong> - Customer shows interest in service/product</div>
-                      <div>4. <strong>Milestone Met</strong> - Specific business milestone achieved</div>
-                      <div>5. <strong>Reminder Sent</strong> - Follow-up reminder sent to customer</div>
-                      <div>6. <strong>Reminder Answered</strong> - Customer responds to follow-up</div>
-                      <div>7. <strong>Sales Done</strong> - Sale completed or deal closed</div>
+                      <div>1. <strong>Contacto recibido</strong> - Primer mensaje del cliente</div>
+                      <div>2. <strong>Responde una pregunta</strong> - El cliente responde al primer filtro</div>
+                      <div>3. <strong>Confirma interés</strong> - Muestra interés por el producto o servicio</div>
+                      <div>4. <strong>Hito cumplido</strong> - Se logró el objetivo definido</div>
+                      <div>5. <strong>Recordatorio enviado</strong> - Se envió seguimiento</div>
+                      <div>6. <strong>Recordatorio respondido</strong> - El cliente respondió al seguimiento</div>
+                      <div>7. <strong>Venta cerrada</strong> - Venta o acuerdo completado</div>
                     </div>
                   </div>
                 </TooltipContent>
               </Tooltip>
             </div>
             <p className="text-gray-600 mt-1">
-              Manage your Instagram conversations ({filteredConversations.length} total)
+              Gestiona tus conversaciones de Instagram ({filteredConversations.length} en total)
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={handleOpenBulkMessage} variant="default" size="sm" className="bg-violet-600 hover:bg-violet-700">
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <Button onClick={handleOpenBulkMessage} variant="default" size="sm" className="w-full bg-violet-600 hover:bg-violet-700 sm:w-auto">
               <Send className="w-4 h-4 mr-2" />
-              Bulk Message
+              Mensaje masivo
             </Button>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
               <Link to="/app/conversations-kanban">
                 <LayoutGrid className="w-4 h-4 mr-2" />
-                Kanban View
+                Vista Kanban
               </Link>
             </Button>
-            <Button onClick={fetchConversations} variant="outline" size="sm">
+            <Button onClick={fetchConversations} variant="outline" size="sm" className="w-full sm:w-auto">
               <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
+              Actualizar
             </Button>
           </div>
         </div>
@@ -589,7 +589,7 @@ const ConversationsList = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
-                    placeholder="Search conversations..."
+                    placeholder="Buscar conversaciones..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -599,25 +599,25 @@ const ConversationsList = () => {
               
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Status" />
+                  <SelectValue placeholder="Estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="open">Abiertas</SelectItem>
+                  <SelectItem value="closed">Cerradas</SelectItem>
+                  <SelectItem value="archived">Archivadas</SelectItem>
                 </SelectContent>
               </Select>
 
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Sort by" />
+                  <SelectValue placeholder="Ordenar por" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="recent">Most Recent</SelectItem>
-                  <SelectItem value="oldest">Oldest</SelectItem>
-                  <SelectItem value="most_messages">Most Messages</SelectItem>
-                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="recent">Más recientes</SelectItem>
+                  <SelectItem value="oldest">Más antiguas</SelectItem>
+                  <SelectItem value="most_messages">Más mensajes</SelectItem>
+                  <SelectItem value="name">Nombre</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -630,11 +630,11 @@ const ConversationsList = () => {
             <Card>
               <CardContent className="p-12 text-center">
                 <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No conversations found</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No encontramos conversaciones</h3>
                 <p className="text-gray-600">
                   {searchTerm || statusFilter !== "all" 
-                    ? "Try adjusting your search or filters" 
-                    : "Start by connecting your Instagram account"}
+                    ? "Prueba ajustando la búsqueda o los filtros"
+                    : "Conecta tu cuenta de Instagram para recibir mensajes"}
                 </p>
               </CardContent>
             </Card>
@@ -663,7 +663,7 @@ const ConversationsList = () => {
                             {conversation.settings?.activatedByKeyword && conversation.settings?.activationKeyword && (
                               <Badge variant="outline" className="text-xs flex items-center gap-1">
                                 <Key className="w-3 h-3" />
-                                Activated: {conversation.settings.activationKeyword.toUpperCase()}
+                                Activada por: {conversation.settings.activationKeyword.toUpperCase()}
                               </Badge>
                             )}
                           </div>
@@ -671,13 +671,13 @@ const ConversationsList = () => {
                           {/* Lead Score and Meta Information */}
                           {conversation.leadScoring?.currentScore && (
                             <div className="flex flex-wrap items-center gap-2 mb-2">
-                              <span className="text-xs text-gray-500">🎯</span>
+                              <Target className="w-3 h-3 text-gray-500" />
                               <span className="text-sm font-medium text-gray-900">
-                                {conversation.leadScoring.currentScore}/7 Lead Score
+                                Score {conversation.leadScoring.currentScore}/7
                               </span>
                               {conversation.leadScoring?.confidence && (
                                 <span className="text-xs text-gray-500">
-                                  ({Math.round(conversation.leadScoring.confidence * 100)}% confidence)
+                                  ({Math.round(conversation.leadScoring.confidence * 100)}% confianza)
                                 </span>
                               )}
                             </div>
@@ -685,7 +685,7 @@ const ConversationsList = () => {
                           
                           <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
                             <MessageCircle className="w-3 h-3 flex-shrink-0" />
-                            <span>{conversation.messageCount} messages</span>
+                            <span>{conversation.messageCount} mensajes</span>
                             <span>•</span>
                             <Clock className="w-3 h-3 flex-shrink-0" />
                             <span>{formatTimeAgo(conversation.lastMessage?.timestamp || conversation.updatedAt)}</span>
@@ -700,18 +700,18 @@ const ConversationsList = () => {
                       <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                         {conversation.aiResponseMetadata && (
                           <div className="flex items-center gap-1">
-                            <span>🤖</span>
+                            <Bot className="w-3 h-3" />
                             <span>AI: {conversation.aiResponseMetadata.lastResponseType}</span>
-                            {conversation.aiResponseMetadata.repetitionDetected && <span>⚠️</span>}
-                            {conversation.aiResponseMetadata.contextAwareness && <span>🧠</span>}
+                            {conversation.aiResponseMetadata.repetitionDetected && <AlertTriangle className="w-3 h-3 text-amber-500" />}
+                            {conversation.aiResponseMetadata.contextAwareness && <CheckCircle className="w-3 h-3 text-green-500" />}
                           </div>
                         )}
                         {conversation.analytics?.leadProgression && (
                           <div className="flex items-center gap-1">
-                            <span>📈</span>
+                            <TrendingUp className="w-3 h-3" />
                             <span>
-                              {conversation.analytics.leadProgression.trend === 'improving' ? 'Trending up' :
-                               conversation.analytics.leadProgression.trend === 'declining' ? 'Trending down' : 'Stable'}
+                              {conversation.analytics.leadProgression.trend === 'improving' ? 'Mejorando' :
+                               conversation.analytics.leadProgression.trend === 'declining' ? 'Bajando' : 'Estable'}
                             </span>
                           </div>
                         )}
@@ -720,7 +720,7 @@ const ConversationsList = () => {
                       {/* Agent Toggle and Details Button - Right side */}
                       <div className="flex items-center justify-between sm:justify-end gap-3">
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm text-gray-600">Agent</span>
+                          <span className="text-sm text-gray-600">Agente</span>
                           <Switch
                             checked={conversation.agentEnabled}
                             onCheckedChange={(checked) => handleAgentToggle(conversation.id, checked)}
@@ -734,7 +734,7 @@ const ConversationsList = () => {
                           className="flex items-center space-x-1"
                         >
                           <Eye className="w-4 h-4" />
-                          <span className="hidden sm:inline">Details</span>
+                          <span className="hidden sm:inline">Detalles</span>
                         </Button>
                       </div>
                     </div>
@@ -750,39 +750,39 @@ const ConversationsList = () => {
       <Dialog open={bulkMessageOpen} onOpenChange={setBulkMessageOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Send Bulk Message</DialogTitle>
+            <DialogTitle>Enviar mensaje masivo</DialogTitle>
             <DialogDescription>
-              Send a message to all conversations where the agent is active
+              Envía un mensaje a conversaciones seleccionadas donde el agente está activo.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
             {/* Message Input */}
             <div className="space-y-2">
-              <Label htmlFor="messageText">Message</Label>
+              <Label htmlFor="messageText">Mensaje</Label>
               <Textarea
                 id="messageText"
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
-                placeholder="Enter your message here..."
+                placeholder="Escribe el mensaje aquí..."
                 rows={6}
                 className="resize-none"
                 maxLength={1000}
               />
               <div className="flex justify-between items-center text-sm text-gray-500">
-                <span>Characters: {messageText.length} / 1000</span>
+                <span>Caracteres: {messageText.length} / 1000</span>
                 {messageText.length > 800 && (
-                  <span className="text-amber-600">Approaching character limit</span>
+                  <span className="text-amber-600">Cerca del límite de caracteres</span>
                 )}
               </div>
             </div>
 
             {/* Filters */}
             <div className="space-y-2">
-              <Label>Filters</Label>
+              <Label>Filtros</Label>
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  <Label htmlFor="statusFilter" className="text-sm font-normal w-24">Status:</Label>
+                  <Label htmlFor="statusFilter" className="text-sm font-normal w-24">Estado:</Label>
                   <Select
                     value={bulkFilters.status}
                     onValueChange={(value: 'open' | 'closed' | 'archived') =>
@@ -793,9 +793,9 @@ const ConversationsList = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="open">Open only</SelectItem>
-                      <SelectItem value="closed">Closed only</SelectItem>
-                      <SelectItem value="archived">Archived only</SelectItem>
+                      <SelectItem value="open">Solo abiertas</SelectItem>
+                      <SelectItem value="closed">Solo cerradas</SelectItem>
+                      <SelectItem value="archived">Solo archivadas</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -807,22 +807,22 @@ const ConversationsList = () => {
               {loadingCount ? (
                 <div className="flex items-center gap-2 text-blue-800">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Calculating eligible conversations...</span>
+                  <span>Calculando conversaciones elegibles...</span>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-blue-800">
                     <MessageCircle className="w-5 h-5" />
                     <span className="font-semibold">
-                      <strong>{selectedConversationIds.size}</strong> of <strong>{eligibleCount}</strong> conversation{eligibleCount !== 1 ? 's' : ''} selected
+                      <strong>{selectedConversationIds.size}</strong> de <strong>{eligibleCount}</strong> conversaciones seleccionadas
                     </span>
                   </div>
                   <p className="text-sm text-blue-700">
-                    Only conversations with active agent ({bulkFilters.status} status) will receive this message.
+                    Solo las conversaciones con agente activo y estado seleccionado recibirán este mensaje.
                   </p>
                   {eligibleCount === 0 && (
                     <p className="text-sm text-amber-700 font-medium mt-2">
-                      ⚠️ No eligible conversations found. Make sure you have conversations with active agent in the selected status.
+                      No hay conversaciones elegibles. Revisa que existan conversaciones con agente activo en el estado seleccionado.
                     </p>
                   )}
                 </div>
@@ -833,25 +833,25 @@ const ConversationsList = () => {
             {eligibleCount > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Select Conversations</Label>
+                  <Label>Seleccionar conversaciones</Label>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handleSelectAll}
                     className="text-sm text-violet-600 hover:text-violet-700"
                   >
-                    {selectedConversationIds.size === eligibleConversations.length ? 'Deselect All' : 'Select All'}
+                    {selectedConversationIds.size === eligibleConversations.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
                   </Button>
                 </div>
                 <div className="border rounded-lg max-h-64 overflow-y-auto">
                   {loadingConversations ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-5 h-5 animate-spin text-violet-600" />
-                      <span className="ml-2 text-sm text-gray-600">Loading conversations...</span>
+                      <span className="ml-2 text-sm text-gray-600">Cargando conversaciones...</span>
                     </div>
                   ) : eligibleConversations.length === 0 ? (
                     <div className="text-center py-8 text-sm text-gray-500">
-                      No conversations found
+                      No se encontraron conversaciones
                     </div>
                   ) : (
                     <div className="divide-y">
@@ -900,15 +900,15 @@ const ConversationsList = () => {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-green-800">
                     <CheckCircle className="w-5 h-5" />
-                    <span className="font-semibold">Messages Queued Successfully</span>
+                    <span className="font-semibold">Mensajes encolados correctamente</span>
                   </div>
                   <div className="text-sm text-green-700 space-y-1">
-                    <p>✅ Successfully queued: <strong>{sendResults.queued}</strong> message{sendResults.queued !== 1 ? 's' : ''}</p>
+                    <p>Encolados: <strong>{sendResults.queued}</strong> mensajes</p>
                     {sendResults.failed > 0 && (
-                      <p className="text-amber-700">⚠️ Failed: {sendResults.failed} message{sendResults.failed !== 1 ? 's' : ''}</p>
+                      <p className="text-amber-700">Fallidos: {sendResults.failed} mensajes</p>
                     )}
-                    <p>⏱️ Estimated time to complete: <strong>{sendResults.estimatedTime}</strong> second{sendResults.estimatedTime !== 1 ? 's' : ''}</p>
-                    <p className="mt-2 text-xs">Messages will be sent automatically by the system, respecting rate limits.</p>
+                    <p>Tiempo estimado: <strong>{sendResults.estimatedTime}</strong> segundos</p>
+                    <p className="mt-2 text-xs">El sistema enviará los mensajes respetando los límites de envío.</p>
                   </div>
                 </div>
               </div>
@@ -920,11 +920,11 @@ const ConversationsList = () => {
                 <div className="flex items-start gap-2 text-amber-800">
                   <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
                   <div className="text-sm space-y-1">
-                    <p className="font-semibold">Important:</p>
+                    <p className="font-semibold">Importante:</p>
                     <ul className="list-disc list-inside space-y-1 text-xs">
-                      <li>This action cannot be undone</li>
-                      <li>Messages will be sent automatically and respect rate limits</li>
-                      <li>Only conversations with active agent will receive the message</li>
+                      <li>Esta acción no se puede deshacer</li>
+                      <li>Los mensajes se enviarán automáticamente respetando límites</li>
+                      <li>Solo conversaciones con agente activo recibirán el mensaje</li>
                     </ul>
                   </div>
                 </div>
@@ -942,7 +942,7 @@ const ConversationsList = () => {
               }}
               disabled={sending}
             >
-              Cancel
+              Cancelar
             </Button>
             <Button
               onClick={handleSendBulkMessage}
@@ -952,12 +952,12 @@ const ConversationsList = () => {
               {sending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Sending...
+                  Enviando...
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4 mr-2" />
-                  Send to {selectedConversationIds.size} Conversation{selectedConversationIds.size !== 1 ? 's' : ''}
+                  Enviar a {selectedConversationIds.size} conversación{selectedConversationIds.size !== 1 ? 'es' : ''}
                 </>
               )}
             </Button>

@@ -22,10 +22,10 @@ router.get('/config/:accountId', authenticateToken, async (req, res) => {
       config = new FollowUpConfig({
         userId,
         accountId,
-        enabled: false,
+        enabled: true,
         minLeadScore: 2,
         maxFollowUps: 3,
-        timeSinceLastAnswer: 24,
+        timeSinceLastAnswer: 12,
         messageMode: 'template',
         messageTemplate: "Hola! 👋 Vi que te interesó nuestro servicio. ¿Te gustaría que te cuente más detalles? Estoy aquí para ayudarte! 😊"
       });

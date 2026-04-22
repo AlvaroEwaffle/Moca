@@ -52,6 +52,9 @@ if (process.env.INSTAGRAM_VERIFY_TOKEN) {
 const app = express();
 const PORT = process.env.PORT || 3002;
 
+// Required behind Railway/Cloudflare so express-rate-limit can trust X-Forwarded-For.
+app.set('trust proxy', 1);
+
 // In-memory circular log buffer — last 500 lines, accessible via /api/debug/logs
 const LOG_BUFFER: { ts: string; level: string; msg: string }[] = [];
 const MAX_LOG_LINES = 500;

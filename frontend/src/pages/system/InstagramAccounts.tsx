@@ -147,6 +147,55 @@ interface FollowUpConfig {
   updatedAt?: Date;
 }
 
+const DEFAULT_LEAD_SCORING_SCALE: GlobalAgentConfig['leadScoring']['scale'] = {
+  step1: { name: 'Contacto recibido', description: 'Primer mensaje del cliente', score: 1 },
+  step2: { name: 'Responde una pregunta', description: 'El cliente responde al primer filtro', score: 2 },
+  step3: { name: 'Confirma interés', description: 'Muestra interés claro', score: 3 },
+  step4: { name: 'Hito cumplido', description: 'Se logró el objetivo definido', score: 4 },
+  step5: { name: 'Recordatorio enviado', description: 'Se envió seguimiento', score: 5 },
+  step6: { name: 'Recordatorio respondido', description: 'El cliente respondió al seguimiento', score: 6 },
+  step7: { name: 'Venta cerrada', description: 'Venta o acuerdo completado', score: 7 },
+};
+
+const DEFAULT_GLOBAL_CONFIG: GlobalAgentConfig = {
+  id: 'default',
+  responseLimits: {
+    maxResponsesPerConversation: 10,
+    resetCounterOnMilestone: false,
+  },
+  leadScoring: {
+    scale: DEFAULT_LEAD_SCORING_SCALE,
+    autoDisableOnMilestone: true,
+  },
+  systemSettings: {
+    enableResponseLimits: true,
+    enableLeadScoreAutoDisable: true,
+    enableMilestoneAutoDisable: true,
+    logAllDecisions: true,
+  },
+};
+
+const normalizeGlobalConfig = (config?: Partial<GlobalAgentConfig> | null): GlobalAgentConfig => ({
+  ...DEFAULT_GLOBAL_CONFIG,
+  ...config,
+  responseLimits: {
+    ...DEFAULT_GLOBAL_CONFIG.responseLimits,
+    ...config?.responseLimits,
+  },
+  leadScoring: {
+    ...DEFAULT_GLOBAL_CONFIG.leadScoring,
+    ...config?.leadScoring,
+    scale: {
+      ...DEFAULT_GLOBAL_CONFIG.leadScoring.scale,
+      ...config?.leadScoring?.scale,
+    },
+  },
+  systemSettings: {
+    ...DEFAULT_GLOBAL_CONFIG.systemSettings,
+    ...config?.systemSettings,
+  },
+});
+
 const InstagramAccounts = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -173,7 +222,7 @@ const InstagramAccounts = () => {
   const [globalConfig, setGlobalConfig] = useState<GlobalAgentConfig | null>(null);
   const [editingGlobalConfig, setEditingGlobalConfig] = useState<boolean>(false);
   const [globalConfigForm, setGlobalConfigForm] = useState({
-    maxResponsesPerConversation: 3,
+    maxResponsesPerConversation: 10,
     resetCounterOnMilestone: false,
     autoDisableOnScore: undefined as number | undefined,
     autoDisableOnMilestone: true,
@@ -409,23 +458,24 @@ const InstagramAccounts = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setGlobalConfig(data.data);
+        const currentConfig = normalizeGlobalConfig(data.data);
+        setGlobalConfig(currentConfig);
         // Update form with current config
-        if (data.data) {
+        if (currentConfig) {
           setGlobalConfigForm({
-            maxResponsesPerConversation: data.data.responseLimits.maxResponsesPerConversation,
-            resetCounterOnMilestone: data.data.responseLimits.resetCounterOnMilestone,
-            autoDisableOnScore: data.data.leadScoring.autoDisableOnScore,
-            autoDisableOnMilestone: data.data.leadScoring.autoDisableOnMilestone,
-            enableResponseLimits: data.data.systemSettings.enableResponseLimits,
-            enableLeadScoreAutoDisable: data.data.systemSettings.enableLeadScoreAutoDisable,
-            enableMilestoneAutoDisable: data.data.systemSettings.enableMilestoneAutoDisable,
-            logAllDecisions: data.data.systemSettings.logAllDecisions
+            maxResponsesPerConversation: currentConfig.responseLimits.maxResponsesPerConversation,
+            resetCounterOnMilestone: currentConfig.responseLimits.resetCounterOnMilestone,
+            autoDisableOnScore: currentConfig.leadScoring.autoDisableOnScore,
+            autoDisableOnMilestone: currentConfig.leadScoring.autoDisableOnMilestone,
+            enableResponseLimits: currentConfig.systemSettings.enableResponseLimits,
+            enableLeadScoreAutoDisable: currentConfig.systemSettings.enableLeadScoreAutoDisable,
+            enableMilestoneAutoDisable: currentConfig.systemSettings.enableMilestoneAutoDisable,
+            logAllDecisions: currentConfig.systemSettings.logAllDecisions
           });
           
           // Update MCP config if available
-          if (data.data.mcpTools) {
-            setMcpConfig(data.data.mcpTools);
+          if (currentConfig.mcpTools) {
+            setMcpConfig(currentConfig.mcpTools);
           }
         }
       }
@@ -1816,10 +1866,10 @@ const InstagramAccounts = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Shield className="w-5 h-5 text-violet-600" />
-              <span>Global Agent Settings</span>
+              <span>Configuración del agente</span>
             </CardTitle>
             <CardDescription>
-              Configure system-wide agent behavior and response limits
+              Ajusta el comportamiento del agente y los límites de respuesta para el piloto.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1828,14 +1878,14 @@ const InstagramAccounts = () => {
               <div className="border rounded-lg p-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <Clock className="w-4 h-4 text-violet-600" />
-                  <h4 className="font-medium text-gray-900">Response Limits</h4>
+                  <h4 className="font-medium text-gray-900">Límites de respuesta</h4>
                 </div>
                 
                 {editingGlobalConfig ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="maxResponses">Max Responses per Conversation</Label>
+                        <Label htmlFor="maxResponses">Máximo de respuestas por conversación</Label>
                         <input
                           id="maxResponses"
                           type="number"
@@ -1844,12 +1894,12 @@ const InstagramAccounts = () => {
                           value={globalConfigForm.maxResponsesPerConversation}
                           onChange={(e) => setGlobalConfigForm(prev => ({
                             ...prev,
-                            maxResponsesPerConversation: parseInt(e.target.value) || 3
+                            maxResponsesPerConversation: parseInt(e.target.value) || 10
                           }))}
                           className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Agent will be disabled after this many responses
+                          El agente se desactiva después de esta cantidad de respuestas.
                         </p>
                       </div>
                       
@@ -1865,7 +1915,7 @@ const InstagramAccounts = () => {
                           className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
                         />
                         <Label htmlFor="resetCounterOnMilestone" className="text-sm text-gray-700">
-                          Reset counter when milestone is achieved
+                          Reiniciar contador cuando se logre el hito
                         </Label>
                       </div>
                     </div>
@@ -1873,15 +1923,15 @@ const InstagramAccounts = () => {
                 ) : (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Max responses per conversation:</span>
+                      <span className="text-sm text-gray-600">Máximo de respuestas por conversación:</span>
                       <Badge variant="outline">
-                        {globalConfig?.responseLimits.maxResponsesPerConversation || 3}
+                        {globalConfig?.responseLimits.maxResponsesPerConversation || 10}
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Reset counter on milestone:</span>
+                      <span className="text-sm text-gray-600">Reiniciar contador al lograr hito:</span>
                       <Badge variant={globalConfig?.responseLimits.resetCounterOnMilestone ? "default" : "secondary"}>
-                        {globalConfig?.responseLimits.resetCounterOnMilestone ? "Yes" : "No"}
+                        {globalConfig?.responseLimits.resetCounterOnMilestone ? "Sí" : "No"}
                       </Badge>
                     </div>
                   </div>
@@ -1892,13 +1942,13 @@ const InstagramAccounts = () => {
               <div className="border rounded-lg p-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <BarChart3 className="w-4 h-4 text-violet-600" />
-                  <h4 className="font-medium text-gray-900">Lead Scoring Rules</h4>
+                  <h4 className="font-medium text-gray-900">Reglas de calificación de leads</h4>
                 </div>
                 
                 {editingGlobalConfig ? (
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="autoDisableOnScore">Auto-disable Agent at Lead Score</Label>
+                      <Label htmlFor="autoDisableOnScore">Desactivar agente al llegar a score</Label>
                       <select
                         id="autoDisableOnScore"
                         value={globalConfigForm.autoDisableOnScore || ''}
@@ -1908,17 +1958,17 @@ const InstagramAccounts = () => {
                         }))}
                         className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                       >
-                        <option value="">Disabled</option>
-                        <option value="1">1 - Contact Received</option>
-                        <option value="2">2 - Answers 1 Question</option>
-                        <option value="3">3 - Confirms Interest</option>
-                        <option value="4">4 - Milestone Met</option>
-                        <option value="5">5 - Reminder Sent</option>
-                        <option value="6">6 - Reminder Answered</option>
-                        <option value="7">7 - Sales Done</option>
+                        <option value="">Desactivado</option>
+                        <option value="1">1 - Contacto recibido</option>
+                        <option value="2">2 - Responde una pregunta</option>
+                        <option value="3">3 - Confirma interés</option>
+                        <option value="4">4 - Hito cumplido</option>
+                        <option value="5">5 - Seguimiento enviado</option>
+                        <option value="6">6 - Seguimiento respondido</option>
+                        <option value="7">7 - Venta cerrada</option>
                       </select>
                       <p className="text-xs text-gray-500 mt-1">
-                        Agent will be disabled when lead reaches this score
+                        El agente se desactiva cuando el lead llega a este score.
                       </p>
                     </div>
                     
@@ -1934,25 +1984,25 @@ const InstagramAccounts = () => {
                         className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
                       />
                       <Label htmlFor="autoDisableOnMilestone" className="text-sm text-gray-700">
-                        Auto-disable when conversation milestone is achieved
+                        Desactivar cuando la conversación logre su hito
                       </Label>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Auto-disable at lead score:</span>
+                      <span className="text-sm text-gray-600">Desactivar al llegar a score:</span>
                       <Badge variant="outline">
                         {globalConfig?.leadScoring.autoDisableOnScore 
-                          ? `${globalConfig.leadScoring.autoDisableOnScore} - ${globalConfig.leadScoring.scale[`step${globalConfig.leadScoring.autoDisableOnScore}` as keyof typeof globalConfig.leadScoring.scale]?.name}`
-                          : "Disabled"
+                            ? `${globalConfig.leadScoring.autoDisableOnScore} - ${globalConfig.leadScoring.scale[`step${globalConfig.leadScoring.autoDisableOnScore}` as keyof typeof globalConfig.leadScoring.scale]?.name}`
+                          : "Desactivado"
                         }
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Auto-disable on milestone:</span>
+                      <span className="text-sm text-gray-600">Desactivar al lograr hito:</span>
                       <Badge variant={globalConfig?.leadScoring.autoDisableOnMilestone ? "default" : "secondary"}>
-                        {globalConfig?.leadScoring.autoDisableOnMilestone ? "Yes" : "No"}
+                        {globalConfig?.leadScoring.autoDisableOnMilestone ? "Sí" : "No"}
                       </Badge>
                     </div>
                   </div>
@@ -1963,7 +2013,7 @@ const InstagramAccounts = () => {
               <div className="border rounded-lg p-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <Settings className="w-4 h-4 text-violet-600" />
-                  <h4 className="font-medium text-gray-900">System Settings</h4>
+                  <h4 className="font-medium text-gray-900">Ajustes del sistema</h4>
                 </div>
                 
                 {editingGlobalConfig ? (
@@ -1980,7 +2030,7 @@ const InstagramAccounts = () => {
                         className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
                       />
                       <Label htmlFor="enableResponseLimits" className="text-sm text-gray-700">
-                        Enable response limits
+                        Activar límites de respuesta
                       </Label>
                     </div>
                     
@@ -1996,7 +2046,7 @@ const InstagramAccounts = () => {
                         className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
                       />
                       <Label htmlFor="enableLeadScoreAutoDisable" className="text-sm text-gray-700">
-                        Enable lead score auto-disable
+                        Activar desactivación por score
                       </Label>
                     </div>
                     
@@ -2012,7 +2062,7 @@ const InstagramAccounts = () => {
                         className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
                       />
                       <Label htmlFor="enableMilestoneAutoDisable" className="text-sm text-gray-700">
-                        Enable milestone auto-disable
+                        Activar desactivación por hito
                       </Label>
                     </div>
                     
@@ -2028,34 +2078,34 @@ const InstagramAccounts = () => {
                         className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
                       />
                       <Label htmlFor="logAllDecisions" className="text-sm text-gray-700">
-                        Log all agent decisions (for debugging)
+                        Registrar decisiones del agente (debug)
                       </Label>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Response limits enabled:</span>
+                      <span className="text-sm text-gray-600">Límites de respuesta activos:</span>
                       <Badge variant={globalConfig?.systemSettings.enableResponseLimits ? "default" : "secondary"}>
-                        {globalConfig?.systemSettings.enableResponseLimits ? "Yes" : "No"}
+                        {globalConfig?.systemSettings.enableResponseLimits ? "Sí" : "No"}
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Lead score auto-disable:</span>
+                      <span className="text-sm text-gray-600">Desactivación por score:</span>
                       <Badge variant={globalConfig?.systemSettings.enableLeadScoreAutoDisable ? "default" : "secondary"}>
-                        {globalConfig?.systemSettings.enableLeadScoreAutoDisable ? "Yes" : "No"}
+                        {globalConfig?.systemSettings.enableLeadScoreAutoDisable ? "Sí" : "No"}
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Milestone auto-disable:</span>
+                      <span className="text-sm text-gray-600">Desactivación por hito:</span>
                       <Badge variant={globalConfig?.systemSettings.enableMilestoneAutoDisable ? "default" : "secondary"}>
-                        {globalConfig?.systemSettings.enableMilestoneAutoDisable ? "Yes" : "No"}
+                        {globalConfig?.systemSettings.enableMilestoneAutoDisable ? "Sí" : "No"}
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Decision logging:</span>
+                      <span className="text-sm text-gray-600">Registro de decisiones:</span>
                       <Badge variant={globalConfig?.systemSettings.logAllDecisions ? "default" : "secondary"}>
-                        {globalConfig?.systemSettings.logAllDecisions ? "Yes" : "No"}
+                        {globalConfig?.systemSettings.logAllDecisions ? "Sí" : "No"}
                       </Badge>
                     </div>
                   </div>
@@ -2520,7 +2570,7 @@ const InstagramAccounts = () => {
                     </div>
                     
                     <div className="text-xs text-gray-500">
-                      Click sections below to configure
+                      Abre las secciones siguientes para ajustar la cuenta.
                     </div>
                   </div>
 
@@ -2532,9 +2582,9 @@ const InstagramAccounts = () => {
                     >
                       <div className="flex items-center space-x-2">
                         <Power className="w-4 h-4 text-violet-600 flex-shrink-0" />
-                        <h4 className="text-sm font-medium text-gray-700">Default Agent State</h4>
+                        <h4 className="text-sm font-medium text-gray-700">Estado inicial del agente</h4>
                         <Badge variant="outline" className="text-xs">
-                          {account.settings?.defaultAgentEnabled ? 'Enabled' : 'Disabled'}
+                          {account.settings?.defaultAgentEnabled ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </div>
                       {isAccordionExpanded(account.accountId, 'defaultAgentEnabled') ? (
@@ -2548,24 +2598,24 @@ const InstagramAccounts = () => {
                       <div className="mt-3 space-y-4">
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                           <p className="text-sm text-blue-800 mb-3">
-                            <strong>Configure the default state for new conversations:</strong>
+                            <strong>Configura cómo empiezan las nuevas conversaciones:</strong>
                           </p>
                           <ul className="text-xs text-blue-700 space-y-2 list-disc list-inside">
-                            <li><strong>Enabled:</strong> New conversations will have the agent active by default</li>
-                            <li><strong>Disabled:</strong> New conversations will have the agent inactive (can be activated via keywords or manually)</li>
+                            <li><strong>Activo:</strong> el agente responde desde el inicio</li>
+                            <li><strong>Inactivo:</strong> el agente espera activación manual o por palabra clave</li>
                           </ul>
                           <p className="text-xs text-blue-700 mt-3 font-medium">
-                            💡 Tip: Use "Keyword Activation" feature to automatically activate conversations when specific keywords are detected.
+                            Tip: usa activación por palabra clave para iniciar el agente solo cuando detecte términos específicos.
                           </p>
                         </div>
 
                         <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
                           <div className="flex-1">
                             <Label htmlFor="defaultAgentEnabled" className="text-sm font-medium text-gray-900">
-                              Agent Enabled by Default for New Conversations
+                              Agente activo por defecto en nuevas conversaciones
                             </Label>
                             <p className="text-xs text-gray-500 mt-1">
-                              When {account.settings?.defaultAgentEnabled ? 'enabled' : 'disabled'}, all new conversations will start with the agent {account.settings?.defaultAgentEnabled ? 'active' : 'inactive'}.
+                              Cuando está {account.settings?.defaultAgentEnabled ? 'activo' : 'inactivo'}, las nuevas conversaciones parten con el agente {account.settings?.defaultAgentEnabled ? 'respondiendo' : 'pausado'}.
                             </p>
                           </div>
                           <Switch
@@ -2587,7 +2637,7 @@ const InstagramAccounts = () => {
                     >
                       <div className="flex items-center space-x-2">
                         <Bot className="w-4 h-4 text-violet-600 flex-shrink-0" />
-                        <h4 className="text-sm font-medium text-gray-700">AI System Prompt</h4>
+                        <h4 className="text-sm font-medium text-gray-700">Instrucciones del agente</h4>
                         {account.settings?.systemPrompt && (
                           <Badge variant="outline" className="text-xs">
                             {account.settings.systemPrompt.length} chars
@@ -2606,16 +2656,16 @@ const InstagramAccounts = () => {
                         {editingAccount === account.accountId ? (
                           <div className="space-y-4">
                             <div>
-                              <Label htmlFor="instructions">Custom Instructions</Label>
+                              <Label htmlFor="instructions">Instrucciones personalizadas</Label>
                               <Textarea
                                 id="instructions"
-                                placeholder="Enter your custom AI instructions here..."
+                                placeholder="Escribe aquí cómo debe responder Moca para esta cuenta..."
                                 value={customInstructions}
                                 onChange={(e) => setCustomInstructions(e.target.value)}
                                 className="min-h-[200px] mt-2"
                               />
                               <p className="text-xs text-gray-500 mt-1">
-                                These instructions will be used by the AI to respond to messages for this account.
+                                Estas instrucciones guían las respuestas del agente para esta cuenta.
                               </p>
                             </div>
                             
@@ -2631,7 +2681,7 @@ const InstagramAccounts = () => {
                           ) : (
                                   <Save className="w-4 h-4 mr-2" />
                           )}
-                                Save Changes
+                                Guardar cambios
                         </Button>
                         <Button
                                 variant="outline" 
@@ -2639,7 +2689,7 @@ const InstagramAccounts = () => {
                           size="sm"
                                 className="w-full sm:w-auto"
                         >
-                                Cancel
+                                Cancelar
                         </Button>
                       </div>
                     </div>
@@ -2655,7 +2705,7 @@ const InstagramAccounts = () => {
                               <div className="bg-gray-50 p-4 rounded-lg text-center">
                                 <MessageSquare className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                                 <p className="text-sm text-gray-500">
-                                  No custom instructions set. Using default AI behavior.
+                                  No hay instrucciones personalizadas. Se usará el comportamiento base.
                                 </p>
                               </div>
                             )}
@@ -2663,8 +2713,8 @@ const InstagramAccounts = () => {
                             <div className="flex justify-between items-center">
                               <div className="text-xs text-gray-500">
                                 {account.settings?.systemPrompt 
-                                  ? `${account.settings.systemPrompt.length} characters`
-                                  : 'Default prompt in use'
+                                  ? `${account.settings.systemPrompt.length} caracteres`
+                                  : 'Prompt base en uso'
                       }
                     </div>
                               <Button
@@ -2674,7 +2724,7 @@ const InstagramAccounts = () => {
                                 className="text-xs"
                               >
                                 <Settings className="w-3 h-3 mr-1" />
-                                Edit
+                                Editar
                               </Button>
                             </div>
                           </div>
@@ -2691,10 +2741,10 @@ const InstagramAccounts = () => {
                     >
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4 text-violet-600 flex-shrink-0" />
-                        <h4 className="text-sm font-medium text-gray-700">Lead Follow-up</h4>
+                        <h4 className="text-sm font-medium text-gray-700">Seguimiento de leads</h4>
                         {followUpConfig?.enabled && (
                           <Badge variant="outline" className="text-xs">
-                            Enabled
+                            Activo
                           </Badge>
                         )}
                       </div>
@@ -2725,7 +2775,7 @@ const InstagramAccounts = () => {
                                 className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
                               />
                               <Label htmlFor="followUpEnabled" className="text-sm text-gray-700">
-                                Enable automatic follow-up messages
+                                Activar seguimientos automáticos
                               </Label>
                             </div>
 
@@ -2733,7 +2783,7 @@ const InstagramAccounts = () => {
                               <div className="space-y-4 pl-6 border-l-2 border-gray-200">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
-                                    <Label htmlFor="minLeadScore">Minimum Lead Score</Label>
+                                    <Label htmlFor="minLeadScore">Score mínimo del lead</Label>
                                     <select
                                       id="minLeadScore"
                                       value={followUpConfig.minLeadScore}
@@ -2743,20 +2793,20 @@ const InstagramAccounts = () => {
                                       } : null)}
                                       className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                                     >
-                                      <option value={1}>1 - Contact Received</option>
-                                      <option value={2}>2 - Answers 1 Question</option>
-                                      <option value={3}>3 - Confirms Interest</option>
-                                      <option value={4}>4 - Milestone Met</option>
-                                      <option value={5}>5 - Reminder Sent</option>
-                                      <option value={6}>6 - Reminder Answered</option>
+                                      <option value={1}>1 - Contacto recibido</option>
+                                      <option value={2}>2 - Responde una pregunta</option>
+                                      <option value={3}>3 - Confirma interés</option>
+                                      <option value={4}>4 - Hito cumplido</option>
+                                      <option value={5}>5 - Seguimiento enviado</option>
+                                      <option value={6}>6 - Seguimiento respondido</option>
                                     </select>
                                     <p className="text-xs text-gray-500 mt-1">
-                                      Follow up leads with this score and above
+                                      Seguimiento a leads con este score o superior
                                     </p>
                                   </div>
 
                                   <div>
-                                    <Label htmlFor="maxFollowUps">Max Follow-ups</Label>
+                                    <Label htmlFor="maxFollowUps">Máximo de seguimientos</Label>
                                     <input
                                       id="maxFollowUps"
                                       type="number"
@@ -2770,12 +2820,12 @@ const InstagramAccounts = () => {
                                       className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
-                                      Maximum follow-ups per lead
+                                      Límite de seguimientos por lead
                                     </p>
                                   </div>
 
                                   <div>
-                                    <Label htmlFor="timeSinceLastAnswer">Hours Since Last Answer</Label>
+                                    <Label htmlFor="timeSinceLastAnswer">Horas desde la última respuesta</Label>
                                     <input
                                       id="timeSinceLastAnswer"
                                       type="number"
@@ -2789,12 +2839,12 @@ const InstagramAccounts = () => {
                                       className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
-                                      Wait this long before following up
+                                      Tiempo de espera antes de enviar seguimiento
                                     </p>
                                   </div>
 
                                   <div className="md:col-span-2">
-                                    <Label>Message Mode</Label>
+                                    <Label>Modo del mensaje</Label>
                                     <div className="mt-2 flex gap-4">
                                       <label className="flex items-center gap-2 cursor-pointer">
                                         <input
@@ -2804,7 +2854,7 @@ const InstagramAccounts = () => {
                                           onChange={() => setFollowUpConfig(prev => prev ? { ...prev, messageMode: 'template' } : null)}
                                           className="text-violet-600 focus:ring-violet-500"
                                         />
-                                        <span className="text-sm">Template</span>
+                                        <span className="text-sm">Plantilla</span>
                                       </label>
                                       <label className="flex items-center gap-2 cursor-pointer">
                                         <input
@@ -2815,19 +2865,19 @@ const InstagramAccounts = () => {
                                           className="text-violet-600 focus:ring-violet-500"
                                         />
                                         <Sparkles className="w-4 h-4 text-violet-500" />
-                                        <span className="text-sm">AI Suggested</span>
+                                        <span className="text-sm">Sugerido por IA</span>
                                       </label>
                                     </div>
                                     <p className="text-xs text-gray-500 mt-1">
                                       {followUpConfig.messageMode === 'ai'
-                                        ? 'AI will analyze each conversation and suggest a continuation based on your System Prompt'
-                                        : 'Use a fixed template for all follow-up messages'}
+                                        ? 'La IA analiza cada conversación y redacta una continuación contextual'
+                                        : 'Usa una plantilla fija para todos los seguimientos'}
                                     </p>
                                   </div>
 
                                   {(followUpConfig.messageMode || 'template') === 'template' && (
                                     <div className="md:col-span-2">
-                                      <Label htmlFor="messageTemplate">Follow-up Message Template</Label>
+                                      <Label htmlFor="messageTemplate">Plantilla de seguimiento</Label>
                                       <Textarea
                                         id="messageTemplate"
                                         value={followUpConfig.messageTemplate}
@@ -2837,10 +2887,10 @@ const InstagramAccounts = () => {
                                         } : null)}
                                         className="mt-2"
                                         rows={3}
-                                        placeholder="Enter your follow-up message template..."
+                                        placeholder="Escribe tu mensaje de seguimiento..."
                                       />
                                       <p className="text-xs text-gray-500 mt-1">
-                                        Use {`{name}`} for personalization (e.g., "Hola {`{name}`}!")
+                                        Usa {`{name}`} para personalizar el mensaje (ej: "Hola {`{name}`}!")
                                       </p>
                                     </div>
                                   )}
@@ -2858,7 +2908,7 @@ const InstagramAccounts = () => {
                                     ) : (
                                       <Save className="w-4 h-4 mr-2" />
                                     )}
-                                    Save Configuration
+                                    Guardar configuración
                                   </Button>
                                   <Button
                                     variant="outline"
@@ -2867,7 +2917,7 @@ const InstagramAccounts = () => {
                                     className="w-full sm:w-auto"
                                   >
                                     <Target className="w-4 h-4 mr-2" />
-                                    Test Configuration
+                                    Probar configuración
                                   </Button>
                                 </div>
                               </div>
@@ -2877,7 +2927,7 @@ const InstagramAccounts = () => {
                           <div className="bg-gray-50 p-4 rounded-lg text-center">
                             <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                             <p className="text-sm text-gray-500">
-                              Loading follow-up configuration...
+                              Cargando configuración de seguimientos...
                             </p>
                           </div>
                         )}
@@ -2893,10 +2943,10 @@ const InstagramAccounts = () => {
                     >
                       <div className="flex items-center space-x-2">
                         <Key className="w-4 h-4 text-violet-600 flex-shrink-0" />
-                        <h4 className="text-sm font-medium text-gray-700">Keyword Activation</h4>
+                        <h4 className="text-sm font-medium text-gray-700">Activación por palabra clave</h4>
                         {keywordRules.length > 0 && (
                           <Badge variant="outline" className="text-xs">
-                            {keywordRules.filter(r => r.enabled).length} active
+                            {keywordRules.filter(r => r.enabled).length} activas
                           </Badge>
                         )}
                       </div>
@@ -2911,8 +2961,8 @@ const InstagramAccounts = () => {
                       <div className="mt-3 space-y-4">
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                           <p className="text-xs text-blue-800">
-                            <strong>How it works:</strong> The bot is inactive by default. When a message (from lead or owner) contains any of these keywords, 
-                            the bot will automatically activate and start responding in that conversation.
+                            <strong>Cómo funciona:</strong> el bot puede partir pausado. Si un lead o el dueño escribe una palabra clave,
+                            Moca activa el agente y empieza a responder en esa conversación.
                           </p>
                         </div>
 
@@ -2924,13 +2974,13 @@ const InstagramAccounts = () => {
                           <div className="space-y-4">
                             {/* Add New Keyword */}
                             <div className="border rounded-lg p-4 bg-gray-50">
-                              <Label htmlFor="newKeyword" className="text-sm font-medium">Add New Keyword</Label>
+                              <Label htmlFor="newKeyword" className="text-sm font-medium">Agregar palabra clave</Label>
                               <div className="flex gap-2 mt-2">
                                 <Input
                                   id="newKeyword"
                                   value={newKeyword}
                                   onChange={(e) => setNewKeyword(e.target.value)}
-                                  placeholder="e.g., LANDING"
+                                  placeholder="Ej: LANDING"
                                   className="flex-1"
                                   onKeyPress={(e) => {
                                     if (e.key === 'Enter' && newKeyword.trim()) {
@@ -2948,13 +2998,13 @@ const InstagramAccounts = () => {
                                   ) : (
                                     <>
                                       <Plus className="w-4 h-4 mr-1" />
-                                      Add
+                                      Agregar
                                     </>
                                   )}
                                 </Button>
                               </div>
                               <p className="text-xs text-gray-500 mt-1">
-                                Keywords are case-insensitive. Example: "LANDING" will match "landing", "Landing", etc.
+                                No distingue mayúsculas. Ejemplo: "LANDING" detecta "landing", "Landing", etc.
                               </p>
                             </div>
 
@@ -2963,10 +3013,10 @@ const InstagramAccounts = () => {
                               <div className="bg-gray-50 p-4 rounded-lg text-center">
                                 <Key className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                                 <p className="text-sm text-gray-500">
-                                  No keyword activation rules configured
+                                  No hay reglas de activación configuradas
                                 </p>
                                 <p className="text-xs text-gray-400 mt-1">
-                                  Add keywords to enable automatic bot activation
+                                  Agrega palabras clave para activar el bot automáticamente
                                 </p>
                               </div>
                             ) : (
@@ -2991,6 +3041,7 @@ const InstagramAccounts = () => {
                                             <Button
                                               size="sm"
                                               variant="outline"
+                                              aria-label="Guardar palabra clave"
                                               onClick={() => {
                                                 if (editingKeyword?.keyword?.trim()) {
                                                   updateKeywordRule(account.accountId, rule.id, { keyword: editingKeyword.keyword });
@@ -3006,7 +3057,7 @@ const InstagramAccounts = () => {
                                               onClick={() => setEditingKeyword(null)}
                                               disabled={savingKeyword}
                                             >
-                                              Cancel
+                                              Cancelar
                                             </Button>
                                           </div>
                                         ) : (
@@ -3015,7 +3066,7 @@ const InstagramAccounts = () => {
                                               {rule.keyword?.toUpperCase() || 'UNKNOWN'}
                                             </span>
                                             {!rule.enabled && (
-                                              <Badge variant="secondary" className="ml-2 text-xs">Disabled</Badge>
+                                              <Badge variant="secondary" className="ml-2 text-xs">Inactiva</Badge>
                                             )}
                                           </div>
                                         )}
@@ -3026,6 +3077,7 @@ const InstagramAccounts = () => {
                                         <Button
                                           variant="outline"
                                           size="sm"
+                                          aria-label={`Editar palabra clave ${rule.keyword}`}
                                           onClick={() => {
                                             if (rule && rule.id && rule.keyword) {
                                               setEditingKeyword({ id: rule.id, keyword: rule.keyword, enabled: rule.enabled ?? false });
@@ -3038,6 +3090,7 @@ const InstagramAccounts = () => {
                                         <Button
                                           variant="outline"
                                           size="sm"
+                                          aria-label={`Eliminar palabra clave ${rule.keyword}`}
                                           onClick={() => deleteKeywordRule(account.accountId, rule.id)}
                                           disabled={savingKeyword}
                                         >

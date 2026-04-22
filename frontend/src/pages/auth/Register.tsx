@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Eye, EyeOff, Lock, Mail, User, Phone, MapPin, Building2, Instagram } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, User, Phone, Building2, Instagram } from "lucide-react";
 import { Helmet } from "react-helmet";
 
 const Register = () => {
@@ -125,7 +125,7 @@ const Register = () => {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name" className="text-sm font-medium text-gray-700">
-                    Name *
+                    Nombre *
                   </Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -161,7 +161,7 @@ const Register = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="businessName" className="text-sm font-medium text-gray-700">
-                    Business Name *
+                    Nombre del negocio *
                   </Label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -179,7 +179,7 @@ const Register = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
-                    Phone Number *
+                    Teléfono *
                   </Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -197,7 +197,7 @@ const Register = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                    Password *
+                    Contraseña *
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -212,6 +212,7 @@ const Register = () => {
                     />
                     <button
                       type="button"
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >

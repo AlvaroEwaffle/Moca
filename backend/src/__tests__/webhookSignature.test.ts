@@ -1,5 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import crypto from 'crypto';
+import OutboundQueue from '../models/outboundQueue.model';
+import InstagramAccount from '../models/instagramAccount.model';
+import Message from '../models/message.model';
 
 // Set env before importing
 process.env.INSTAGRAM_APP_SECRET = 'test-app-secret-12345';
@@ -94,5 +97,67 @@ describe('InstagramWebhookService.handleVerification', () => {
   it('returns null when token does not match', () => {
     const result = service.handleVerification('subscribe', 'wrong-token', 'challenge-123');
     expect(result).toBeNull();
+  });
+});
+
+describe('InstagramWebhookService follow-up echo handling', () => {
+  let service: InstagramWebhookService;
+
+  beforeEach(() => {
+    service = new InstagramWebhookService();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('does not cast synthetic follow-up queue message IDs as Message ObjectIds', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: async () => '',
+      json: async () => ({}),
+    }));
+
+    await InstagramAccount.create({
+      userId: '665000000000000000000001',
+      userEmail: 'owner@example.com',
+      accountId: '17841401675262878',
+      pageScopedId: '17841401675262878',
+      accountName: 'moca_test',
+      accessToken: 'test-token',
+      tokenExpiry: new Date(Date.now() + 60 * 60 * 1000),
+      isActive: true,
+    });
+
+    await OutboundQueue.create({
+      messageId: 'followup_69e8dafdb730d23e3941df05_1776868093327',
+      conversationId: '69e8dafdb730d23e3941df05',
+      contactId: '69e8dafdb730d23e3941df06',
+      accountId: '17841401675262878',
+      priority: 'normal',
+      status: 'sent',
+      content: { text: 'Hola' },
+      metadata: {
+        createdAt: new Date(),
+        scheduledFor: new Date(Date.now() - 1000),
+        lastAttempt: new Date(),
+        attempts: 1,
+        maxAttempts: 3,
+      },
+    });
+
+    await expect((service as any).processMessage({
+      mid: 'ig-echo-mid-1',
+      psid: '17841401675262878',
+      recipient: { id: '2673668889690653' },
+      timestamp: Date.now(),
+      text: 'Hola',
+      is_echo: true,
+      entryId: '17841401675262878',
+    })).resolves.toBeUndefined();
+
+    const savedEcho = await Message.findOne({ mid: 'ig-echo-mid-1' });
+    expect(savedEcho?.role).toBe('assistant');
   });
 });

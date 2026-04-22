@@ -336,11 +336,11 @@ const ConversationDetail: React.FC = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'open':
-        return <Badge variant="default" className="bg-green-100 text-green-800">Open</Badge>;
+        return <Badge variant="default" className="bg-green-100 text-green-800">Abierta</Badge>;
       case 'closed':
-        return <Badge variant="secondary">Closed</Badge>;
+        return <Badge variant="secondary">Cerrada</Badge>;
       case 'archived':
-        return <Badge variant="outline">Archived</Badge>;
+        return <Badge variant="outline">Archivada</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -360,11 +360,11 @@ const ConversationDetail: React.FC = () => {
   if (error) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Error loading conversation</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Error al cargar la conversación</h2>
         <p className="text-gray-600 mb-4">{error}</p>
         <Button onClick={() => navigate('/app/conversations')}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Conversations
+          Volver a conversaciones
         </Button>
       </div>
     );
@@ -373,11 +373,11 @@ const ConversationDetail: React.FC = () => {
   if (!conversation) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Conversation not found</h2>
-        <p className="text-gray-600 mb-4">The conversation you're looking for doesn't exist.</p>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Conversación no encontrada</h2>
+        <p className="text-gray-600 mb-4">La conversación que buscas no existe.</p>
         <Button onClick={() => navigate('/app/conversations')}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Conversations
+          Volver a conversaciones
         </Button>
       </div>
     );
@@ -386,8 +386,8 @@ const ConversationDetail: React.FC = () => {
   return (
     <>
       <Helmet>
-        <title>{conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'} | Moca - Instagram DM Agent</title>
-        <meta name="description" content={`Conversation with ${conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}`} />
+        <title>{conversation.contact?.name || conversation.contact?.username || 'Contacto'} | Moca</title>
+        <meta name="description" content={`Conversación con ${conversation.contact?.name || conversation.contact?.username || 'un contacto'}`} />
       </Helmet>
 
       <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
@@ -401,18 +401,18 @@ const ConversationDetail: React.FC = () => {
               className="flex-shrink-0"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+              Volver
             </Button>
 
             <div className="flex-1 min-w-0">
               <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 mb-2">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-                  {conversation.contact?.name || conversation.contact?.username || 'Unknown Contact'}
+                  {conversation.contact?.name || conversation.contact?.username || 'Contacto'}
                 </h1>
                 {getStatusBadge(conversation.status)}
               </div>
               <p className="text-sm sm:text-base text-gray-600 break-words">
-                {conversation.contact?.username ? `@${conversation.contact.username}` : conversation.contact?.name || 'Contacto sin nombre'} • Last contact: {formatTimeAgo(conversation.timestamps?.lastUserMessage || conversation.timestamps?.lastActivity)}
+                {conversation.contact?.username ? `@${conversation.contact.username}` : conversation.contact?.name || 'Contacto sin nombre'} • Último contacto: {formatTimeAgo(conversation.timestamps?.lastUserMessage || conversation.timestamps?.lastActivity)}
               </p>
             </div>
           </div>
@@ -420,7 +420,7 @@ const ConversationDetail: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
               <Archive className="w-4 h-4 mr-2" />
-              Archive
+              Archivar
             </Button>
             <Button
               variant="outline"
@@ -430,7 +430,7 @@ const ConversationDetail: React.FC = () => {
               disabled={deleting}
             >
               <Trash2 className="w-4 h-4 mr-2" />
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? 'Eliminando...' : 'Eliminar'}
             </Button>
           </div>
         </div>
@@ -442,7 +442,7 @@ const ConversationDetail: React.FC = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Status</p>
+                  <p className="text-sm font-medium text-gray-600">Estado</p>
                   <p className="text-2xl font-bold text-gray-900">{conversation.status}</p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
@@ -457,12 +457,12 @@ const ConversationDetail: React.FC = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Lead Score</p>
+                  <p className="text-sm font-medium text-gray-600">Score del lead</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {conversation.leadScoring?.currentScore || 1}/7
                   </p>
                   <p className="text-xs text-gray-500">
-                    {conversation.leadScoring?.confidence ? `${Math.round(conversation.leadScoring.confidence * 100)}% confidence` : ''}
+                    {conversation.leadScoring?.confidence ? `${Math.round(conversation.leadScoring.confidence * 100)}% confianza` : ''}
                   </p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center">
@@ -477,10 +477,10 @@ const ConversationDetail: React.FC = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Messages</p>
+                  <p className="text-sm font-medium text-gray-600">Mensajes totales</p>
                   <p className="text-2xl font-bold text-gray-900">{conversation.messageCount || 0}</p>
                   <p className="text-xs text-gray-500">
-                    {conversation.metrics?.userMessages || 0} user • {conversation.metrics?.botMessages || 0} bot
+                    {conversation.metrics?.userMessages || 0} cliente • {conversation.metrics?.botMessages || 0} bot
                   </p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
@@ -495,9 +495,9 @@ const ConversationDetail: React.FC = () => {
             <CardContent className="p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0 pr-3">
-                  <p className="text-sm font-medium text-gray-600 mb-1">Next Action</p>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Próxima acción</p>
                   <p className="text-sm font-medium text-gray-900 break-words">
-                    {conversation.aiResponseMetadata?.lastNextAction || 'Continue conversation'}
+                    {conversation.aiResponseMetadata?.lastNextAction || 'Continuar conversación'}
                   </p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
@@ -513,17 +513,17 @@ const ConversationDetail: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Target className="w-5 h-5" />
-              <span>Conversation Milestone</span>
+              <span>Hito de la conversación</span>
               {conversation.milestone?.status === 'achieved' && (
                 <Badge variant="default" className="bg-green-100 text-green-800">
                   <CheckCircle className="w-3 h-3 mr-1" />
-                  Achieved
+                  Logrado
                 </Badge>
               )}
               {conversation.milestone?.status === 'pending' && (
                 <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
                   <Clock className="w-3 h-3 mr-1" />
-                  Pending
+                  Pendiente
                 </Badge>
               )}
             </CardTitle>
@@ -532,27 +532,27 @@ const ConversationDetail: React.FC = () => {
             {editingMilestone ? (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Milestone Target</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Objetivo del hito</label>
                   <select
                     value={milestoneTarget}
                     onChange={(e) => setMilestoneTarget(e.target.value as any)}
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   >
-                    <option value="link_shared">Link Shared</option>
-                    <option value="meeting_scheduled">Meeting Scheduled</option>
-                    <option value="demo_booked">Demo Booked</option>
-                    <option value="custom">Custom</option>
+                    <option value="link_shared">Link compartido</option>
+                    <option value="meeting_scheduled">Reunión agendada</option>
+                    <option value="demo_booked">Demo agendada</option>
+                    <option value="custom">Personalizado</option>
                   </select>
                 </div>
 
                 {milestoneTarget === 'custom' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Custom Milestone Description</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Descripción personalizada</label>
                     <input
                       type="text"
                       value={customMilestoneTarget}
                       onChange={(e) => setCustomMilestoneTarget(e.target.value)}
-                      placeholder="e.g., 'Price quote requested'"
+                      placeholder="Ej: cotización solicitada"
                       className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                     />
                   </div>
@@ -567,7 +567,7 @@ const ConversationDetail: React.FC = () => {
                     className="h-4 w-4 text-violet-600 focus:ring-violet-500 border-gray-300 rounded"
                   />
                   <label htmlFor="autoDisableAgent" className="text-sm text-gray-700">
-                    Auto-disable agent when milestone is achieved
+                    Desactivar el agente cuando se logre el hito
                   </label>
                 </div>
 
@@ -582,14 +582,14 @@ const ConversationDetail: React.FC = () => {
                     ) : (
                       <Target className="w-4 h-4 mr-2" />
                     )}
-                    Save Milestone
+                    Guardar hito
                   </Button>
                   <Button
                     variant="outline"
                     onClick={cancelEditingMilestone}
                     size="sm"
                   >
-                    Cancel
+                    Cancelar
                   </Button>
                 </div>
               </div>
@@ -612,9 +612,9 @@ const ConversationDetail: React.FC = () => {
                           }
                         </p>
                         <p className="text-xs text-gray-500">
-                          Status: {conversation.milestone.status}
+                          Estado: {conversation.milestone.status}
                           {conversation.milestone.achievedAt && (
-                            <span> • Achieved: {formatTime(conversation.milestone.achievedAt)}</span>
+                            <span> • Logrado: {formatTime(conversation.milestone.achievedAt)}</span>
                           )}
                         </p>
                       </div>
@@ -633,7 +633,7 @@ const ConversationDetail: React.FC = () => {
                         size="sm"
                       >
                         <Target className="w-4 h-4 mr-2" />
-                        Edit Milestone
+                        Editar hito
                       </Button>
                       {conversation.milestone.status === 'pending' && (
                         <Button
@@ -647,7 +647,7 @@ const ConversationDetail: React.FC = () => {
                           ) : (
                             <CheckCircle className="w-4 h-4 mr-2" />
                           )}
-                          Mark Achieved
+                          Marcar como logrado
                         </Button>
                       )}
                     </div>
@@ -655,10 +655,10 @@ const ConversationDetail: React.FC = () => {
                 ) : (
                   <div className="text-center py-6">
                     <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-4">No milestone set for this conversation</p>
+                    <p className="text-gray-600 mb-4">No hay un hito definido para esta conversación</p>
                     <Button onClick={startEditingMilestone} size="sm">
                       <Target className="w-4 h-4 mr-2" />
-                      Set Milestone
+                      Definir hito
                     </Button>
                   </div>
                 )}
@@ -673,7 +673,7 @@ const ConversationDetail: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <MessageCircle className="w-5 h-5" />
-                <span>Messages</span>
+                <span>Mensajes</span>
                 <Badge variant="outline">{conversation.messages?.length || 0}</Badge>
               </CardTitle>
             </CardHeader>
@@ -682,7 +682,7 @@ const ConversationDetail: React.FC = () => {
                 {(!conversation.messages || conversation.messages.length === 0) ? (
                   <div className="text-center py-8">
                     <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No messages yet</p>
+                    <p className="text-gray-600">Aún no hay mensajes</p>
                   </div>
                 ) : (
                   conversation.messages
@@ -742,24 +742,24 @@ const ConversationDetail: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <User className="w-5 h-5" />
-                <span>Contact & AI Info</span>
+                <span>Contacto e IA</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Basic Contact Info */}
               <div className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Username</p>
+                  <p className="text-sm font-medium text-gray-600">Usuario</p>
                   <p className="text-lg font-semibold">
                     {conversation.contact?.username ? `@${conversation.contact.username}` : conversation.contact?.name || 'Contacto sin nombre'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-600">First Contact</p>
+                  <p className="text-sm font-medium text-gray-600">Primer contacto</p>
                   <p className="text-sm">{formatTime(conversation.timestamps?.createdAt || new Date())}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Last Activity</p>
+                  <p className="text-sm font-medium text-gray-600">Última actividad</p>
                   <p className="text-sm">{formatTime(conversation.timestamps?.lastActivity || new Date())}</p>
                 </div>
               </div>
@@ -767,10 +767,10 @@ const ConversationDetail: React.FC = () => {
               {/* AI Response Quality Indicators */}
               {conversation.aiResponseMetadata && (
                 <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">AI Response Quality</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Calidad de respuesta IA</h4>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Response Type</span>
+                      <span className="text-sm text-gray-600">Tipo de respuesta</span>
                       <Badge
                         variant={conversation.aiResponseMetadata.lastResponseType === 'structured' ? 'default' : 'secondary'}
                         className="text-xs"
@@ -787,17 +787,17 @@ const ConversationDetail: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Context Aware</span>
+                      <span className="text-sm text-gray-600">Usa contexto</span>
                       <div className={`w-3 h-3 rounded-full ${conversation.aiResponseMetadata.contextAwareness ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Repetition Detected</span>
+                      <span className="text-sm text-gray-600">Repetición detectada</span>
                       <div className={`w-3 h-3 rounded-full ${conversation.aiResponseMetadata.repetitionDetected ? 'bg-red-500' : 'bg-green-500'}`}></div>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Response Quality</span>
+                      <span className="text-sm text-gray-600">Calidad</span>
                       <span className="text-sm font-medium">
                         {Math.round((conversation.aiResponseMetadata.responseQuality || 0) * 100)}%
                       </span>
@@ -809,20 +809,20 @@ const ConversationDetail: React.FC = () => {
               {/* Lead Scoring Details */}
               {conversation.leadScoring && (
                 <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">Lead Scoring Details</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Detalle del score</h4>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Current Score</span>
+                      <span className="text-sm text-gray-600">Score actual</span>
                       <span className="text-sm font-bold">{conversation.leadScoring.currentScore || 1}/7</span>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Previous Score</span>
+                      <span className="text-sm text-gray-600">Score anterior</span>
                       <span className="text-sm font-medium">{conversation.leadScoring.previousScore || 'N/A'}/7</span>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Progression</span>
+                      <span className="text-sm text-gray-600">Progreso</span>
                       <Badge
                         variant={
                           conversation.leadScoring.progression === 'increased' ? 'default' :
@@ -835,7 +835,7 @@ const ConversationDetail: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Confidence</span>
+                      <span className="text-sm text-gray-600">Confianza</span>
                       <span className="text-sm font-medium">
                         {Math.round((conversation.leadScoring.confidence || 0) * 100)}%
                       </span>
@@ -845,16 +845,16 @@ const ConversationDetail: React.FC = () => {
                     {conversation.leadScoring.currentStep && (
                       <div className="bg-gray-50 p-3 rounded-lg">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700">Current Step</span>
+                          <span className="text-sm font-medium text-gray-700">Etapa actual</span>
                           <span className="text-sm font-bold text-violet-600">
                             {conversation.leadScoring.currentStep.stepNumber || conversation.leadScoring.currentScore || 1}
                           </span>
                         </div>
                         <p className="text-sm text-gray-600 font-medium">
-                          {conversation.leadScoring.currentStep.stepName || 'Contact Received'}
+                          {conversation.leadScoring.currentStep.stepName || 'Contacto recibido'}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          {conversation.leadScoring.currentStep.stepDescription || 'Initial contact from customer'}
+                          {conversation.leadScoring.currentStep.stepDescription || 'Primer contacto del cliente'}
                         </p>
                       </div>
                     )}
@@ -865,11 +865,11 @@ const ConversationDetail: React.FC = () => {
               {/* Analytics Summary */}
               {conversation.analytics && (
                 <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">Analytics Summary</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Resumen analítico</h4>
                   <div className="space-y-3">
                     {conversation.analytics.leadProgression && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Lead Trend</span>
+                        <span className="text-sm text-gray-600">Tendencia del lead</span>
                         <Badge
                           variant={
                             conversation.analytics.leadProgression.trend === 'improving' ? 'default' :
@@ -884,7 +884,7 @@ const ConversationDetail: React.FC = () => {
 
                     {conversation.analytics.leadProgression && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Average Score</span>
+                        <span className="text-sm text-gray-600">Score promedio</span>
                         <span className="text-sm font-medium">
                           {conversation.analytics.leadProgression.averageScore?.toFixed(1) || 'N/A'}/7
                         </span>
@@ -893,7 +893,7 @@ const ConversationDetail: React.FC = () => {
 
                     {conversation.analytics.leadProgression && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Peak Score</span>
+                        <span className="text-sm text-gray-600">Score máximo</span>
                         <span className="text-sm font-medium">
                           {conversation.analytics.leadProgression.peakScore || 'N/A'}/7
                         </span>
@@ -902,7 +902,7 @@ const ConversationDetail: React.FC = () => {
 
                     {conversation.analytics.conversationFlow && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Total Turns</span>
+                        <span className="text-sm text-gray-600">Turnos totales</span>
                         <span className="text-sm font-medium">
                           {conversation.analytics.conversationFlow.totalTurns || 0}
                         </span>
@@ -927,10 +927,10 @@ const ConversationDetail: React.FC = () => {
             </div>
             <div className="text-center">
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Delete Conversation
+                Eliminar conversación
               </h3>
               <p className="text-sm text-gray-500 mb-6">
-                Are you sure you want to delete this conversation? This action cannot be undone and will permanently remove all messages and data associated with this conversation.
+                ¿Seguro que quieres eliminar esta conversación? Esta acción no se puede deshacer y eliminará sus mensajes y datos asociados.
               </p>
               <div className="flex space-x-3 justify-center">
                 <Button
@@ -938,14 +938,14 @@ const ConversationDetail: React.FC = () => {
                   onClick={() => setShowDeleteConfirm(false)}
                   disabled={deleting}
                 >
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button
                   variant="destructive"
                   onClick={deleteConversation}
                   disabled={deleting}
                 >
-                  {deleting ? 'Deleting...' : 'Delete Conversation'}
+                  {deleting ? 'Eliminando...' : 'Eliminar conversación'}
                 </Button>
               </div>
             </div>

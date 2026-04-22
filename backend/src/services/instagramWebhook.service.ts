@@ -13,6 +13,10 @@ import debounceWorkerService from './debounceWorker.service';
 import { notifyError } from '../utils/slack';
 // pushToFidelidapp import removed — push now handled in debounceWorker after lead enrichment
 
+function isObjectIdString(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-fA-F0-9]{24}$/.test(value);
+}
+
 function maskSecret(value: string): string {
   if (!value) return 'NOT SET';
   if (value.length <= 6) return '***';
@@ -480,6 +484,11 @@ export class InstagramWebhookService {
       
       // For each queue item, check if the associated message has this MID
       for (const queueItem of recentQueueItems) {
+        if (!isObjectIdString(queueItem.messageId)) {
+          console.log(`🤖 [Bot Detection] Skipping synthetic outbound messageId in queue: ${queueItem.messageId}`);
+          continue;
+        }
+
         const associatedMessage = await Message.findById(queueItem.messageId);
         if (associatedMessage && associatedMessage.metadata?.instagramResponse?.messageId === messageData.mid) {
           console.log(`🤖 [Bot Detection] Bot message detected by matching MID in OutboundQueue/Message, skipping: ${messageData.mid}`);

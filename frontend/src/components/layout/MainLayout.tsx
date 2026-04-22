@@ -35,6 +35,7 @@ import {
   Settings2,
   Activity,
   MessageCircle,
+  Clock,
   Calendar
 } from "lucide-react";
 import {
@@ -145,13 +146,13 @@ const MainLayout = () => {
 
   const navigation = [
     {
-      name: 'Dashboard',
+      name: 'Inicio',
       href: '/app/dashboard',
       icon: Home,
       current: location.pathname === '/app/dashboard'
     },
     {
-      name: 'Analytics',
+      name: 'Analítica',
       href: '/app/analytics',
       icon: BarChart3,
       current: location.pathname.startsWith('/app/analytics')
@@ -166,25 +167,47 @@ const MainLayout = () => {
       name: 'Instagram',
       href: '/app/instagram',
       icon: Instagram,
-      current: location.pathname.startsWith('/app/instagram') || location.pathname.startsWith('/app/conversations') || location.pathname.startsWith('/app/comments'),
+      current: location.pathname.startsWith('/app/instagram') ||
+        location.pathname.startsWith('/app/conversations') ||
+        location.pathname.startsWith('/app/follow-ups') ||
+        location.pathname.startsWith('/app/queue') ||
+        location.pathname.startsWith('/app/logs'),
       subItems: [
         {
-          name: 'Agent Config',
+          name: 'Configuración',
           href: '/app/instagram',
           icon: Settings2,
           current: location.pathname === '/app/instagram'
         },
         {
-          name: 'Conversations',
+          name: 'Conversaciones',
           href: '/app/conversations',
           icon: MessageSquare,
           current: location.pathname.startsWith('/app/conversations')
+        },
+        {
+          name: 'Seguimientos',
+          href: '/app/follow-ups',
+          icon: Clock,
+          current: location.pathname.startsWith('/app/follow-ups')
         },
         {
           name: 'Comentarios',
           href: '/app/instagram/comments',
           icon: MessageCircle,
           current: location.pathname.startsWith('/app/instagram/comments')
+        },
+        {
+          name: 'Cola de envío',
+          href: '/app/queue',
+          icon: Activity,
+          current: location.pathname.startsWith('/app/queue')
+        },
+        {
+          name: 'Logs',
+          href: '/app/logs',
+          icon: Settings,
+          current: location.pathname.startsWith('/app/logs')
         }
       ]
     },
@@ -209,7 +232,7 @@ const MainLayout = () => {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen overflow-x-hidden bg-gray-50">
       {/* Mobile menu */}
       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
         <SheetContent side="left" className="w-80">
@@ -302,6 +325,7 @@ const MainLayout = () => {
               variant="ghost"
               size="sm"
               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              aria-label={isSidebarCollapsed ? "Expandir menú lateral" : "Colapsar menú lateral"}
               className="h-8 w-8 p-0 hover:bg-gray-100"
             >
               {isSidebarCollapsed ? (
@@ -419,7 +443,7 @@ const MainLayout = () => {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Abrir menú de cuenta">
                             <ChevronDown className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -458,7 +482,7 @@ const MainLayout = () => {
                               <DropdownMenuSeparator />
                             </>
                           )}
-                          <DropdownMenuItem onClick={() => navigate('/configuracion')}>
+                          <DropdownMenuItem onClick={() => navigate('/app/instagram')}>
                             <Settings className="mr-2 h-4 w-4" />
                             Configuración
                           </DropdownMenuItem>
@@ -519,7 +543,7 @@ const MainLayout = () => {
         </div>
 
         {/* Page content */}
-        <main className="py-6">
+        <main className="overflow-x-hidden py-6">
           <Outlet />
         </main>
       </div>

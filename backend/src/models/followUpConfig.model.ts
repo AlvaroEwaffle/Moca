@@ -15,7 +15,7 @@ export interface IFollowUpConfig extends Document {
 const FollowUpConfigSchema = new Schema<IFollowUpConfig>({
   userId: { type: String, required: true },
   accountId: { type: String, required: true },
-  enabled: { type: Boolean, default: false },
+  enabled: { type: Boolean, default: true },
   minLeadScore: { type: Number, min: 1, max: 7, default: 2 },
   maxFollowUps: { type: Number, min: 1, max: 10, default: 3 },
   timeSinceLastAnswer: { type: Number, min: 0.25, max: 168, default: 24 },

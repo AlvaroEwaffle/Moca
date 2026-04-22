@@ -47,6 +47,41 @@ describe('LeadScoringService', () => {
       expect(result.currentScore).toBeGreaterThanOrEqual(1);
     });
 
+    it('does not leave explicit commercial interest stuck at score 1', () => {
+      const result = LeadScoringService.calculateLeadScore('Me interesa saber mas, quiero cotizar', {
+        businessName: 'TestBiz',
+        conversationHistory: [],
+        lastMessage: 'Me interesa saber mas, quiero cotizar',
+        timeSinceLastMessage: 0,
+        repetitionPatterns: [],
+        leadHistory: [1],
+        isSupport: false
+      });
+
+      expect(result.currentScore).toBeGreaterThanOrEqual(3);
+      expect(result.reasons).toContain('Explicit pricing or proposal intent detected');
+    });
+
+    it('moves a substantive reply after assistant context out of score 1', () => {
+      const result = LeadScoringService.calculateLeadScore('Trabajo en retail y necesito automatizar mensajes', {
+        businessName: 'TestBiz',
+        conversationHistory: [
+          {
+            role: 'assistant',
+            content: 'Cuéntame un poco más sobre tu negocio.',
+            timestamp: new Date()
+          }
+        ],
+        lastMessage: 'Trabajo en retail y necesito automatizar mensajes',
+        timeSinceLastMessage: 1,
+        repetitionPatterns: [],
+        leadHistory: [1],
+        isSupport: false
+      });
+
+      expect(result.currentScore).toBeGreaterThanOrEqual(2);
+    });
+
     it('caps Score 5 and defers to async verification', () => {
       // Even if keywords would produce score 5, it should be capped to 4
       const result = LeadScoringService.calculateLeadScore('recordatorio seguimiento reminder', {

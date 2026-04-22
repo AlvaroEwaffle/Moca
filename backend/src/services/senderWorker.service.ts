@@ -2,6 +2,7 @@ import OutboundQueue from '../models/outboundQueue.model';
 import Message from '../models/message.model';
 import Conversation from '../models/conversation.model';
 import InstagramAccount from '../models/instagramAccount.model';
+import LeadFollowUp from '../models/leadFollowUp.model';
 import { IOutboundQueue } from '../models/outboundQueue.model';
 import instagramService from './instagramApi.service';
 import { notifyError } from '../utils/slack';
@@ -148,6 +149,9 @@ class SenderWorkerService {
         
         // Update queue item status
         await this.updateQueueItemStatus(queueItem.id, 'sent');
+
+        // Keep follow-up analytics/unblocking state in sync for synthetic follow-up messages
+        await this.updateFollowUpRecord(queueItem, 'sent');
         
         // Update conversation metadata
         await this.updateConversationMetadata(queueItem.conversationId);
@@ -164,12 +168,14 @@ class SenderWorkerService {
           console.log(`🚫 SenderWorkerService: User not found for PSID ${contact.psid}, marking as failed permanently`);
           await this.updateQueueItemStatus(queueItem.id, 'failed');
           await this.updateMessageStatus(queueItem.messageId, 'failed');
+          await this.updateFollowUpRecord(queueItem, 'failed');
           return false;
         }
         if (errorMessage.includes('outside of allowed window') || errorMessage.includes('error_subcode":2534022')) {
           console.log(`🚫 SenderWorkerService: Instagram 24h window expired for PSID ${contact.psid}, marking as failed permanently`);
           await this.updateQueueItemStatus(queueItem.id, 'failed');
           await this.updateMessageStatus(queueItem.messageId, 'failed');
+          await this.updateFollowUpRecord(queueItem, 'failed');
           return false;
         }
         
@@ -277,6 +283,7 @@ class SenderWorkerService {
       if (attempts >= maxAttempts) {
         // Mark as permanently failed
         await this.updateQueueItemStatus(queueItem.id, 'failed');
+        await this.updateFollowUpRecord(queueItem, 'failed');
         console.log(`❌ SenderWorkerService: Queue item ${queueItem.id} permanently failed after ${maxAttempts} attempts`);
       } else {
         // Schedule retry
@@ -356,6 +363,33 @@ class SenderWorkerService {
       console.log(`✅ SenderWorkerService: Message status updated: ${messageId}`);
     } catch (error) {
       console.error(`❌ SenderWorkerService: Error updating message status:`, error);
+    }
+  }
+
+  /**
+   * Update LeadFollowUp state for synthetic follow-up queue messages.
+   */
+  private async updateFollowUpRecord(queueItem: IOutboundQueue, status: 'sent' | 'failed'): Promise<void> {
+    const followUpId = (queueItem.metadata as any)?.followUpId;
+    if (!followUpId) {
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const updateData: any = {
+        status,
+        lastFollowUpAt: now
+      };
+
+      if (status === 'sent') {
+        updateData.sentAt = now;
+      }
+
+      await LeadFollowUp.findByIdAndUpdate(followUpId, updateData);
+      console.log(`✅ SenderWorkerService: Follow-up ${followUpId} marked as ${status}`);
+    } catch (error) {
+      console.error(`❌ SenderWorkerService: Error updating follow-up record:`, error);
     }
   }
 

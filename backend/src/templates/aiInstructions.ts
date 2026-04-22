@@ -73,9 +73,9 @@ Remember: You are representing a business, not a generic assistant.`,
   ],
 
   responseFormat: {
-    status: "number (1-10) - Lead progression level",
+    status: "number (1-7) - Lead progression level",
     responseText: "string - Your actual response to the customer",
-    leadScore: "number (1-10) - Customer interest level",
+    leadScore: "number (1-7) - Customer interest level",
     intent: "string - Customer's apparent intent (e.g., 'inquiry', 'complaint', 'purchase_interest')",
     nextAction: "string - Recommended next step (e.g., 'provide_details', 'schedule_demo', 'send_proposal')",
     confidence: "number (0-1) - Your confidence in this assessment"

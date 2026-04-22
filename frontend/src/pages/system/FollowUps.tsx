@@ -207,10 +207,10 @@ export default function FollowUps() {
         fetchHistory(selectedAccountId);
       } else {
         const err = await res.json();
-        toast({ title: "Error", description: err.error || "Failed to send", variant: "destructive" });
+        toast({ title: "Error", description: err.error || "No se pudo enviar", variant: "destructive" });
       }
     } catch (err) {
-      toast({ title: "Error", description: "Network error", variant: "destructive" });
+      toast({ title: "Error", description: "Error de conexión", variant: "destructive" });
     } finally {
       setSending(false);
     }
@@ -218,12 +218,12 @@ export default function FollowUps() {
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { color: string; label: string }> = {
-      pending: { color: 'bg-yellow-100 text-yellow-800', label: 'Pending' },
-      sent: { color: 'bg-blue-100 text-blue-800', label: 'Sent' },
-      delivered: { color: 'bg-green-100 text-green-800', label: 'Delivered' },
-      responded: { color: 'bg-emerald-100 text-emerald-800', label: 'Responded' },
-      converted: { color: 'bg-purple-100 text-purple-800', label: 'Converted' },
-      failed: { color: 'bg-red-100 text-red-800', label: 'Failed' }
+      pending: { color: 'bg-yellow-100 text-yellow-800', label: 'Pendiente' },
+      sent: { color: 'bg-blue-100 text-blue-800', label: 'Enviado' },
+      delivered: { color: 'bg-green-100 text-green-800', label: 'Entregado' },
+      responded: { color: 'bg-emerald-100 text-emerald-800', label: 'Respondido' },
+      converted: { color: 'bg-purple-100 text-purple-800', label: 'Convertido' },
+      failed: { color: 'bg-red-100 text-red-800', label: 'Fallido' }
     };
     const v = variants[status] || { color: 'bg-gray-100 text-gray-800', label: status };
     return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v.color}`}>{v.label}</span>;
@@ -232,18 +232,18 @@ export default function FollowUps() {
   return (
     <div className="space-y-6">
       <Helmet>
-        <title>Follow-Ups | Moca</title>
+        <title>Seguimientos | Moca</title>
       </Helmet>
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Follow-Up Configuration</h1>
-          <p className="text-muted-foreground">Configure automatic follow-up messages for leads.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Seguimientos automáticos</h1>
+          <p className="text-muted-foreground">Configura recordatorios para leads que quedaron esperando respuesta.</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select account" />
+              <SelectValue placeholder="Selecciona una cuenta" />
             </SelectTrigger>
             <SelectContent>
               {accounts.map(a => (
@@ -261,7 +261,7 @@ export default function FollowUps() {
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Follow-ups</CardTitle>
+              <CardTitle className="text-sm font-medium">Seguimientos totales</CardTitle>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -270,7 +270,7 @@ export default function FollowUps() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today</CardTitle>
+              <CardTitle className="text-sm font-medium">Hoy</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -279,7 +279,7 @@ export default function FollowUps() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Sent</CardTitle>
+              <CardTitle className="text-sm font-medium">Enviados</CardTitle>
               <CheckCircle className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
@@ -288,7 +288,7 @@ export default function FollowUps() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Failed</CardTitle>
+              <CardTitle className="text-sm font-medium">Fallidos</CardTitle>
               <XCircle className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
@@ -304,18 +304,18 @@ export default function FollowUps() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              Configuration
+              Configuración
             </CardTitle>
             <CardDescription>
-              Configure when and how follow-up messages are sent to leads.
+              Define cuándo Moca debe reactivar una conversación con un mensaje de seguimiento.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Enable/Disable */}
             <div className="flex items-center justify-between">
               <div>
-                <Label className="text-base font-semibold">Enable Follow-ups</Label>
-                <p className="text-sm text-muted-foreground">Automatically send follow-up messages to qualified leads.</p>
+                <Label className="text-base font-semibold">Activar seguimientos</Label>
+                <p className="text-sm text-muted-foreground">Envía mensajes automáticos a leads calificados que no respondieron.</p>
               </div>
               <Switch
                 checked={config.enabled}
@@ -325,7 +325,7 @@ export default function FollowUps() {
 
             {/* Min lead score */}
             <div className="space-y-2">
-              <Label>Minimum Lead Score ({config.minLeadScore}/7)</Label>
+              <Label>Score mínimo del lead ({config.minLeadScore}/7)</Label>
               <Slider
                 value={[config.minLeadScore]}
                 onValueChange={([val]) => setConfig({ ...config, minLeadScore: val })}
@@ -334,13 +334,13 @@ export default function FollowUps() {
                 step={1}
               />
               <p className="text-xs text-muted-foreground">
-                Only send follow-ups to leads with a score of {config.minLeadScore} or higher.
+                Solo se enviarán seguimientos a leads con score {config.minLeadScore} o superior.
               </p>
             </div>
 
             {/* Max follow-ups */}
             <div className="space-y-2">
-              <Label>Max Follow-ups per Lead</Label>
+              <Label>Máximo de seguimientos por lead</Label>
               <Input
                 type="number"
                 min={1}
@@ -349,13 +349,13 @@ export default function FollowUps() {
                 onChange={(e) => setConfig({ ...config, maxFollowUps: parseInt(e.target.value) || 1 })}
               />
               <p className="text-xs text-muted-foreground">
-                Maximum number of follow-up messages per lead before stopping.
+                Límite de mensajes de seguimiento antes de detenerse.
               </p>
             </div>
 
             {/* Time delay */}
             <div className="space-y-2">
-              <Label>Hours Since Last Answer</Label>
+              <Label>Horas desde la última respuesta</Label>
               <Input
                 type="number"
                 min={0.25}
@@ -365,13 +365,13 @@ export default function FollowUps() {
                 onChange={(e) => setConfig({ ...config, timeSinceLastAnswer: parseFloat(e.target.value) || 1 })}
               />
               <p className="text-xs text-muted-foreground">
-                Wait this many hours after last activity before sending a follow-up. Use decimals for minutes (0.25 = 15 min, 0.5 = 30 min, 1 = 1 hour).
+                Espera esta cantidad de horas desde la última actividad. Puedes usar decimales: 0.25 = 15 min, 0.5 = 30 min.
               </p>
             </div>
 
             {/* Message mode */}
             <div className="space-y-2">
-              <Label>Message Mode</Label>
+              <Label>Modo del mensaje</Label>
               <Select
                 value={config.messageMode}
                 onValueChange={(val: 'template' | 'ai') => setConfig({ ...config, messageMode: val })}
@@ -383,28 +383,28 @@ export default function FollowUps() {
                   <SelectItem value="template">
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4" />
-                      Template
+                      Plantilla
                     </div>
                   </SelectItem>
                   <SelectItem value="ai">
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4" />
-                      AI Generated
+                      Generado por IA
                     </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
                 {config.messageMode === 'template'
-                  ? 'Use a fixed template with {name} personalization.'
-                  : 'AI generates contextual follow-ups based on conversation history.'}
+                  ? 'Usa una plantilla fija con personalización {name}.'
+                  : 'La IA genera un seguimiento contextual usando el historial de la conversación.'}
               </p>
             </div>
 
             {/* AI Instruction */}
             {config.messageMode === 'ai' && (
               <div className="space-y-2">
-                <Label>AI Instruction</Label>
+                <Label>Instrucción para la IA</Label>
                 <Textarea
                   value={config.aiInstruction || ''}
                   onChange={(e) => setConfig({ ...config, aiInstruction: e.target.value })}
@@ -412,7 +412,7 @@ export default function FollowUps() {
                   rows={3}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Custom instruction that guides the AI when generating follow-up messages. The AI also uses the account's system prompt and conversation history.
+                  Instrucción adicional para guiar los seguimientos. Moca también usa el prompt de la cuenta y el historial.
                 </p>
               </div>
             )}
@@ -420,7 +420,7 @@ export default function FollowUps() {
             {/* Template editor */}
             {config.messageMode === 'template' && (
               <div className="space-y-2">
-                <Label>Message Template</Label>
+                <Label>Plantilla del mensaje</Label>
                 <Textarea
                   value={config.messageTemplate}
                   onChange={(e) => setConfig({ ...config, messageTemplate: e.target.value })}
@@ -428,7 +428,7 @@ export default function FollowUps() {
                   rows={4}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use {'{name}'} to insert the contact's name.
+                  Usa {'{name}'} para insertar el nombre del contacto.
                 </p>
               </div>
             )}
@@ -438,7 +438,7 @@ export default function FollowUps() {
               <Alert>
                 <MessageSquare className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Preview:</strong>{' '}
+                  <strong>Vista previa:</strong>{' '}
                   {config.messageTemplate.replace(/\{name\}/g, 'Maria')}
                 </AlertDescription>
               </Alert>
@@ -448,11 +448,11 @@ export default function FollowUps() {
             <div className="flex gap-2 pt-4">
               <Button onClick={handleSave} disabled={saving}>
                 {saving ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Save Configuration
+                Guardar configuración
               </Button>
               <Button variant="outline" onClick={handleSendNow} disabled={sending || !config.enabled}>
                 {sending ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Send Now
+                Enviar ahora
               </Button>
             </div>
           </CardContent>
@@ -465,7 +465,7 @@ export default function FollowUps() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
-              Recent Follow-ups
+              Seguimientos recientes
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -474,7 +474,7 @@ export default function FollowUps() {
                 <div key={item._id} className="flex items-center justify-between border-b pb-3 last:border-0">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {item.contactId?.name || item.contactId?.psid || 'Unknown'}
+                      {item.contactId?.name || item.contactId?.psid || 'Contacto desconocido'}
                     </p>
                     <p className="text-xs text-muted-foreground truncate max-w-[400px]">
                       {item.messageTemplate}

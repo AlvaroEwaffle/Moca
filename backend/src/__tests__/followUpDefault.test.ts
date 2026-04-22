@@ -1,15 +1,20 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import express from 'express';
 import supertest from 'supertest';
 import jwt from 'jsonwebtoken';
 import User from '../models/user.model';
-import { FollowUpConfig, InstagramAccount } from '../models';
+import { FollowUpConfig } from '../models';
+import followUpRoutes from '../routes/followUp.routes';
 
-// Set required env vars before importing routes
+// Set required env vars for authenticated route handlers.
 process.env.JWT_SECRET = 'test-jwt-secret-for-testing-only';
 process.env.INSTAGRAM_CLIENT_ID = 'test-client-id';
 process.env.INSTAGRAM_CLIENT_SECRET = 'test-client-secret';
 process.env.INSTAGRAM_REDIRECT_URI = 'http://localhost/callback';
+
+const app = express();
+app.use(express.json());
+app.use('/api/follow-up', followUpRoutes);
 
 describe('FollowUp Default Config on Account Creation (R1.5)', () => {
   it('creates a FollowUpConfig entry in the database with enabled=true', async () => {
@@ -56,6 +61,57 @@ describe('FollowUp Default Config on Account Creation (R1.5)', () => {
     expect(created!.maxFollowUps).toBe(3);
     expect(created!.timeSinceLastAnswer).toBe(12);
     expect(created!.messageMode).toBe('template');
+  });
+
+  it('defaults new FollowUpConfig records to enabled=true when omitted', async () => {
+    const user = await User.create({
+      name: 'Default Enabled User',
+      email: 'followup-default-enabled@example.com',
+      password: 'hashedpassword123',
+      businessName: 'DefaultBiz',
+      phone: '+56912345670'
+    });
+
+    const config = await FollowUpConfig.create({
+      userId: user._id.toString(),
+      accountId: 'test-account-default-enabled',
+      messageTemplate: 'Default enabled follow-up'
+    });
+
+    expect(config.enabled).toBe(true);
+    expect(config.minLeadScore).toBe(2);
+    expect(config.maxFollowUps).toBe(3);
+  });
+
+  it('GET /config creates missing config enabled by default', async () => {
+    const user = await User.create({
+      name: 'Route Default User',
+      email: 'followup-route-default@example.com',
+      password: 'hashedpassword123',
+      businessName: 'RouteDefaultBiz',
+      phone: '+56912345671'
+    });
+    const accountId = 'test-account-route-default';
+    const token = jwt.sign(
+      { userId: user._id.toString(), email: user.email },
+      process.env.JWT_SECRET!
+    );
+
+    const response = await supertest(app)
+      .get(`/api/follow-up/config/${accountId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.enabled).toBe(true);
+    expect(response.body.minLeadScore).toBe(2);
+    expect(response.body.maxFollowUps).toBe(3);
+    expect(response.body.timeSinceLastAnswer).toBe(12);
+
+    const config = await FollowUpConfig.findOne({
+      userId: user._id.toString(),
+      accountId
+    });
+    expect(config?.enabled).toBe(true);
   });
 
   it('does not create duplicate FollowUpConfig if one already exists', async () => {

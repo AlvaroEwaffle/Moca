@@ -120,7 +120,7 @@ const Login = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                  Password
+                  Contraseña
                 </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -135,6 +135,7 @@ const Login = () => {
                   />
                   <button
                     type="button"
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
@@ -172,12 +173,9 @@ const Login = () => {
             </div>
 
             <div className="text-center">
-              <Link
-                to="/forgot-password"
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                ¿Olvidaste tu contraseña?
-              </Link>
+              <p className="text-sm text-gray-500">
+                ¿Olvidaste tu contraseña? Escríbenos para reactivar el acceso durante el piloto.
+              </p>
             </div>
           </CardContent>
         </Card>

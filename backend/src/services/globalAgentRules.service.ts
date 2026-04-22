@@ -11,6 +11,9 @@ import { IConversation } from '../models/conversation.model';
 import { IGlobalAgentConfig } from '../models/globalAgentConfig.model';
 import { LEAD_SCORING_STEPS } from '../types/aiResponse';
 
+const DEFAULT_MAX_RESPONSES_PER_CONVERSATION = 10;
+const LEGACY_LOW_RESPONSE_LIMIT = 3;
+
 export class GlobalAgentRulesService {
   
   /**
@@ -74,7 +77,7 @@ export class GlobalAgentRulesService {
     globalConfig: IGlobalAgentConfig
   ): { shouldDisable: boolean; reason?: string; ruleType?: 'response_limit' } {
     
-    const maxResponses = globalConfig.responseLimits.maxResponsesPerConversation;
+    const maxResponses = this.getEffectiveMaxResponses(globalConfig);
     const currentResponses = conversation.settings?.responseCounter?.totalResponses || 0;
     
     if (currentResponses >= maxResponses) {
@@ -86,6 +89,23 @@ export class GlobalAgentRulesService {
     }
     
     return { shouldDisable: false };
+  }
+
+  private static getEffectiveMaxResponses(globalConfig: IGlobalAgentConfig): number {
+    const configuredLimit = globalConfig.responseLimits?.maxResponsesPerConversation;
+
+    if (!configuredLimit) {
+      return DEFAULT_MAX_RESPONSES_PER_CONVERSATION;
+    }
+
+    // R1 launch-readiness: old production configs used 3, which stalled otherwise
+    // healthy conversations too early. Treat only that legacy default as the new
+    // safe floor while preserving intentional custom limits.
+    if (configuredLimit === LEGACY_LOW_RESPONSE_LIMIT) {
+      return DEFAULT_MAX_RESPONSES_PER_CONVERSATION;
+    }
+
+    return configuredLimit;
   }
   
   /**

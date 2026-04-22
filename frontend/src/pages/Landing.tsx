@@ -91,11 +91,11 @@ const Landing = () => {
                         {/* CTA Button */}
                         <div className="mb-8 animate-fade-in-delay flex justify-center">
                             <Button
-                                onClick={() => navigate('/login')}
+                                onClick={() => navigate('/register')}
                                 size="lg"
                                 className="w-full max-w-md py-6 text-xl font-bold rounded-2xl shadow-2xl bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 border-0 text-white flex items-center justify-center gap-3 transform hover:scale-105 transition-all duration-300"
                             >
-                                Comenzar Gratis Ahora <ArrowRight className="w-6 h-6" />
+                                Solicitar piloto gratis <ArrowRight className="w-6 h-6" />
                             </Button>
                         </div>
 
@@ -103,7 +103,7 @@ const Landing = () => {
                         <div className="flex flex-col items-center space-y-4 animate-fade-in-delay-2">
                             <div className="flex items-center gap-2 text-gray-600">
                                 <Users className="w-5 h-5 text-violet-500" />
-                                <span className="font-medium">+500 empresas ya automatizaron sus ventas</span>
+                                <span className="font-medium">Pilotos asistidos para equipos que venden por Instagram</span>
                             </div>
                             
                             {/* Trust badges */}
@@ -336,7 +336,7 @@ const Landing = () => {
 
                     <div className="text-center mt-12">
                         <Button
-                            onClick={() => navigate('/login')}
+                            onClick={() => navigate('/register')}
                             size="lg"
                             className="px-8 py-4 text-lg font-bold rounded-2xl shadow-2xl bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 border-0 text-white flex items-center justify-center gap-3 transform hover:scale-105 transition-all duration-300 mx-auto"
                         >
@@ -382,7 +382,7 @@ const Landing = () => {
                         </div>
 
                         <Button
-                            onClick={() => navigate('/login')}
+                            onClick={() => navigate('/register')}
                             size="lg"
                             className="w-full py-6 text-xl font-bold rounded-2xl shadow-2xl bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 border-0 text-white flex items-center justify-center gap-3 transform hover:scale-105 transition-all duration-300"
                         >
@@ -465,15 +465,15 @@ const Landing = () => {
                         ¿Listo para transformar tu Instagram?
                     </h2>
                     <p className="text-xl text-violet-100 mb-8">
-                        Únete a +500 empresas que ya automatizaron sus ventas con Moca
+                        Agenda un piloto asistido y valida Moca con conversaciones reales
                     </p>
 
                     <Button
-                        onClick={() => navigate('/login')}
+                        onClick={() => navigate('/register')}
                         size="lg"
                         className="px-12 py-6 text-xl font-bold rounded-2xl shadow-2xl bg-white text-violet-600 hover:bg-violet-50 flex items-center justify-center gap-3 transform hover:scale-105 transition-all duration-300 mx-auto"
                     >
-                        Comenzar Gratis Ahora <ArrowRight className="w-6 h-6" />
+                        Solicitar piloto gratis <ArrowRight className="w-6 h-6" />
                     </Button>
 
                     <p className="text-violet-200 mt-6">
