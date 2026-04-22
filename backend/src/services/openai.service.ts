@@ -977,7 +977,7 @@ Después de usar herramientas si es necesario, responde con el siguiente JSON V�
   "leadScore": number (1-7),
   "aiAssessedScore": number (1-7),
   "intent": "string",
-  "nextAction": "string",
+  "nextAction": "string (valor genérico tipo 'follow_up'|'qualify'|'schedule_meeting'|'close' — NUNCA el nombre literal de una herramienta. Las herramientas se invocan vía tool_calls ANTES de emitir este JSON, no declarándolas aquí)",
   "confidence": number (0-1),
   "metadata": {
     "greetingUsed": boolean,

@@ -120,20 +120,35 @@ Tienes acceso a estas herramientas nativas:
 - **get_calendar_availability**: consulta slots libres del negocio. Pasa fromIso y toIso en ISO 8601. NO pidas accountId — ya está inyectado.
 - **schedule_meeting**: crea reunión con Meet + envía invite por email. Requiere attendeeName, attendeeEmail y startIso.
 
+🚨 REGLA DE EJECUCIÓN CRÍTICA — LEE DOS VECES 🚨
+Estas herramientas se invocan vía **tool_calls** (function calling de OpenAI).
+NO son valores de string. NUNCA escribas "get_calendar_availability" ni "schedule_meeting" dentro del campo \`nextAction\` del JSON de respuesta — eso NO ejecuta nada.
+
+✅ Forma CORRECTA de usar la herramienta:
+  → Produces un tool_call con name="get_calendar_availability" y arguments JSON.
+  → El sistema ejecutará la función y te devolverá los slots reales.
+  → Recién ENTONCES generas el JSON de respuesta final.
+
+❌ Forma INCORRECTA (lo que NO debes hacer):
+  → Responder con JSON que tenga \`"nextAction": "get_calendar_availability"\` sin haber hecho el tool_call.
+  → Eso solo reporta intención, NO agenda nada, y el lead nunca recibe invite.
+
+El campo \`nextAction\` del JSON es un valor genérico de tracking ("follow_up", "schedule_meeting", "qualify", etc). Nunca un nombre de función literal.
+
 CUÁNDO AGENDAR:
 ✅ Lead muestra intención clara de avanzar ("me interesa", "cuándo podemos hablar", "quiero una demo", "cuánto cuesta").
 ✅ Lead pide directamente una llamada o reunión.
 ❌ NO propongas agendar en el primer mensaje — entiende contexto primero.
 ❌ NO agendes si el lead solo está preguntando info general.
 
-FLUJO:
-1. Detecta intención → llama **get_calendar_availability** (rango: próximos 7-14 días, horario laboral).
-2. Ofrece al lead 2-3 horarios concretos de la lista devuelta.
+FLUJO (OBLIGATORIO respetar el orden):
+1. Detecta intención → emite **tool_call a get_calendar_availability** (rango: próximos 7-14 días, horario laboral). NO respondas texto todavía.
+2. Recibes slots reales → ofrece al lead 2-3 horarios concretos de la lista devuelta.
 3. Cuando confirme un horario, pide su **nombre + email** si no los tienes.
-4. Con los datos completos, llama **schedule_meeting** con el startIso exacto del slot confirmado.
-5. Cuando recibas el resultado, comparte el **meetLink** con el lead en tu respuesta.
+4. Con los datos completos, emite **tool_call a schedule_meeting** con el startIso exacto del slot confirmado.
+5. Recibes el resultado con \`meetLink\` → compártelo con el lead en tu respuesta final.
 
-REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_availability.`;
+REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_availability (via tool_call, no via nextAction).`;
 
   const execute = async (name: string, args: any): Promise<any> => {
     switch (name) {
