@@ -19,6 +19,9 @@ const WEEKDAY_ORDER: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat
 interface AvailabilitySlot {
   startIso: string; // ISO 8601 with offset
   endIso: string;
+  startLocal: string;
+  endLocal: string;
+  label: string;
 }
 
 interface GetAvailabilityOptions {
@@ -44,6 +47,19 @@ const parseHHMM = (hhmm: string): { hour: number; minute: number } => {
   const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10));
   return { hour: h || 0, minute: m || 0 };
 };
+
+const roundUpToMinutes = (date: Date, stepMinutes: number): Date => {
+  const stepMs = stepMinutes * 60_000;
+  return new Date(Math.ceil(date.getTime() / stepMs) * stepMs);
+};
+
+const toAvailabilitySlot = (start: Date, end: Date, timezone: string): AvailabilitySlot => ({
+  startIso: start.toISOString(),
+  endIso: end.toISOString(),
+  startLocal: formatInTimeZone(start, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+  endLocal: formatInTimeZone(end, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+  label: `${formatInTimeZone(start, timezone, 'yyyy-MM-dd HH:mm zzz')} - ${formatInTimeZone(end, timezone, 'HH:mm zzz')}`,
+});
 
 /**
  * Expand working-hours windows (in the integration's timezone) to concrete
@@ -102,14 +118,21 @@ const carveSlots = (
   windows: Array<{ start: Date; end: Date }>,
   busy: Array<{ start: Date; end: Date }>,
   durationMin: number,
-  bufferMin: number
+  bufferMin: number,
+  timezone: string
 ): AvailabilitySlot[] => {
   const slots: AvailabilitySlot[] = [];
   const slotMs = durationMin * 60_000;
   const bufferMs = bufferMin * 60_000;
 
-  // Normalize + sort busy
-  const busySorted = [...busy].sort((a, b) => a.start.getTime() - b.start.getTime());
+  // Normalize + sort busy. The configured buffer protects time before and after
+  // existing meetings, not only spacing between generated slots.
+  const busySorted = busy
+    .map((b) => ({
+      start: new Date(b.start.getTime() - bufferMs),
+      end: new Date(b.end.getTime() + bufferMs),
+    }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
 
   for (const w of windows) {
     // Build free intervals within this window by subtracting busy
@@ -129,11 +152,11 @@ const carveSlots = (
 
     // Slice each free interval into slots, respecting buffer between slots
     for (const f of free) {
-      let cursor = f.start.getTime();
+      let cursor = roundUpToMinutes(f.start, 15).getTime();
       while (cursor + slotMs <= f.end.getTime()) {
         const start = new Date(cursor);
         const end = new Date(cursor + slotMs);
-        slots.push({ startIso: start.toISOString(), endIso: end.toISOString() });
+        slots.push(toAvailabilitySlot(start, end, timezone));
         cursor += slotMs + bufferMs;
       }
     }
@@ -174,11 +197,19 @@ export const getAvailability = async (
 
   const durationMin = opts.durationMin || integration.meetingDurationMinutes || 30;
   const bufferMin = integration.bufferMinutes ?? 15;
+  const now = new Date();
+  const effectiveFrom = from < now ? now : from;
+
+  if (effectiveFrom >= to) {
+    throw new Error('Invalid from/to range: requested window is in the past.');
+  }
+
+  const bufferMs = bufferMin * 60_000;
 
   const freeBusyRes = await calendar.freebusy.query({
     requestBody: {
-      timeMin: from.toISOString(),
-      timeMax: to.toISOString(),
+      timeMin: new Date(effectiveFrom.getTime() - bufferMs).toISOString(),
+      timeMax: new Date(to.getTime() + bufferMs).toISOString(),
       timeZone: integration.timezone,
       items: [{ id: integration.calendarId || 'primary' }],
     },
@@ -189,8 +220,8 @@ export const getAvailability = async (
     .filter((b) => b.start && b.end)
     .map((b) => ({ start: new Date(b.start as string), end: new Date(b.end as string) }));
 
-  const windows = expandWorkingWindows(from, to, integration.workingHours, integration.timezone);
-  const slots = carveSlots(windows, busy, durationMin, bufferMin);
+  const windows = expandWorkingWindows(effectiveFrom, to, integration.workingHours, integration.timezone);
+  const slots = carveSlots(windows, busy, durationMin, bufferMin, integration.timezone);
 
   return {
     slots,
@@ -213,6 +244,34 @@ export const createMeetingEvent = async (
 }> => {
   const { client, integration } = await getAuthorizedClientForAccount(accountId);
   const calendar = getCalendarApi(client);
+  const requestedStart = new Date(opts.startIso);
+  const requestedEnd = new Date(opts.endIso);
+
+  if (
+    Number.isNaN(requestedStart.getTime()) ||
+    Number.isNaN(requestedEnd.getTime()) ||
+    requestedStart >= requestedEnd
+  ) {
+    throw new Error('Invalid event start/end range.');
+  }
+
+  const durationMin = Math.round((requestedEnd.getTime() - requestedStart.getTime()) / 60_000);
+  const availability = await getAvailability(accountId, {
+    from: opts.startIso,
+    to: opts.endIso,
+    durationMin,
+  });
+  const exactSlot = availability.slots.find(
+    (slot) =>
+      new Date(slot.startIso).getTime() === requestedStart.getTime() &&
+      new Date(slot.endIso).getTime() === requestedEnd.getTime()
+  );
+
+  if (!exactSlot) {
+    throw new Error(
+      `Requested meeting time is not available in ${integration.timezone}. Ask the lead to choose one of the available slots first.`
+    );
+  }
 
   const requestId = `moca-meet-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 

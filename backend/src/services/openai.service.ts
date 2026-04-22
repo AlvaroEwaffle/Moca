@@ -34,6 +34,33 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
+const buildForcedToolChoice = (name: string) => ({
+  type: 'function',
+  function: { name },
+});
+
+const normalizeForIntent = (text: string): string =>
+  text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const shouldForceCalendarAvailability = (conversationContext: ConversationContext): boolean => {
+  const current = normalizeForIntent(conversationContext.lastMessage || '');
+
+  if (!current) return false;
+
+  const explicitSchedulingIntent =
+    /(agend|agenda|reunion|llamada|videollamada|demo|cita|calendario|calendar|schedule|meeting|meet|call)/i.test(current);
+  const asksForAvailability =
+    /(disponib|horario|hora|cuando podemos|cuando tienen|que dias|que horas|available|availability|time slots)/i.test(current);
+  const relativeTimeWithAction =
+    /(hoy|manana|mañana|pasado|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)/i.test(current) &&
+    /(puedo|podemos|agend|reunion|llamada|demo|cita|hora|disponib)/i.test(current);
+
+  return explicitSchedulingIntent || asksForAvailability || relativeTimeWithAction;
+};
+
 // Instagram DM AI Response Generation
 export async function generateInstagramResponse(context: {
   conversationHistory: Array<{
@@ -995,8 +1022,10 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
       { role: 'user', content: userPrompt }
     ];
 
-    // Use the functions already loaded above
-    let functionCall: 'none' | 'auto' | { name: string } = functions.length > 0 ? 'auto' : 'none';
+    const forcedCalendarTool =
+      nativeBundle && shouldForceCalendarAvailability(conversationContext)
+        ? 'get_calendar_availability'
+        : null;
 
     // Use a model that supports tools. Default to gpt-4o-mini which has excellent tool support
     const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -1021,17 +1050,26 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
         type: 'function',
         function: fn
       }));
-      requestConfig.tool_choice = functionCall;
+      requestConfig.tool_choice = forcedCalendarTool
+        ? buildForcedToolChoice(forcedCalendarTool)
+        : 'auto';
       console.log(`🔧 [OpenAI] Added ${functions.length} tools to structured response request`);
       console.log(`🔧 [OpenAI] Using model: ${modelName} (supports tools)`);
       console.log(`🔧 [OpenAI] Increased max_tokens to ${maxTokens} to accommodate tool calls`);
+      if (forcedCalendarTool) {
+        console.log(`📅 [OpenAI] Forcing calendar tool because scheduling intent was detected: ${forcedCalendarTool}`);
+      }
     }
 
     let response = await openai.chat.completions.create(requestConfig);
     
     // Handle function calls if any
-    const toolCalls = response.choices[0]?.message?.tool_calls || [];
-    if (toolCalls.length > 0) {
+    let toolCalls = response.choices[0]?.message?.tool_calls || [];
+    let toolIterations = 0;
+    const maxToolIterations = 4;
+
+    while (toolCalls.length > 0 && toolIterations < maxToolIterations) {
+      toolIterations += 1;
       console.log(`🔧 [MCP] Processing ${toolCalls.length} tool call(s)`);
       
       // Execute tool calls
@@ -1068,29 +1106,51 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
           }
         }
       }
-      
-      // Add tool results to messages and get final response
+
+      // Add tool results to messages and let the model either call the next tool
+      // (availability -> schedule) or produce the final structured JSON.
       messages.push(response.choices[0].message as ChatCompletionMessageParam);
       messages.push(...toolResults);
-      
-      // Get final response with tool results
-      const finalModelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-      const finalMaxTokens = parseInt(process.env.OPENAI_STRUCTURED_MAX_TOKENS || process.env.OPENAI_MAX_TOKENS || '1500');
-      const finalRequestConfig: any = {
-        model: finalModelName,
+
+      const toolFollowUpConfig: any = {
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         messages,
-        max_tokens: finalMaxTokens,
+        max_tokens: parseInt(process.env.OPENAI_STRUCTURED_MAX_TOKENS || process.env.OPENAI_MAX_TOKENS || '1500'),
         temperature: 0.7,
         presence_penalty: 0.1,
-        frequency_penalty: 0.1
+        frequency_penalty: 0.1,
+        tools: requestConfig.tools,
+        tool_choice: 'auto'
       };
-      
-      if (functions.length > 0) {
-        finalRequestConfig.tools = requestConfig.tools;
-        finalRequestConfig.tool_choice = 'none'; // Don't allow more tool calls in final response
-      }
-      
-      response = await openai.chat.completions.create(finalRequestConfig);
+
+      response = await openai.chat.completions.create(toolFollowUpConfig);
+      toolCalls = response.choices[0]?.message?.tool_calls || [];
+    }
+
+    if (toolCalls.length > 0) {
+      console.warn(`⚠️ [OpenAI] Tool iteration limit reached (${maxToolIterations}); forcing final JSON response`);
+      const limitResults = toolCalls.map((toolCall) => ({
+        tool_call_id: toolCall.id,
+        role: 'tool' as const,
+        name: toolCall.type === 'function' ? toolCall.function.name : 'unknown_tool',
+        content: JSON.stringify({
+          error: 'Tool iteration limit reached. Continue with the information already available.',
+        }),
+      }));
+
+      messages.push(response.choices[0].message as ChatCompletionMessageParam);
+      messages.push(...limitResults);
+
+      response = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages,
+        max_tokens: parseInt(process.env.OPENAI_STRUCTURED_MAX_TOKENS || process.env.OPENAI_MAX_TOKENS || '1500'),
+        temperature: 0.7,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1,
+        tools: requestConfig.tools,
+        tool_choice: 'none'
+      } as any);
     }
 
     const aiResponse = response.choices[0]?.message?.content || '';
@@ -1737,4 +1797,3 @@ La estructura debe ser exactamente la siguiente (rellena todos los campos):
   console.log("--- Data Generates---")
   return data.premium;
 }
-

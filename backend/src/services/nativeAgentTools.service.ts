@@ -11,6 +11,7 @@
  */
 
 import CalendarIntegration from '../models/calendarIntegration.model';
+import { formatInTimeZone } from 'date-fns-tz';
 import {
   getAvailability,
   createMeetingEvent,
@@ -50,6 +51,9 @@ export async function loadCalendarToolsForAccount(
     return null;
   }
 
+  const now = new Date();
+  const localNow = formatInTimeZone(now, integration.timezone, "yyyy-MM-dd'T'HH:mm:ssXXX");
+
   // Tool schemas — NO accountId here (we inject it server-side).
   const tools: NativeTool[] = [
     {
@@ -64,7 +68,7 @@ export async function loadCalendarToolsForAccount(
           fromIso: {
             type: 'string',
             description:
-              'Inicio del rango a consultar en ISO 8601. Ej: "2026-04-22T00:00:00-04:00". Usa "ahora" si el lead quiere lo antes posible.',
+              `Inicio del rango a consultar en ISO 8601 con zona horaria. Ej: "${localNow}". Nunca envíes la palabra "ahora"; calcula el ISO usando la fecha actual.`,
           },
           toIso: {
             type: 'string',
@@ -75,6 +79,8 @@ export async function loadCalendarToolsForAccount(
             type: 'number',
             description:
               'Duración de cada slot en minutos. Opcional — si se omite usa el default configurado por el negocio.',
+            minimum: 15,
+            maximum: 180,
           },
         },
         required: ['fromIso', 'toIso'],
@@ -120,6 +126,12 @@ Tienes acceso a estas herramientas nativas:
 - **get_calendar_availability**: consulta slots libres del negocio. Pasa fromIso y toIso en ISO 8601. NO pidas accountId — ya está inyectado.
 - **schedule_meeting**: crea reunión con Meet + envía invite por email. Requiere attendeeName, attendeeEmail y startIso.
 
+Contexto de agenda:
+- Zona horaria del calendario: ${integration.timezone}
+- Fecha/hora actual del calendario: ${localNow}
+- Duración por defecto: ${integration.meetingDurationMinutes || 30} minutos
+- Buffer configurado: ${integration.bufferMinutes ?? 15} minutos
+
 🚨 REGLA DE EJECUCIÓN CRÍTICA — LEE DOS VECES 🚨
 Estas herramientas se invocan vía **tool_calls** (function calling de OpenAI).
 NO son valores de string. NUNCA escribas "get_calendar_availability" ni "schedule_meeting" dentro del campo \`nextAction\` del JSON de respuesta — eso NO ejecuta nada.
@@ -161,7 +173,18 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
           to: String(args.toIso),
           durationMin: typeof args.durationMin === 'number' ? args.durationMin : undefined,
         });
-        return result;
+        const slots = result.slots.slice(0, 12);
+        console.log(
+          `📅 [NativeTool get_calendar_availability] ${result.slots.length} slot(s) found for account=${ctx.accountId}; returning ${slots.length}`
+        );
+        return {
+          ...result,
+          slots,
+          totalSlots: result.slots.length,
+          moreAvailable: result.slots.length > slots.length,
+          instruction:
+            'Offer 2-3 concrete options using slot.label/startLocal. If moreAvailable=true, mention that more options exist.',
+        };
       }
 
       case 'schedule_meeting': {

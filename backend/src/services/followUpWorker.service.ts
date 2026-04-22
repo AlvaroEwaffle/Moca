@@ -85,6 +85,10 @@ export class FollowUpWorkerService {
     
     // Exclude conversations that had activity in the last X hours (to give them time to respond)
     const excludeRecentActivity = new Date(now.getTime() - (config.timeSinceLastAnswer * 60 * 60 * 1000));
+    if (excludeRecentActivity <= instagramWindowStart) {
+      console.log(`⏭️ [FollowUp Worker] No valid Instagram follow-up window for account ${config.accountId}: timeSinceLastAnswer=${config.timeSinceLastAnswer}h is at or beyond the 24h messaging window`);
+      return [];
+    }
     
     console.log(`🔍 [FollowUp Worker] Searching for leads with Instagram 24h window constraint:`, {
       accountId: config.accountId,
@@ -94,7 +98,7 @@ export class FollowUpWorkerService {
       instagramWindowStart: instagramWindowStart.toISOString(),
       excludeRecentActivity: excludeRecentActivity.toISOString(),
       now: now.toISOString(),
-      explanation: `Looking for conversations with activity between ${excludeRecentActivity.toISOString()} and ${instagramWindowStart.toISOString()}`
+      explanation: `Looking for conversations with activity between ${instagramWindowStart.toISOString()} and ${excludeRecentActivity.toISOString()}`
     });
 
     // Find conversations that meet the criteria
