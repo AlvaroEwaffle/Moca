@@ -7,8 +7,9 @@ import Message from '../models/message.model';
 import OutboundQueue from '../models/outboundQueue.model';
 import InstagramAccount from '../models/instagramAccount.model';
 import KeywordActivationRule from '../models/keywordActivationRule.model';
+import CalendarIntegration from '../models/calendarIntegration.model';
 import { authenticateToken } from '../middleware/auth';
-import { generateInstagramResponse } from '../services/openai.service';
+import { generateStructuredResponse } from '../services/openai.service';
 import { pushToFidelidapp } from '../services/fidelidapp.service';
 
 const router = express.Router();
@@ -2158,10 +2159,15 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
       conversationHistoryLength: req.body.conversationHistory?.length || 0
     }, null, 2));
     
-    const { message, conversationHistory } = req.body;
+    const { conversationHistory } = req.body;
+    const message = cleanText(req.body.message);
     const requestedAccountId = cleanText(req.body.accountId);
     const testContactName = cleanText(req.body.contactName);
     const testContactEmail = cleanText(req.body.contactEmail);
+    const testBusinessName = cleanText(req.body.businessName);
+    const testBusinessSector = cleanText(req.body.businessSector) || cleanText(req.body.sector);
+    const testConversationId = cleanText(req.body.conversationId);
+    const testLeadId = cleanText(req.body.leadId);
     
     if (!message) {
       console.log('❌ [Test Chat] Missing message in request');
@@ -2186,6 +2192,7 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
 
     let accountMcpConfig: { enabled: boolean; servers: any[] } | undefined;
     let testAccount: any = null;
+    let calendarIntegration: any = null;
     if (userId) {
       console.log('🔍 [Test Chat] Looking up Instagram account for userId:', userId, {
         requestedAccountId: requestedAccountId || undefined
@@ -2229,13 +2236,36 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
       } else {
         console.log('⚠️ [Test Chat] No account or settings found for userId:', userId);
       }
+
+      if (testAccount) {
+        calendarIntegration = await CalendarIntegration.findOne({
+          userId,
+          accountId: testAccount.accountId
+        }).select('status enabled timezone calendarId meetingDurationMinutes bufferMinutes');
+      }
     } else {
       console.log('⚠️ [Test Chat] No userId in request');
     }
 
     // Build complete conversation history including current message
+    const normalizedConversationHistory = Array.isArray(conversationHistory)
+      ? conversationHistory
+          .map((msg: any) => {
+            const content = cleanText(msg?.content) || cleanText(msg?.text) || cleanText(msg?.content?.text);
+            if (!content) return null;
+
+            const timestamp = msg?.timestamp ? new Date(msg.timestamp) : new Date();
+            return {
+              role: msg?.role === 'assistant' ? 'assistant' as const : 'user' as const,
+              content,
+              timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp
+            };
+          })
+          .filter(Boolean)
+      : [];
+
     const fullHistory = [
-      ...(conversationHistory || []),
+      ...normalizedConversationHistory,
       {
         role: 'user' as const,
         content: message,
@@ -2258,21 +2288,47 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
       2
     ));
 
-    console.log('🤖 [Test Chat] Calling generateInstagramResponse...');
+    console.log('🤖 [Test Chat] Calling generateStructuredResponse...');
     const startTime = Date.now();
 
-    // Generate response using OpenAI service
-    const response = await generateInstagramResponse({
-      conversationHistory: fullHistory,
-      language: 'es',
-      agentBehavior: agentBehavior,
-      accountMcpConfig: accountMcpConfig,
-      agentContext: testAccount ? {
+    const defaultMilestone = testAccount?.settings?.defaultMilestone;
+
+    const structuredResponse = await generateStructuredResponse(
+      {
+        businessName: testBusinessName || testAccount?.accountName || 'Business',
+        conversationHistory: fullHistory,
+        lastMessage: message,
+        timeSinceLastMessage: 0,
+        repetitionPatterns: [],
+        leadHistory: Array.isArray(req.body.leadHistory) ? req.body.leadHistory : [],
+        milestoneTarget: req.body.milestoneTarget || defaultMilestone?.target,
+        milestoneStatus: req.body.milestoneStatus || (defaultMilestone?.target ? 'pending' : undefined),
+        milestoneCustomTarget: req.body.milestoneCustomTarget || defaultMilestone?.customTarget,
+        isSupport: Boolean(req.body.isSupport)
+      },
+      {
+        useStructuredResponse: true,
+        enableLeadScoring: true,
+        enableRepetitionPrevention: true,
+        enableContextAwareness: true,
+        customInstructions: agentBehavior.systemPrompt,
+        businessContext: {
+          company: testBusinessName || testAccount?.accountName || 'Business',
+          sector: testBusinessSector || 'General',
+          services: []
+        }
+      },
+      accountMcpConfig,
+      testAccount ? {
         accountId: testAccount.accountId,
+        conversationId: testConversationId || undefined,
+        leadId: testLeadId || undefined,
         contactName: testContactName || undefined,
         contactEmail: testContactEmail || extractedEmail || undefined,
       } : undefined
-    });
+    );
+
+    const response = structuredResponse.responseText;
 
     const duration = Date.now() - startTime;
     console.log(`✅ [Test Chat] Response generated successfully in ${duration}ms`);
@@ -2283,10 +2339,22 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
       success: true,
       data: {
         response: response,
+        mode: 'structured',
+        structuredResponse,
         accountContext: testAccount ? {
           accountId: testAccount.accountId,
           accountName: testAccount.accountName,
-          calendarToolsEligible: true
+          mcpToolsEnabled: Boolean(accountMcpConfig?.enabled),
+          mcpServersCount: accountMcpConfig?.servers?.length || 0,
+          calendarToolsEligible: Boolean(calendarIntegration?.enabled && calendarIntegration?.status === 'connected'),
+          calendar: calendarIntegration ? {
+            status: calendarIntegration.status,
+            enabled: calendarIntegration.enabled,
+            timezone: calendarIntegration.timezone,
+            calendarId: calendarIntegration.calendarId,
+            meetingDurationMinutes: calendarIntegration.meetingDurationMinutes,
+            bufferMinutes: calendarIntegration.bufferMinutes
+          } : null
         } : null
       }
     });
