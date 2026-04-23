@@ -2159,6 +2159,9 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
     }, null, 2));
     
     const { message, conversationHistory } = req.body;
+    const requestedAccountId = cleanText(req.body.accountId);
+    const testContactName = cleanText(req.body.contactName);
+    const testContactEmail = cleanText(req.body.contactEmail);
     
     if (!message) {
       console.log('❌ [Test Chat] Missing message in request');
@@ -2182,9 +2185,27 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
     };
 
     let accountMcpConfig: { enabled: boolean; servers: any[] } | undefined;
+    let testAccount: any = null;
     if (userId) {
-      console.log('🔍 [Test Chat] Looking up Instagram account for userId:', userId);
-      const account = await InstagramAccount.findOne({ userId });
+      console.log('🔍 [Test Chat] Looking up Instagram account for userId:', userId, {
+        requestedAccountId: requestedAccountId || undefined
+      });
+      testAccount = requestedAccountId
+        ? await InstagramAccount.findOne({ userId, accountId: requestedAccountId })
+        : await InstagramAccount.findOne({ userId, isActive: true }).sort({ updatedAt: -1 });
+
+      if (!testAccount && !requestedAccountId) {
+        testAccount = await InstagramAccount.findOne({ userId }).sort({ updatedAt: -1 });
+      }
+
+      if (requestedAccountId && !testAccount) {
+        return res.status(404).json({
+          success: false,
+          error: 'Instagram account not found for this user'
+        });
+      }
+
+      const account = testAccount;
       if (account?.settings) {
         agentBehavior = {
           systemPrompt: account.settings.systemPrompt,
@@ -2201,7 +2222,9 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
           hasKeyInformation: !!agentBehavior.keyInformation,
           fallbackRulesCount: agentBehavior.fallbackRules?.length || 0,
           hasMcpConfig: !!accountMcpConfig,
-          mcpServersCount: accountMcpConfig?.servers?.length || 0
+          mcpServersCount: accountMcpConfig?.servers?.length || 0,
+          accountId: account.accountId,
+          accountName: account.accountName
         });
       } else {
         console.log('⚠️ [Test Chat] No account or settings found for userId:', userId);
@@ -2219,6 +2242,11 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
         timestamp: new Date()
       }
     ];
+    const extractedEmail =
+      fullHistory
+        .map(msg => msg.content)
+        .join('\n')
+        .match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || '';
 
     console.log('📋 [Test Chat] Full conversation history:', JSON.stringify(
       fullHistory.map(msg => ({
@@ -2238,7 +2266,12 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
       conversationHistory: fullHistory,
       language: 'es',
       agentBehavior: agentBehavior,
-      accountMcpConfig: accountMcpConfig
+      accountMcpConfig: accountMcpConfig,
+      agentContext: testAccount ? {
+        accountId: testAccount.accountId,
+        contactName: testContactName || undefined,
+        contactEmail: testContactEmail || extractedEmail || undefined,
+      } : undefined
     });
 
     const duration = Date.now() - startTime;
@@ -2249,7 +2282,12 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       data: {
-        response: response
+        response: response,
+        accountContext: testAccount ? {
+          accountId: testAccount.accountId,
+          accountName: testAccount.accountName,
+          calendarToolsEligible: true
+        } : null
       }
     });
   } catch (error: any) {

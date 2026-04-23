@@ -3366,7 +3366,7 @@ const InstagramAccounts = () => {
       </div>
 
       {/* Chatbot Test Component */}
-      <ChatbotTest />
+      <ChatbotTest accountId={accounts[0]?.accountId} />
     </>
   );
 };

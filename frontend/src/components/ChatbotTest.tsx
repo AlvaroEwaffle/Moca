@@ -13,7 +13,11 @@ interface Message {
   timestamp: Date;
 }
 
-const ChatbotTest = () => {
+interface ChatbotTestProps {
+  accountId?: string;
+}
+
+const ChatbotTest = ({ accountId }: ChatbotTestProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,6 +56,7 @@ const ChatbotTest = () => {
         },
         body: JSON.stringify({
           message: userMessage.content,
+          accountId,
           conversationHistory: messages.map(msg => ({
             role: msg.role,
             content: msg.content,
@@ -177,7 +182,7 @@ const ChatbotTest = () => {
               <div className="text-center text-gray-500 py-8">
                 <Bot className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                 <p className="text-sm">Start a conversation to test the agent</p>
-                <p className="text-xs text-gray-400 mt-1">MCP tools will be used if enabled</p>
+                <p className="text-xs text-gray-400 mt-1">MCP/native tools will be used if enabled</p>
               </div>
             ) : (
               <>
