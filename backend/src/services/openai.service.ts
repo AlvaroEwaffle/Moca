@@ -45,6 +45,22 @@ const normalizeForIntent = (text: string): string =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
+const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+const buildCalendarIntentText = (conversationContext: ConversationContext): string =>
+  [
+    ...conversationContext.conversationHistory.slice(-6).map((msg) => msg.content),
+    conversationContext.lastMessage,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+const hasKnownContactEmail = (
+  conversationContext: ConversationContext,
+  agentContext?: { contactEmail?: string }
+): boolean =>
+  Boolean(agentContext?.contactEmail) || EMAIL_PATTERN.test(buildCalendarIntentText(conversationContext));
+
 const shouldForceCalendarAvailability = (conversationContext: ConversationContext): boolean => {
   const current = normalizeForIntent(conversationContext.lastMessage || '');
 
@@ -59,6 +75,55 @@ const shouldForceCalendarAvailability = (conversationContext: ConversationContex
     /(puedo|podemos|agend|reunion|llamada|demo|cita|hora|disponib)/i.test(current);
 
   return explicitSchedulingIntent || asksForAvailability || relativeTimeWithAction;
+};
+
+const shouldForceCalendarSchedule = (
+  conversationContext: ConversationContext,
+  agentContext?: { contactEmail?: string }
+): boolean => {
+  const current = normalizeForIntent(conversationContext.lastMessage || '');
+  if (!current || !hasKnownContactEmail(conversationContext, agentContext)) return false;
+
+  const fullContext = normalizeForIntent(buildCalendarIntentText(conversationContext));
+  const confirmsOfferedSlot =
+    /\b(confirm|confirmo|confirmar|confirma|me sirve|me acomoda|dale|ok|okay|perfecto|ese|esa|ese horario|esa hora|primer|primero|primera|segundo|segunda|tercer|tercero|tercera|el de|la de)\b/i.test(current) ||
+    /\ba\s+las\s+\d{1,2}(:\d{2})?\b/i.test(current);
+  const hasSchedulingContext =
+    /(agend|reunion|llamada|videollamada|demo|cita|calendario|calendar|schedule|meeting|meet|call|horario|hora|disponib)/i.test(fullContext);
+
+  return confirmsOfferedSlot && hasSchedulingContext;
+};
+
+const selectForcedCalendarTool = (
+  conversationContext: ConversationContext,
+  agentContext?: { contactEmail?: string }
+): string | null => {
+  if (shouldForceCalendarSchedule(conversationContext, agentContext)) {
+    return 'schedule_meeting';
+  }
+
+  if (shouldForceCalendarAvailability(conversationContext)) {
+    return 'get_calendar_availability';
+  }
+
+  return null;
+};
+
+const looksLikeMeetingWasConfirmed = (text: string): boolean => {
+  const normalized = normalizeForIntent(text || '');
+  return (
+    /meet\.google\.com/i.test(text) ||
+    /(reunion|llamada|cita|demo).{0,40}(confirmad|agendad|programad|reservad)/i.test(normalized) ||
+    /(confirmad|agendad|programad|reservad).{0,40}(reunion|llamada|cita|demo)/i.test(normalized)
+  );
+};
+
+export const __calendarToolTestHooks = {
+  buildCalendarIntentText,
+  shouldForceCalendarSchedule,
+  shouldForceCalendarAvailability,
+  selectForcedCalendarTool,
+  looksLikeMeetingWasConfirmed,
 };
 
 // Instagram DM AI Response Generation
@@ -668,7 +733,7 @@ export async function generateStructuredResponse(
             leadId: agentContext.leadId,
             contactName: agentContext.contactName,
             contactEmail: agentContext.contactEmail,
-            currentUserMessage: conversationContext.lastMessage,
+            currentUserMessage: buildCalendarIntentText(conversationContext),
           });
           if (nativeBundle) {
             const nativeFns = nativeBundle.tools.map(t => ({
@@ -1024,10 +1089,9 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
       { role: 'user', content: userPrompt }
     ];
 
-    const forcedCalendarTool =
-      nativeBundle && shouldForceCalendarAvailability(conversationContext)
-        ? 'get_calendar_availability'
-        : null;
+    const forcedCalendarTool = nativeBundle
+      ? selectForcedCalendarTool(conversationContext, agentContext)
+      : null;
 
     // Use a model that supports tools. Default to gpt-4o-mini which has excellent tool support
     const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -1069,6 +1133,7 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
     let toolCalls = response.choices[0]?.message?.tool_calls || [];
     let toolIterations = 0;
     const maxToolIterations = 4;
+    const successfulNativeToolNames: string[] = [];
 
     while (toolCalls.length > 0 && toolIterations < maxToolIterations) {
       toolIterations += 1;
@@ -1085,6 +1150,7 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
             if (isNative && nativeBundle) {
               const nativeResult = await nativeBundle.execute(toolCall.function.name, parameters);
               content = JSON.stringify(nativeResult);
+              successfulNativeToolNames.push(toolCall.function.name);
               console.log(`✅ [NativeTool/Structured] ${toolCall.function.name} ok`);
             } else {
               const result = await mcpService.executeTool(toolCall.function.name, parameters);
@@ -1188,6 +1254,21 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
     // Enhance with metadata (but let AI determine its own lead score)
     structuredResponse.metadata.leadProgression = leadScoringData.progression;
     structuredResponse.metadata.repetitionDetected = repetitionPatterns.length > 0;
+
+    if (
+      nativeBundle &&
+      !successfulNativeToolNames.includes('schedule_meeting') &&
+      looksLikeMeetingWasConfirmed(structuredResponse.responseText)
+    ) {
+      console.warn(
+        '⚠️ [OpenAI] Model attempted to confirm a calendar meeting without a successful schedule_meeting tool call. Replacing unsafe response.'
+      );
+      structuredResponse.responseText =
+        'Todavía no pude confirmar la reunión en el calendario. ¿Me confirmas el horario exacto que prefieres de la lista disponible para dejarla agendada?';
+      structuredResponse.intent = 'schedule_meeting';
+      structuredResponse.nextAction = 'schedule_meeting';
+      structuredResponse.confidence = Math.min(structuredResponse.confidence || 0.6, 0.7);
+    }
 
     // CRITICAL: Validate lead score based on conversation progress (number of user messages)
     // Note: userMessagesCount was already declared above in the logging section
