@@ -28,6 +28,7 @@ const connectedIntegration = {
   calendarId: 'primary',
   meetingDurationMinutes: 30,
   bufferMinutes: 15,
+  ccEmails: ['owner@example.com'],
 };
 
 describe('nativeAgentTools calendar date handling', () => {
@@ -93,5 +94,46 @@ describe('nativeAgentTools calendar date handling', () => {
     ).rejects.toThrow(/Lead requested manana \(2026-04-23\)/);
 
     expect(mocks.createMeetingEvent).not.toHaveBeenCalled();
+  });
+
+  it('builds event title and description from business and conversation context', async () => {
+    mocks.createMeetingEvent.mockResolvedValue({
+      success: true,
+      eventId: 'event-1',
+      meetLink: 'https://meet.google.com/test',
+      start: '2026-04-23T13:00:00.000Z',
+      end: '2026-04-23T13:30:00.000Z',
+    });
+
+    const bundle = await loadCalendarToolsForAccount({
+      accountId: '17841467023627361',
+      currentUserMessage: 'Agenda una sesión para mañana\nEl primer horario me sirve',
+      contactName: 'Alvaro',
+      contactEmail: 'alvaro@example.com',
+      businessName: 'Fidelidapp',
+      conversationSummary: 'Lead pidió una sesión para conocer Fidelidapp y confirmó el primer horario.',
+      now: new Date('2026-04-22T15:05:00-04:00'),
+    });
+
+    await bundle!.execute('schedule_meeting', {
+      attendeeName: 'Alvaro',
+      attendeeEmail: 'alvaro@example.com',
+      startIso: '2026-04-23T13:00:00.000Z',
+      topic: 'Demo de fidelización',
+    });
+
+    expect(mocks.createMeetingEvent).toHaveBeenCalledWith('17841467023627361', {
+      summary: 'Fidelidapp - Demo de fidelización con Alvaro',
+      description: expect.stringContaining('Resumen de conversación:'),
+      startIso: '2026-04-23T13:00:00.000Z',
+      endIso: '2026-04-23T13:30:00.000Z',
+      attendees: [{ email: 'alvaro@example.com', name: 'Alvaro' }],
+    });
+    expect(mocks.createMeetingEvent.mock.calls[0][1].description).toContain(
+      'Lead pidió una sesión para conocer Fidelidapp'
+    );
+    expect(mocks.createMeetingEvent.mock.calls[0][1].description).toContain(
+      'CC internos: owner@example.com'
+    );
   });
 });

@@ -61,6 +61,20 @@ const hasKnownContactEmail = (
 ): boolean =>
   Boolean(agentContext?.contactEmail) || EMAIL_PATTERN.test(buildCalendarIntentText(conversationContext));
 
+const buildConversationSummaryForCalendar = (conversationContext: ConversationContext): string => {
+  const messages = conversationContext.conversationHistory
+    .slice(-8)
+    .map((msg) => `${msg.role === 'user' ? 'Lead' : 'Agente'}: ${msg.content.trim()}`)
+    .filter((line) => line.length > 8);
+
+  if (conversationContext.lastMessage) {
+    messages.push(`Ultimo mensaje del lead: ${conversationContext.lastMessage.trim()}`);
+  }
+
+  const summary = messages.join('\n');
+  return summary.length > 1800 ? `${summary.slice(0, 1800)}...` : summary;
+};
+
 const shouldForceCalendarAvailability = (conversationContext: ConversationContext): boolean => {
   const current = normalizeForIntent(conversationContext.lastMessage || '');
 
@@ -194,6 +208,12 @@ export async function generateInstagramResponse(context: {
             leadId: context.agentContext.leadId,
             contactName: context.agentContext.contactName,
             contactEmail: context.agentContext.contactEmail,
+            businessName: context.businessContext?.company,
+            conversationSummary: context.conversationHistory
+              .slice(-8)
+              .map((msg) => `${msg.role === 'user' ? 'Lead' : 'Agente'}: ${msg.content.trim()}`)
+              .join('\n')
+              .slice(0, 1800),
             currentUserMessage: context.conversationHistory.at(-1)?.content,
           });
           if (nativeBundle) {
@@ -733,6 +753,8 @@ export async function generateStructuredResponse(
             leadId: agentContext.leadId,
             contactName: agentContext.contactName,
             contactEmail: agentContext.contactEmail,
+            businessName: conversationContext.businessName,
+            conversationSummary: buildConversationSummaryForCalendar(conversationContext),
             currentUserMessage: buildCalendarIntentText(conversationContext),
           });
           if (nativeBundle) {

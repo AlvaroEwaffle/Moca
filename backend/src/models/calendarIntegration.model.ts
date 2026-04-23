@@ -47,6 +47,7 @@ export interface ICalendarIntegration extends Document {
   workingHours: WorkingHours;
   bufferMinutes: number; // padding between meetings
   meetingDurationMinutes: number; // default slot length
+  ccEmails: string[]; // internal invite recipients copied on every scheduled meeting
   enabled: boolean;
 
   auth: CalendarAuth;
@@ -105,6 +106,18 @@ const CalendarIntegrationSchema = new Schema<ICalendarIntegration>(
     },
     bufferMinutes: { type: Number, default: 15 },
     meetingDurationMinutes: { type: Number, default: 30 },
+    ccEmails: {
+      type: [String],
+      default: [],
+      set: (emails: string[]) =>
+        Array.from(
+          new Set(
+            (emails || [])
+              .map((email) => String(email).trim().toLowerCase())
+              .filter(Boolean)
+          )
+        ),
+    },
     enabled: { type: Boolean, default: true },
 
     auth: {
@@ -171,6 +184,7 @@ CalendarIntegrationSchema.methods.toSafeObject = function () {
     workingHours: this.workingHours,
     bufferMinutes: this.bufferMinutes,
     meetingDurationMinutes: this.meetingDurationMinutes,
+    ccEmails: this.ccEmails || [],
     enabled: this.enabled,
     lastSyncedAt: this.lastSyncedAt,
     tokenExpiresAt: this.auth?.tokenExpiresAt,

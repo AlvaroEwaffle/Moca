@@ -33,6 +33,7 @@ const integration = {
   },
   bufferMinutes: 15,
   meetingDurationMinutes: 30,
+  ccEmails: ['owner@example.com', 'Lead@example.com'],
 };
 
 describe('googleCalendar.service', () => {
@@ -111,5 +112,47 @@ describe('googleCalendar.service', () => {
     ).rejects.toThrow(/not available/i);
 
     expect(mocks.eventsInsert).not.toHaveBeenCalled();
+  });
+
+  it('adds configured cc emails as event attendees without duplicating the lead', async () => {
+    mocks.freebusyQuery.mockResolvedValue({
+      data: {
+        calendars: {
+          primary: {
+            busy: [],
+          },
+        },
+      },
+    });
+    mocks.eventsInsert.mockResolvedValue({
+      data: {
+        id: 'event-1',
+        htmlLink: 'https://calendar.google.com/event',
+        hangoutLink: 'https://meet.google.com/test-meet',
+        status: 'confirmed',
+        start: { dateTime: '2026-06-03T13:00:00.000Z' },
+        end: { dateTime: '2026-06-03T13:30:00.000Z' },
+      },
+    });
+
+    await createMeetingEvent('ig-account-1', {
+      summary: 'Fidelidapp - Demo con Lead',
+      description: 'Resumen de conversación',
+      startIso: '2026-06-03T13:00:00.000Z',
+      endIso: '2026-06-03T13:30:00.000Z',
+      attendees: [{ email: 'lead@example.com', name: 'Lead' }],
+    });
+
+    expect(mocks.eventsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({
+          summary: 'Fidelidapp - Demo con Lead',
+          attendees: [
+            { email: 'lead@example.com', displayName: 'Lead' },
+            { email: 'owner@example.com', displayName: 'Moca CC' },
+          ],
+        }),
+      })
+    );
   });
 });

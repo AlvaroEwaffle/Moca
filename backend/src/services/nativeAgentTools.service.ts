@@ -23,6 +23,8 @@ export interface NativeToolContext {
   leadId?: string;
   contactEmail?: string;
   contactName?: string;
+  businessName?: string;
+  conversationSummary?: string;
   currentUserMessage?: string;
   now?: Date;
 }
@@ -130,6 +132,57 @@ const sameLocalDate = (iso: string, expectedDate: string, timezone: string): boo
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return false;
   return formatInTimeZone(date, timezone, 'yyyy-MM-dd') === expectedDate;
+};
+
+const hasMeaningfulBusinessName = (businessName: string): boolean => {
+  const normalized = normalizeText(businessName).trim();
+  return Boolean(normalized && normalized !== 'business' && normalized !== 'no especificado');
+};
+
+const buildMeetingTitle = (businessName: string | undefined, topic: string, attendeeName: string): string => {
+  const baseTopic = topic.trim() || 'Reunión';
+  const topicWithLead =
+    attendeeName && !normalizeText(baseTopic).includes(normalizeText(attendeeName))
+      ? `${baseTopic} con ${attendeeName}`
+      : baseTopic;
+
+  if (!businessName || !hasMeaningfulBusinessName(businessName)) {
+    return topicWithLead;
+  }
+
+  if (normalizeText(topicWithLead).includes(normalizeText(businessName))) {
+    return topicWithLead;
+  }
+
+  return `${businessName.trim()} - ${topicWithLead}`;
+};
+
+const buildMeetingDescription = (input: {
+  topic: string;
+  attendeeName: string;
+  attendeeEmail: string;
+  conversationSummary?: string;
+  conversationId?: string;
+  leadId?: string;
+  ccEmails?: string[];
+}): string => {
+  const descLines: string[] = [];
+  if (input.topic) descLines.push(`Tema: ${input.topic}`);
+  descLines.push(`Lead: ${input.attendeeName} <${input.attendeeEmail}>`);
+
+  if (input.conversationSummary) {
+    descLines.push('', 'Resumen de conversación:', input.conversationSummary);
+  }
+
+  if (input.ccEmails?.length) {
+    descLines.push('', `CC internos: ${input.ccEmails.join(', ')}`);
+  }
+
+  if (input.conversationId) descLines.push('', `Moca conversation: ${input.conversationId}`);
+  if (input.leadId) descLines.push(`Moca lead: ${input.leadId}`);
+  descLines.push('', '(Agendado automáticamente por Moca - agente de Instagram DM)');
+
+  return descLines.join('\n');
 };
 
 const resolveAvailabilityRange = (
@@ -325,7 +378,7 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
         const attendeeEmail =
           args?.attendeeEmail ? String(args.attendeeEmail) : ctx.contactEmail || '';
         const startIso = args?.startIso ? String(args.startIso) : '';
-        const topic = args?.topic ? String(args.topic) : `Reunión con ${attendeeName}`;
+        const topic = args?.topic ? String(args.topic) : 'Reunión';
 
         if (!attendeeName) throw new Error('attendeeName is required');
         if (!attendeeEmail) throw new Error('attendeeEmail is required');
@@ -358,15 +411,20 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
           endIso = new Date(start.getTime() + durationMs).toISOString();
         }
 
-        const descLines: string[] = [];
-        if (topic) descLines.push(topic);
-        if (ctx.conversationId) descLines.push(`\nMoca conversation: ${ctx.conversationId}`);
-        if (ctx.leadId) descLines.push(`Moca lead: ${ctx.leadId}`);
-        descLines.push('\n(Agendado automáticamente por Moca — agente de Instagram DM)');
+        const summary = buildMeetingTitle(ctx.businessName, topic, attendeeName);
+        const description = buildMeetingDescription({
+          topic,
+          attendeeName,
+          attendeeEmail,
+          conversationSummary: ctx.conversationSummary,
+          conversationId: ctx.conversationId,
+          leadId: ctx.leadId,
+          ccEmails: integration2.ccEmails || [],
+        });
 
         const event = await createMeetingEvent(ctx.accountId, {
-          summary: topic,
-          description: descLines.join('\n'),
+          summary,
+          description,
           startIso,
           endIso,
           attendees: [{ email: attendeeEmail, name: attendeeName }],

@@ -556,7 +556,7 @@ class DebounceWorkerService {
       return {
         contactName: contact.name,
         contactEmail: contact.email,
-        businessName: contact.businessInfo?.company || 'Business',
+        businessName: contact.businessInfo?.company || instagramAccount?.accountName || 'Business',
         specialization: contact.businessInfo?.sector || 'General',
         preferences: contact.preferences || {},
         agentBehavior: agentSettings,
@@ -1164,7 +1164,6 @@ class DebounceWorkerService {
 }
 
 export default new DebounceWorkerService();
-
 
 
 

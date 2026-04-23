@@ -33,6 +33,7 @@ const router = express.Router();
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
 const validateWorkingHours = (wh: any): string | null => {
   if (wh == null) return null;
@@ -48,6 +49,28 @@ const validateWorkingHours = (wh: any): string | null => {
     if (w.start >= w.end) return `Start >= end for ${day}`;
   }
   return null;
+};
+
+const normalizeCcEmails = (value: any): { emails: string[]; error?: string } => {
+  if (value == null) return { emails: [] };
+  if (!Array.isArray(value)) {
+    return { emails: [], error: 'ccEmails must be an array' };
+  }
+
+  const emails = Array.from(
+    new Set(
+      value
+        .map((email) => String(email || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  const invalid = emails.find((email) => !EMAIL_RE.test(email));
+  if (invalid) {
+    return { emails: [], error: `Invalid cc email: ${invalid}` };
+  }
+
+  return { emails };
 };
 
 // ── GET /google/connect ─────────────────────────────────────────────────────────
@@ -200,12 +223,17 @@ router.put('/config', authenticateToken, async (req: Request, res: Response) => 
       return res.status(400).json({ success: false, error: 'accountId is required' });
     }
 
-    const { workingHours, timezone, meetingDurationMinutes, bufferMinutes, enabled, calendarId } =
+    const { workingHours, timezone, meetingDurationMinutes, bufferMinutes, ccEmails, enabled, calendarId } =
       req.body || {};
 
     const whError = validateWorkingHours(workingHours);
     if (whError) {
       return res.status(400).json({ success: false, error: whError });
+    }
+
+    const ccResult = normalizeCcEmails(ccEmails);
+    if (ccResult.error) {
+      return res.status(400).json({ success: false, error: ccResult.error });
     }
 
     const integration = await CalendarIntegration.findOne({
@@ -222,6 +250,7 @@ router.put('/config', authenticateToken, async (req: Request, res: Response) => 
       integration.meetingDurationMinutes = Math.min(240, meetingDurationMinutes);
     if (typeof bufferMinutes === 'number' && bufferMinutes >= 0)
       integration.bufferMinutes = Math.min(120, bufferMinutes);
+    if (Array.isArray(ccEmails)) integration.ccEmails = ccResult.emails;
     if (typeof enabled === 'boolean') integration.enabled = enabled;
     if (typeof calendarId === 'string' && calendarId.trim())
       integration.calendarId = calendarId.trim();

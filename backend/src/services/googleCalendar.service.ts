@@ -39,6 +39,32 @@ interface CreateMeetingEventOptions {
   location?: string;
 }
 
+const normalizeEmail = (email: string | undefined): string => String(email || '').trim().toLowerCase();
+
+const mergeConfiguredAttendees = (
+  attendees: Array<{ email: string; name?: string }>,
+  ccEmails: string[] | undefined
+): Array<{ email: string; name?: string }> => {
+  const merged: Array<{ email: string; name?: string }> = [];
+  const seen = new Set<string>();
+
+  for (const attendee of attendees) {
+    const email = normalizeEmail(attendee.email);
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    merged.push({ ...attendee, email });
+  }
+
+  for (const ccEmail of ccEmails || []) {
+    const email = normalizeEmail(ccEmail);
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    merged.push({ email, name: 'Moca CC' });
+  }
+
+  return merged;
+};
+
 // ───────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────────────────────────────────────
@@ -274,6 +300,7 @@ export const createMeetingEvent = async (
   }
 
   const requestId = `moca-meet-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const attendees = mergeConfiguredAttendees(opts.attendees, integration.ccEmails);
 
   const response = await calendar.events.insert({
     calendarId: integration.calendarId || 'primary',
@@ -285,7 +312,7 @@ export const createMeetingEvent = async (
       location: opts.location,
       start: { dateTime: opts.startIso, timeZone: integration.timezone },
       end: { dateTime: opts.endIso, timeZone: integration.timezone },
-      attendees: opts.attendees.map((a) => ({ email: a.email, displayName: a.name })),
+      attendees: attendees.map((a) => ({ email: a.email, displayName: a.name })),
       conferenceData: {
         createRequest: {
           requestId,

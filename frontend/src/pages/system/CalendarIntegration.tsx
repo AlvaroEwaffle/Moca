@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -49,6 +50,7 @@ interface CalendarConfig {
   workingHours?: WorkingHours;
   bufferMinutes?: number;
   meetingDurationMinutes?: number;
+  ccEmails?: string[];
   enabled?: boolean;
   error?: string;
   lastSyncedAt?: string;
@@ -110,6 +112,7 @@ const CalendarIntegration = () => {
   const [timezone, setTimezone] = useState("America/Santiago");
   const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(30);
   const [bufferMinutes, setBufferMinutes] = useState(15);
+  const [ccEmailsText, setCcEmailsText] = useState("");
   const [enabled, setEnabled] = useState(true);
 
   const accessToken = useMemo(() => localStorage.getItem("accessToken"), []);
@@ -199,6 +202,7 @@ const CalendarIntegration = () => {
       setTimezone(cfg.timezone || "America/Santiago");
       setMeetingDurationMinutes(cfg.meetingDurationMinutes ?? 30);
       setBufferMinutes(cfg.bufferMinutes ?? 15);
+      setCcEmailsText((cfg.ccEmails || []).join(", "));
       setEnabled(cfg.enabled ?? true);
     } catch (err: any) {
       console.error("Error loading config:", err);
@@ -299,6 +303,24 @@ const CalendarIntegration = () => {
       }
     }
 
+    const ccEmails = Array.from(
+      new Set(
+        ccEmailsText
+          .split(/[,\n]/)
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+    const invalidCcEmail = ccEmails.find((email) => !/^\S+@\S+\.\S+$/.test(email));
+    if (invalidCcEmail) {
+      toast({
+        title: "Correo inválido",
+        description: `Revisa el CC: ${invalidCcEmail}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(
@@ -314,6 +336,7 @@ const CalendarIntegration = () => {
             timezone,
             meetingDurationMinutes,
             bufferMinutes,
+            ccEmails,
             enabled,
           }),
         }
@@ -553,6 +576,19 @@ const CalendarIntegration = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div>
+              <Label className="text-sm">CC de invitación</Label>
+              <Textarea
+                value={ccEmailsText}
+                onChange={(e) => setCcEmailsText(e.target.value)}
+                placeholder="alvaro@empresa.com, operaciones@empresa.com"
+                className="mt-1 min-h-20"
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                Estos correos recibirán invitación en cada reunión creada por el agente.
+              </p>
             </div>
 
             {/* Working hours */}
