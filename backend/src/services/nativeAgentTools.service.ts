@@ -16,6 +16,7 @@ import {
   getAvailability,
   createMeetingEvent,
 } from './googleCalendar.service';
+import { extractContactData as extractLeadContactData } from './contactDataExtractor.service';
 
 export interface NativeToolContext {
   accountId: string;
@@ -23,9 +24,12 @@ export interface NativeToolContext {
   leadId?: string;
   contactEmail?: string;
   contactName?: string;
+  leadBusinessName?: string;
   businessName?: string;
   conversationSummary?: string;
   currentUserMessage?: string;
+  requireLeadBusinessNameBeforeScheduling?: boolean;
+  requireLeadEmailBeforeScheduling?: boolean;
   now?: Date;
 }
 
@@ -63,6 +67,8 @@ const normalizeText = (text: string): string =>
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+
+const normalizeEmail = (email: string | undefined): string => String(email || '').trim().toLowerCase();
 
 const addDaysToDateString = (dateString: string, days: number): string => {
   const [year, month, day] = dateString.split('-').map((part) => Number(part));
@@ -139,6 +145,50 @@ const hasMeaningfulBusinessName = (businessName: string): boolean => {
   return Boolean(normalized && normalized !== 'business' && normalized !== 'no especificado');
 };
 
+const resolveLeadBusinessName = (ctx: NativeToolContext): string | undefined => {
+  if (hasMeaningfulBusinessName(ctx.leadBusinessName || '')) {
+    return ctx.leadBusinessName;
+  }
+
+  const extracted = extractLeadContactData(
+    [ctx.currentUserMessage, ctx.conversationSummary].filter(Boolean).join('\n')
+  );
+  return extracted.businessNames[0];
+};
+
+const resolveLeadEmail = (ctx: NativeToolContext, attendeeEmail?: string): string | undefined => {
+  const normalizedAttendeeEmail = normalizeEmail(attendeeEmail);
+  if (normalizedAttendeeEmail) return normalizedAttendeeEmail;
+
+  const normalizedContactEmail = normalizeEmail(ctx.contactEmail);
+  if (normalizedContactEmail) return normalizedContactEmail;
+
+  const extracted = extractLeadContactData(
+    [ctx.currentUserMessage, ctx.conversationSummary].filter(Boolean).join('\n')
+  );
+  return extracted.emails[0];
+};
+
+const getMissingCalendarQualificationFields = (
+  ctx: NativeToolContext,
+  attendeeEmail?: string
+): string[] => {
+  const missing: string[] = [];
+
+  if (ctx.requireLeadEmailBeforeScheduling && !resolveLeadEmail(ctx, attendeeEmail)) {
+    missing.push('email del lead');
+  }
+
+  if (
+    ctx.requireLeadBusinessNameBeforeScheduling &&
+    !hasMeaningfulBusinessName(resolveLeadBusinessName(ctx) || '')
+  ) {
+    missing.push('nombre del negocio del lead');
+  }
+
+  return missing;
+};
+
 const buildMeetingTitle = (businessName: string | undefined, topic: string, attendeeName: string): string => {
   const baseTopic = topic.trim() || 'Reunión';
   const topicWithLead =
@@ -161,6 +211,7 @@ const buildMeetingDescription = (input: {
   topic: string;
   attendeeName: string;
   attendeeEmail: string;
+  leadBusinessName?: string;
   conversationSummary?: string;
   conversationId?: string;
   leadId?: string;
@@ -169,6 +220,7 @@ const buildMeetingDescription = (input: {
   const descLines: string[] = [];
   if (input.topic) descLines.push(`Tema: ${input.topic}`);
   descLines.push(`Lead: ${input.attendeeName} <${input.attendeeEmail}>`);
+  if (input.leadBusinessName) descLines.push(`Negocio del lead: ${input.leadBusinessName}`);
 
   if (input.conversationSummary) {
     descLines.push('', 'Resumen de conversación:', input.conversationSummary);
@@ -231,6 +283,9 @@ export async function loadCalendarToolsForAccount(
     integration.timezone,
     now
   );
+  const missingQualificationFields = getMissingCalendarQualificationFields(ctx);
+  const knownLeadBusinessName = resolveLeadBusinessName(ctx);
+  const knownLeadEmail = resolveLeadEmail(ctx);
 
   // Tool schemas — NO accountId here (we inject it server-side).
   const tools: NativeTool[] = [
@@ -310,6 +365,7 @@ Contexto de agenda:
 - Duración por defecto: ${integration.meetingDurationMinutes || 30} minutos
 - Buffer configurado: ${integration.bufferMinutes ?? 15} minutos
 ${requestedDateIntent ? `- Fecha pedida por el lead: ${requestedDateIntent.date} (${requestedDateIntent.source})` : ''}
+${ctx.requireLeadBusinessNameBeforeScheduling || ctx.requireLeadEmailBeforeScheduling ? `- Nombre del negocio del lead: ${knownLeadBusinessName || 'pendiente'}\n- Email del lead: ${knownLeadEmail || 'pendiente'}\n- Campos faltantes antes de agenda: ${missingQualificationFields.join(', ') || 'ninguno'}` : ''}
 
 🚨 REGLA DE EJECUCIÓN CRÍTICA — LEE DOS VECES 🚨
 Estas herramientas se invocan vía **tool_calls** (function calling de OpenAI).
@@ -341,9 +397,27 @@ FLUJO (OBLIGATORIO respetar el orden):
 
 REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_availability (via tool_call, no via nextAction).`;
 
+  const qualificationRules = ctx.requireLeadBusinessNameBeforeScheduling || ctx.requireLeadEmailBeforeScheduling
+    ? `
+
+CALIFICACIÓN OBLIGATORIA PARA ESTA CUENTA:
+- NO uses get_calendar_availability ni schedule_meeting hasta tener completos los datos requeridos del lead.
+- Si falta ${missingQualificationFields.join(', ') || 'algún dato'}, pregunta solo por eso.
+- Cuando ya tengas los datos, explica brevemente el valor de ${ctx.businessName || 'la solución'} para el negocio del lead antes de ofrecer horarios.
+`
+    : '';
+
   const execute = async (name: string, args: any): Promise<any> => {
     switch (name) {
       case 'get_calendar_availability': {
+        if (missingQualificationFields.length > 0) {
+          throw new Error(
+            `Lead qualification incomplete. Ask for ${missingQualificationFields.join(
+              ' y '
+            )} before using calendar tools for this account.`
+          );
+        }
+
         const range = resolveAvailabilityRange(args, requestedDateIntent, integration.timezone, now);
         if (range.correctedByIntent) {
           console.log(
@@ -379,6 +453,15 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
           args?.attendeeEmail ? String(args.attendeeEmail) : ctx.contactEmail || '';
         const startIso = args?.startIso ? String(args.startIso) : '';
         const topic = args?.topic ? String(args.topic) : 'Reunión';
+        const missingScheduleFields = getMissingCalendarQualificationFields(ctx, attendeeEmail);
+
+        if (missingScheduleFields.length > 0) {
+          throw new Error(
+            `Lead qualification incomplete. Ask for ${missingScheduleFields.join(
+              ' y '
+            )} before scheduling this meeting.`
+          );
+        }
 
         if (!attendeeName) throw new Error('attendeeName is required');
         if (!attendeeEmail) throw new Error('attendeeEmail is required');
@@ -416,6 +499,7 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
           topic,
           attendeeName,
           attendeeEmail,
+          leadBusinessName: resolveLeadBusinessName(ctx),
           conversationSummary: ctx.conversationSummary,
           conversationId: ctx.conversationId,
           leadId: ctx.leadId,
@@ -450,7 +534,7 @@ REGLA CRÍTICA: NUNCA inventes horarios. Usa solo los que devuelve get_calendar_
     }
   };
 
-  return { tools, promptAugmentation, execute };
+  return { tools, promptAugmentation: `${promptAugmentation}${qualificationRules}`, execute };
 }
 
 /**

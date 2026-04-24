@@ -11,6 +11,7 @@ import CalendarIntegration from '../models/calendarIntegration.model';
 import { authenticateToken } from '../middleware/auth';
 import { generateStructuredResponse } from '../services/openai.service';
 import { pushToFidelidapp } from '../services/fidelidapp.service';
+import { extractContactData } from '../services/contactDataExtractor.service';
 
 const router = express.Router();
 const webhookService = new InstagramWebhookService();
@@ -2165,6 +2166,7 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
     const testContactName = cleanText(req.body.contactName);
     const testContactEmail = cleanText(req.body.contactEmail);
     const testBusinessName = cleanText(req.body.businessName);
+    const testLeadBusinessName = cleanText(req.body.leadBusinessName);
     const testBusinessSector = cleanText(req.body.businessSector) || cleanText(req.body.sector);
     const testConversationId = cleanText(req.body.conversationId);
     const testLeadId = cleanText(req.body.leadId);
@@ -2272,11 +2274,15 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
         timestamp: new Date()
       }
     ];
-    const extractedEmail =
+    const extractedLeadData = extractContactData(
       fullHistory
         .map(msg => msg.content)
         .join('\n')
-        .match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || '';
+    );
+    const isFidelidappSalesAccount =
+      testAccount?.accountName?.toLowerCase() === 'fidelidapp' ||
+      testAccount?.userEmail?.toLowerCase() === 'alvaro@fidelidapp.cl' ||
+      testAccount?.fidelidappSlug?.toLowerCase() === 'fidelidappcl';
 
     console.log('📋 [Test Chat] Full conversation history:', JSON.stringify(
       fullHistory.map(msg => ({
@@ -2324,7 +2330,13 @@ router.post('/test-chat', authenticateToken, async (req, res) => {
         conversationId: testConversationId || undefined,
         leadId: testLeadId || undefined,
         contactName: testContactName || undefined,
-        contactEmail: testContactEmail || extractedEmail || undefined,
+        contactEmail: testContactEmail || extractedLeadData.emails[0] || undefined,
+        leadBusinessName: testLeadBusinessName || extractedLeadData.businessNames[0] || undefined,
+        accountName: testAccount.accountName,
+        ownerEmail: testAccount.userEmail,
+        requireLeadBusinessNameBeforeScheduling: isFidelidappSalesAccount,
+        requireLeadEmailBeforeScheduling: isFidelidappSalesAccount,
+        requireValueExplanationBeforeScheduling: isFidelidappSalesAccount,
       } : undefined
     );
 

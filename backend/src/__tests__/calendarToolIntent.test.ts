@@ -38,6 +38,22 @@ describe('calendar tool intent selection', () => {
     })).toBe('get_calendar_availability');
   });
 
+  it('does not force calendar tools when Fidelidapp qualification data is missing', () => {
+    const conversation = baseConversation({
+      lastMessage: 'Agenda una sesion para manana',
+    });
+
+    expect(__calendarToolTestHooks.getMissingQualificationFields(conversation, {
+      requireLeadBusinessNameBeforeScheduling: true,
+      requireLeadEmailBeforeScheduling: true,
+    })).toEqual(['email de contacto', 'nombre del negocio']);
+
+    expect(__calendarToolTestHooks.selectForcedCalendarTool(conversation, {
+      requireLeadBusinessNameBeforeScheduling: true,
+      requireLeadEmailBeforeScheduling: true,
+    })).toBeNull();
+  });
+
   it('forces schedule_meeting when the lead confirms an offered slot and email is known', () => {
     const conversation = baseConversation({
       conversationHistory: [

@@ -19,6 +19,7 @@ import {
   NATIVE_TOOL_NAMES,
   NativeToolsBundle,
 } from './nativeAgentTools.service'
+import { extractContactData, hasMeaningfulBusinessName } from './contactDataExtractor.service'
 
 // Ensure environment variables are loaded
 dotenv.config()
@@ -39,6 +40,20 @@ const buildForcedToolChoice = (name: string) => ({
   function: { name },
 });
 
+interface CalendarAgentContext {
+  accountId?: string;
+  conversationId?: string;
+  leadId?: string;
+  contactName?: string;
+  contactEmail?: string;
+  leadBusinessName?: string;
+  accountName?: string;
+  ownerEmail?: string;
+  requireLeadBusinessNameBeforeScheduling?: boolean;
+  requireLeadEmailBeforeScheduling?: boolean;
+  requireValueExplanationBeforeScheduling?: boolean;
+}
+
 const normalizeForIntent = (text: string): string =>
   text
     .toLowerCase()
@@ -57,9 +72,41 @@ const buildCalendarIntentText = (conversationContext: ConversationContext): stri
 
 const hasKnownContactEmail = (
   conversationContext: ConversationContext,
-  agentContext?: { contactEmail?: string }
+  agentContext?: CalendarAgentContext
 ): boolean =>
   Boolean(agentContext?.contactEmail) || EMAIL_PATTERN.test(buildCalendarIntentText(conversationContext));
+
+const resolveKnownLeadData = (
+  conversationContext: ConversationContext,
+  agentContext?: CalendarAgentContext
+): { email?: string; businessName?: string } => {
+  const extracted = extractContactData(buildCalendarIntentText(conversationContext));
+  return {
+    email: agentContext?.contactEmail || extracted.emails[0],
+    businessName: agentContext?.leadBusinessName || extracted.businessNames[0],
+  };
+};
+
+const getMissingQualificationFields = (
+  conversationContext: ConversationContext,
+  agentContext?: CalendarAgentContext
+): string[] => {
+  const knownLeadData = resolveKnownLeadData(conversationContext, agentContext);
+  const missing: string[] = [];
+
+  if (agentContext?.requireLeadEmailBeforeScheduling && !knownLeadData.email) {
+    missing.push('email de contacto');
+  }
+
+  if (
+    agentContext?.requireLeadBusinessNameBeforeScheduling &&
+    !hasMeaningfulBusinessName(knownLeadData.businessName)
+  ) {
+    missing.push('nombre del negocio');
+  }
+
+  return missing;
+};
 
 const buildConversationSummaryForCalendar = (conversationContext: ConversationContext): string => {
   const messages = conversationContext.conversationHistory
@@ -75,10 +122,15 @@ const buildConversationSummaryForCalendar = (conversationContext: ConversationCo
   return summary.length > 1800 ? `${summary.slice(0, 1800)}...` : summary;
 };
 
-const shouldForceCalendarAvailability = (conversationContext: ConversationContext): boolean => {
+const shouldForceCalendarAvailability = (
+  conversationContext: ConversationContext,
+  agentContext?: CalendarAgentContext
+): boolean => {
   const current = normalizeForIntent(conversationContext.lastMessage || '');
 
-  if (!current) return false;
+  if (!current || getMissingQualificationFields(conversationContext, agentContext).length > 0) {
+    return false;
+  }
 
   const explicitSchedulingIntent =
     /(agend|agenda|reunion|llamada|videollamada|demo|cita|calendario|calendar|schedule|meeting|meet|call)/i.test(current);
@@ -93,10 +145,16 @@ const shouldForceCalendarAvailability = (conversationContext: ConversationContex
 
 const shouldForceCalendarSchedule = (
   conversationContext: ConversationContext,
-  agentContext?: { contactEmail?: string }
+  agentContext?: CalendarAgentContext
 ): boolean => {
   const current = normalizeForIntent(conversationContext.lastMessage || '');
-  if (!current || !hasKnownContactEmail(conversationContext, agentContext)) return false;
+  if (
+    !current ||
+    !hasKnownContactEmail(conversationContext, agentContext) ||
+    getMissingQualificationFields(conversationContext, agentContext).length > 0
+  ) {
+    return false;
+  }
 
   const fullContext = normalizeForIntent(buildCalendarIntentText(conversationContext));
   const confirmsOfferedSlot =
@@ -110,13 +168,17 @@ const shouldForceCalendarSchedule = (
 
 const selectForcedCalendarTool = (
   conversationContext: ConversationContext,
-  agentContext?: { contactEmail?: string }
+  agentContext?: CalendarAgentContext
 ): string | null => {
+  if (getMissingQualificationFields(conversationContext, agentContext).length > 0) {
+    return null;
+  }
+
   if (shouldForceCalendarSchedule(conversationContext, agentContext)) {
     return 'schedule_meeting';
   }
 
-  if (shouldForceCalendarAvailability(conversationContext)) {
+  if (shouldForceCalendarAvailability(conversationContext, agentContext)) {
     return 'get_calendar_availability';
   }
 
@@ -132,12 +194,81 @@ const looksLikeMeetingWasConfirmed = (text: string): boolean => {
   );
 };
 
+const looksLikeAvailabilityWasOffered = (text: string): boolean => {
+  const normalized = normalizeForIntent(text || '');
+  return (
+    /(?:\b\d{1,2}:\d{2}\b|\b\d{1,2}\s?(?:am|pm)\b)/i.test(text) &&
+    /(disponib|horario|agenda|agendar|reunion|llamada|demo|manana|mañana|hoy)/i.test(normalized)
+  );
+};
+
 export const __calendarToolTestHooks = {
   buildCalendarIntentText,
+  getMissingQualificationFields,
   shouldForceCalendarSchedule,
   shouldForceCalendarAvailability,
   selectForcedCalendarTool,
   looksLikeMeetingWasConfirmed,
+  looksLikeAvailabilityWasOffered,
+};
+
+const buildQualificationInstructions = (
+  conversationContext: ConversationContext,
+  agentContext?: CalendarAgentContext
+): string => {
+  if (
+    !agentContext?.requireLeadBusinessNameBeforeScheduling &&
+    !agentContext?.requireLeadEmailBeforeScheduling &&
+    !agentContext?.requireValueExplanationBeforeScheduling
+  ) {
+    return '';
+  }
+
+  const knownLeadData = resolveKnownLeadData(conversationContext, agentContext);
+  const missingFields = getMissingQualificationFields(conversationContext, agentContext);
+  const accountLabel = agentContext?.accountName || conversationContext.businessName || 'esta cuenta';
+  const businessNameStatus = hasMeaningfulBusinessName(knownLeadData.businessName)
+    ? knownLeadData.businessName
+    : 'pendiente';
+  const emailStatus = knownLeadData.email || 'pendiente';
+
+  return `
+
+GUARDIAS DE CALIFICACIÓN PARA ${accountLabel.toUpperCase()}:
+- Nombre del negocio del lead: ${businessNameStatus}
+- Email del lead: ${emailStatus}
+
+ORDEN OBLIGATORIO PARA ESTA CUENTA:
+1. Primero valida que el lead tenga negocio y que te comparta ${agentContext.requireLeadBusinessNameBeforeScheduling ? 'el nombre del negocio' : 'sus datos'}${agentContext.requireLeadEmailBeforeScheduling ? ' y su email' : ''}.
+2. Si falta alguno (${missingFields.join(', ') || 'ninguno'}), NO uses herramientas de calendario todavía. Pregunta solo por el dato faltante.
+3. Una vez completos los datos, explica brevemente y en lenguaje simple cómo ${accountLabel} puede ayudar a ese negocio antes de pasar a horarios.
+4. Solo después de esa validación usa el calendario para ofrecer disponibilidad o agendar.
+
+REGLA CRÍTICA:
+- Nunca confirmes una reunión, prometas envío de invitación ni ofrezcas horarios concretos si todavía falta el email del lead o el nombre de su negocio cuando esta cuenta lo requiere.
+`;
+};
+
+const buildQualificationFallbackResponse = (
+  conversationContext: ConversationContext,
+  agentContext?: CalendarAgentContext
+): string => {
+  const missingFields = getMissingQualificationFields(conversationContext, agentContext);
+  const accountLabel = agentContext?.accountName || conversationContext.businessName || 'la solución';
+
+  if (missingFields.length === 0) {
+    return `Antes de seguir, cuéntame un poco más de tu negocio y vemos cómo ${accountLabel} puede ayudarte.`;
+  }
+
+  if (missingFields.length === 2) {
+    return `Antes de agendar, quiero entender bien tu negocio para mostrarte cómo ${accountLabel} puede ayudarte. ¿Me compartes el nombre de tu negocio y tu correo de contacto?`;
+  }
+
+  if (missingFields[0] === 'nombre del negocio') {
+    return `Antes de agendar, quiero entender bien tu negocio para mostrarte cómo ${accountLabel} puede ayudarte. ¿Me compartes el nombre de tu negocio?`;
+  }
+
+  return `Antes de agendar, quiero dejar bien tus datos para enviarte la invitación correcta. ¿Me compartes tu correo de contacto?`;
 };
 
 // Instagram DM AI Response Generation
@@ -163,13 +294,7 @@ export async function generateInstagramResponse(context: {
     fallbackRules?: string[];
   };
   accountMcpConfig?: { enabled: boolean; servers: any[] }; // Account-specific MCP configuration
-  agentContext?: {
-    accountId?: string;
-    conversationId?: string;
-    leadId?: string;
-    contactName?: string;
-    contactEmail?: string;
-  };
+  agentContext?: CalendarAgentContext;
 }): Promise<string> {
   try {
     console.log('🤖 Generating Instagram DM response with AI');
@@ -199,8 +324,21 @@ export async function generateInstagramResponse(context: {
         }
       }
 
-      // Load native tools (calendar) — only if accountId is in context and integration is active.
-      if (context.agentContext?.accountId) {
+      const instagramConversationContext: ConversationContext = {
+        businessName: context.businessContext?.company || 'Business',
+        conversationHistory: context.conversationHistory,
+        lastMessage: context.conversationHistory.at(-1)?.content || '',
+        timeSinceLastMessage: 0,
+        repetitionPatterns: [],
+        leadHistory: [],
+      };
+      const missingInstagramQualificationFields = getMissingQualificationFields(
+        instagramConversationContext,
+        context.agentContext
+      );
+
+      // Load native tools (calendar) — only if accountId is in context, qualification is complete, and integration is active.
+      if (context.agentContext?.accountId && missingInstagramQualificationFields.length === 0) {
         try {
           nativeBundle = await loadCalendarToolsForAccount({
             accountId: context.agentContext.accountId,
@@ -208,6 +346,11 @@ export async function generateInstagramResponse(context: {
             leadId: context.agentContext.leadId,
             contactName: context.agentContext.contactName,
             contactEmail: context.agentContext.contactEmail,
+            leadBusinessName: context.agentContext.leadBusinessName,
+            requireLeadBusinessNameBeforeScheduling:
+              context.agentContext.requireLeadBusinessNameBeforeScheduling,
+            requireLeadEmailBeforeScheduling:
+              context.agentContext.requireLeadEmailBeforeScheduling,
             businessName: context.businessContext?.company,
             conversationSummary: context.conversationHistory
               .slice(-8)
@@ -228,6 +371,10 @@ export async function generateInstagramResponse(context: {
         } catch (err) {
           console.warn('⚠️ [NativeTools] Error loading calendar tools:', err);
         }
+      } else if (context.agentContext?.accountId && missingInstagramQualificationFields.length > 0) {
+        console.log(
+          `📅 [NativeTools] Skipping calendar tools until lead qualification is complete: ${missingInstagramQualificationFields.join(', ')}`
+        );
       }
 
       if (functions.length > 0) {
@@ -708,13 +855,7 @@ export async function generateStructuredResponse(
   conversationContext: ConversationContext,
   config: AIResponseConfig,
   accountMcpConfig?: { enabled: boolean; servers: any[] }, // Account-specific MCP configuration
-  agentContext?: {
-    accountId?: string;
-    conversationId?: string;
-    leadId?: string;
-    contactName?: string;
-    contactEmail?: string;
-  }
+  agentContext?: CalendarAgentContext
 ): Promise<StructuredResponse> {
   try {
     console.log('🤖 Generating structured Instagram DM response with AI');
@@ -744,8 +885,10 @@ export async function generateStructuredResponse(
         }
       }
 
-      // Load native tools (calendar) — only if accountId is in agentContext and integration is active.
-      if (agentContext?.accountId) {
+      const missingQualificationFields = getMissingQualificationFields(conversationContext, agentContext);
+
+      // Load native tools (calendar) — only if accountId is in agentContext, qualification is complete, and integration is active.
+      if (agentContext?.accountId && missingQualificationFields.length === 0) {
         try {
           nativeBundle = await loadCalendarToolsForAccount({
             accountId: agentContext.accountId,
@@ -753,6 +896,11 @@ export async function generateStructuredResponse(
             leadId: agentContext.leadId,
             contactName: agentContext.contactName,
             contactEmail: agentContext.contactEmail,
+            leadBusinessName: agentContext.leadBusinessName,
+            requireLeadBusinessNameBeforeScheduling:
+              agentContext.requireLeadBusinessNameBeforeScheduling,
+            requireLeadEmailBeforeScheduling:
+              agentContext.requireLeadEmailBeforeScheduling,
             businessName: conversationContext.businessName,
             conversationSummary: buildConversationSummaryForCalendar(conversationContext),
             currentUserMessage: buildCalendarIntentText(conversationContext),
@@ -769,6 +917,10 @@ export async function generateStructuredResponse(
         } catch (err) {
           console.warn('⚠️ [NativeTools] Error loading calendar tools:', err);
         }
+      } else if (agentContext?.accountId && missingQualificationFields.length > 0) {
+        console.log(
+          `📅 [NativeTools] Skipping calendar tools until lead qualification is complete: ${missingQualificationFields.join(', ')}`
+        );
       }
 
       if (functions.length > 0) {
@@ -932,6 +1084,14 @@ Agente: (AHORA SÍ ejecuta la herramienta con los datos reales)
     // THEN append custom instructions (system prompt) so it has context of available tools
     if (config.customInstructions) {
       contextualInstructions += `\n\nINSTRUCCIONES PERSONALIZADAS DEL AGENTE:\n${config.customInstructions}`;
+    }
+
+    const qualificationInstructions = buildQualificationInstructions(
+      conversationContext,
+      agentContext
+    );
+    if (qualificationInstructions) {
+      contextualInstructions += qualificationInstructions;
     }
 
     // Analyze conversation for repetition patterns
@@ -1111,6 +1271,7 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
       { role: 'user', content: userPrompt }
     ];
 
+    const missingQualificationFields = getMissingQualificationFields(conversationContext, agentContext);
     const forcedCalendarTool = nativeBundle
       ? selectForcedCalendarTool(conversationContext, agentContext)
       : null;
@@ -1290,6 +1451,25 @@ El campo "leadScore" puede seguir tu evaluación por keywords, pero "aiAssessedS
       structuredResponse.intent = 'schedule_meeting';
       structuredResponse.nextAction = 'schedule_meeting';
       structuredResponse.confidence = Math.min(structuredResponse.confidence || 0.6, 0.7);
+    }
+
+    if (
+      missingQualificationFields.length > 0 &&
+      (looksLikeAvailabilityWasOffered(structuredResponse.responseText) ||
+        looksLikeMeetingWasConfirmed(structuredResponse.responseText) ||
+        /schedule_meeting/i.test(structuredResponse.intent || '') ||
+        /schedule_meeting/i.test(structuredResponse.nextAction || ''))
+    ) {
+      console.warn(
+        `⚠️ [OpenAI] Replacing unsafe scheduling response because lead qualification is incomplete: ${missingQualificationFields.join(', ')}`
+      );
+      structuredResponse.responseText = buildQualificationFallbackResponse(
+        conversationContext,
+        agentContext
+      );
+      structuredResponse.intent = 'qualify';
+      structuredResponse.nextAction = 'qualify';
+      structuredResponse.confidence = Math.min(structuredResponse.confidence || 0.6, 0.75);
     }
 
     // CRITICAL: Validate lead score based on conversation progress (number of user messages)

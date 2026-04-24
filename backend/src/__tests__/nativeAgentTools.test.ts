@@ -96,6 +96,26 @@ describe('nativeAgentTools calendar date handling', () => {
     expect(mocks.createMeetingEvent).not.toHaveBeenCalled();
   });
 
+  it('blocks calendar usage when a required lead business name is missing', async () => {
+    const bundle = await loadCalendarToolsForAccount({
+      accountId: '17841467023627361',
+      currentUserMessage: 'Agenda una sesión para mañana',
+      contactEmail: 'alvaro@example.com',
+      requireLeadBusinessNameBeforeScheduling: true,
+      requireLeadEmailBeforeScheduling: true,
+      now: new Date('2026-04-22T15:05:00-04:00'),
+    });
+
+    await expect(
+      bundle!.execute('get_calendar_availability', {
+        fromIso: '2026-04-23T04:00:00.000Z',
+        toIso: '2026-04-24T04:00:00.000Z',
+      })
+    ).rejects.toThrow(/Lead qualification incomplete/);
+
+    expect(mocks.getAvailability).not.toHaveBeenCalled();
+  });
+
   it('builds event title and description from business and conversation context', async () => {
     mocks.createMeetingEvent.mockResolvedValue({
       success: true,
@@ -110,6 +130,7 @@ describe('nativeAgentTools calendar date handling', () => {
       currentUserMessage: 'Agenda una sesión para mañana\nEl primer horario me sirve',
       contactName: 'Alvaro',
       contactEmail: 'alvaro@example.com',
+      leadBusinessName: 'Ewaffle',
       businessName: 'Fidelidapp',
       conversationSummary: 'Lead pidió una sesión para conocer Fidelidapp y confirmó el primer horario.',
       now: new Date('2026-04-22T15:05:00-04:00'),
@@ -131,6 +152,9 @@ describe('nativeAgentTools calendar date handling', () => {
     });
     expect(mocks.createMeetingEvent.mock.calls[0][1].description).toContain(
       'Lead pidió una sesión para conocer Fidelidapp'
+    );
+    expect(mocks.createMeetingEvent.mock.calls[0][1].description).toContain(
+      'Negocio del lead: Ewaffle'
     );
     expect(mocks.createMeetingEvent.mock.calls[0][1].description).toContain(
       'CC internos: owner@example.com'

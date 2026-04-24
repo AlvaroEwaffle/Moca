@@ -19,7 +19,7 @@ import {
 import { LeadScoringService } from './leadScoring.service';
 import { GlobalAgentRulesService } from './globalAgentRules.service';
 import { pushToFidelidapp } from './fidelidapp.service';
-import { extractContactData } from './contactDataExtractor.service';
+import { extractContactData, hasMeaningfulBusinessName } from './contactDataExtractor.service';
 
 class DebounceWorkerService {
   private isRunning: boolean = false;
@@ -399,6 +399,8 @@ class DebounceWorkerService {
 
       // Get full conversation history for context
       const conversationHistory = await this.getConversationHistory(conversation.id);
+
+      await this.enrichLeadProfileFromConversation(conversation);
       
       // Get user context and business information
       const userContext = await this.getUserContext(conversation.contactId, conversation.accountId);
@@ -437,13 +439,15 @@ class DebounceWorkerService {
 
       // Get full conversation history for context
       const conversationHistory = await this.getConversationHistory(conversation.id);
+
+      await this.enrichLeadProfileFromConversation(conversation);
       
       // Get user context and business information
       const userContext = await this.getUserContext(conversation.contactId, conversation.accountId);
       
       // Create conversation context for structured response
       const conversationContext: ConversationContext = {
-        businessName: userContext.businessName || 'Business',
+        businessName: userContext.agentBusinessName || 'Business',
         conversationHistory: conversationHistory
           .filter(msg => msg.role !== 'system')
           .map(msg => ({
@@ -471,7 +475,7 @@ class DebounceWorkerService {
         enableContextAwareness: true,
         customInstructions: userContext.agentBehavior?.systemPrompt,
         businessContext: {
-          company: userContext.businessName || 'Business',
+          company: userContext.agentBusinessName || 'Business',
           sector: userContext.specialization || 'General',
           services: ['desarrollo web', 'marketing digital', 'consultoría']
         }
@@ -488,6 +492,12 @@ class DebounceWorkerService {
           leadId: conversation.contactId,
           contactName: userContext.contactName,
           contactEmail: userContext.contactEmail,
+          leadBusinessName: userContext.leadBusinessName,
+          accountName: userContext.accountName,
+          ownerEmail: userContext.ownerEmail,
+          requireLeadBusinessNameBeforeScheduling: userContext.isFidelidappSalesAccount,
+          requireLeadEmailBeforeScheduling: userContext.isFidelidappSalesAccount,
+          requireValueExplanationBeforeScheduling: userContext.isFidelidappSalesAccount,
         }
       );
 
@@ -517,6 +527,72 @@ class DebounceWorkerService {
       conversationId,
       role: { $in: ['user', 'assistant'] }
     }).sort({ 'metadata.timestamp': 1 });
+  }
+
+  private async enrichLeadProfileFromConversation(conversation: IConversation): Promise<void> {
+    try {
+      const contact = await Contact.findById(conversation.contactId);
+      if (!contact) return;
+
+      const recentMessages = await Message.find({
+        conversationId: conversation.id,
+        role: 'user'
+      }).sort({ createdAt: -1 }).limit(30);
+
+      const allMessageText = recentMessages
+        .map((message) => message.content?.text || '')
+        .filter(Boolean)
+        .join('\n');
+      const extracted = extractContactData(allMessageText);
+
+      let emailUpdated = false;
+      let phoneUpdated = false;
+      let businessNameUpdated = false;
+
+      if (!contact.email && extracted.emails.length > 0) {
+        contact.email = extracted.emails[0];
+        emailUpdated = true;
+        console.log(`🔗 DebounceWorkerService: Extracted email for contact ${contact.id}: ${contact.email}`);
+      }
+
+      if (!contact.phone && extracted.phones.length > 0) {
+        contact.phone = extracted.phones[0];
+        phoneUpdated = true;
+        console.log(`🔗 DebounceWorkerService: Extracted phone for contact ${contact.id}: ${contact.phone}`);
+      }
+
+      if (!hasMeaningfulBusinessName(contact.businessInfo?.company) && extracted.businessNames.length > 0) {
+        contact.businessInfo = {
+          ...contact.businessInfo,
+          company: extracted.businessNames[0],
+        };
+        businessNameUpdated = true;
+        console.log(
+          `🏷️ DebounceWorkerService: Extracted business name for contact ${contact.id}: ${contact.businessInfo.company}`
+        );
+      }
+
+      const anyUpdated = emailUpdated || phoneUpdated || businessNameUpdated;
+      if (!anyUpdated) return;
+
+      await contact.save();
+      console.log(`✅ DebounceWorkerService: Contact ${contact.id} enriched before AI response`);
+
+      if (contact.email) {
+        const account = await InstagramAccount.findOne({ accountId: conversation.accountId });
+        pushToFidelidapp(
+          {
+            name: contact.name,
+            email: contact.email,
+            phoneNumber: contact.phone,
+          },
+          'moca-instagram',
+          account?.fidelidappSlug
+        );
+      }
+    } catch (error) {
+      console.error('❌ DebounceWorkerService: Error enriching lead profile before AI response:', error);
+    }
   }
 
   /**
@@ -556,11 +632,19 @@ class DebounceWorkerService {
       return {
         contactName: contact.name,
         contactEmail: contact.email,
-        businessName: contact.businessInfo?.company || instagramAccount?.accountName || 'Business',
+        leadBusinessName: contact.businessInfo?.company,
+        agentBusinessName: instagramAccount?.accountName || 'Business',
         specialization: contact.businessInfo?.sector || 'General',
         preferences: contact.preferences || {},
         agentBehavior: agentSettings,
-        accountMcpConfig: accountMcpConfig
+        accountMcpConfig: accountMcpConfig,
+        accountId,
+        accountName: instagramAccount?.accountName,
+        ownerEmail: instagramAccount?.userEmail,
+        isFidelidappSalesAccount:
+          instagramAccount?.accountName?.toLowerCase() === 'fidelidapp' ||
+          instagramAccount?.userEmail?.toLowerCase() === 'alvaro@fidelidapp.cl' ||
+          instagramAccount?.fidelidappSlug?.toLowerCase() === 'fidelidappcl'
       };
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error getting user context:`, error);
@@ -582,7 +666,7 @@ class DebounceWorkerService {
       
       // Create conversation context for structured response
       const conversationContext: ConversationContext = {
-        businessName: userContext.businessName || 'Business',
+        businessName: userContext.agentBusinessName || 'Business',
         conversationHistory: conversationHistory
           .filter(msg => msg.role !== 'system')
           .map(msg => ({
@@ -604,7 +688,7 @@ class DebounceWorkerService {
         enableContextAwareness: true,
         customInstructions: userContext.agentBehavior?.systemPrompt,
         businessContext: {
-          company: userContext.businessName || 'Business',
+          company: userContext.agentBusinessName || 'Business',
           sector: userContext.specialization || 'General',
           services: ['desarrollo web', 'marketing digital', 'consultoría']
         }
@@ -614,7 +698,18 @@ class DebounceWorkerService {
       const structuredResponse = await generateStructuredResponse(
         conversationContext, 
         aiConfig,
-        userContext.accountMcpConfig
+        userContext.accountMcpConfig,
+        {
+          accountId: userContext.accountId,
+          contactName: userContext.contactName,
+          contactEmail: userContext.contactEmail,
+          leadBusinessName: userContext.leadBusinessName,
+          accountName: userContext.accountName,
+          ownerEmail: userContext.ownerEmail,
+          requireLeadBusinessNameBeforeScheduling: userContext.isFidelidappSalesAccount,
+          requireLeadEmailBeforeScheduling: userContext.isFidelidappSalesAccount,
+          requireValueExplanationBeforeScheduling: userContext.isFidelidappSalesAccount,
+        }
       );
       
       console.log('✅ DebounceWorkerService: Structured response generated:', {
@@ -742,57 +837,6 @@ class DebounceWorkerService {
 
       await conversation.save();
       console.log('✅ DebounceWorkerService: Conversation updated with structured response data');
-
-      // Progressive lead enrichment: extract email/phone from recent messages and push to Fidelidapp
-      try {
-        const contact = await Contact.findById(conversation.contactId);
-        if (contact) {
-          // Get recent user messages for this conversation to extract contact data
-          const recentMessages = await Message.find({
-            conversationId: conversation.id,
-            role: 'user'
-          }).sort({ createdAt: -1 }).limit(20);
-
-          const allMessageText = recentMessages.map(m => m.content?.text || '').join(' ');
-          const extracted = extractContactData(allMessageText);
-
-          let emailUpdated = false;
-          let phoneUpdated = false;
-
-          // Update contact email if currently empty and we found one
-          if (!contact.email && extracted.emails.length > 0) {
-            contact.email = extracted.emails[0];
-            emailUpdated = true;
-            console.log(`🔗 DebounceWorkerService: Extracted email for contact ${contact.id}: ${contact.email}`);
-          }
-
-          // Update contact phone if currently empty and we found one
-          if (!contact.phone && extracted.phones.length > 0) {
-            contact.phone = extracted.phones[0];
-            phoneUpdated = true;
-            console.log(`🔗 DebounceWorkerService: Extracted phone for contact ${contact.id}: ${contact.phone}`);
-          }
-
-          // Save contact if any field was updated
-          if (emailUpdated || phoneUpdated) {
-            await contact.save();
-            console.log(`✅ DebounceWorkerService: Contact ${contact.id} enriched with extracted data`);
-          }
-
-          // Push to Fidelidapp only if contact has email AND new data was just extracted
-          if (contact.email && (emailUpdated || phoneUpdated)) {
-            // Fetch account to get per-account fidelidappSlug
-            const account = await InstagramAccount.findOne({ accountId: conversation.accountId });
-            pushToFidelidapp({
-              name: contact.name,
-              email: contact.email,
-              phoneNumber: contact.phone,
-            }, 'moca-instagram', account?.fidelidappSlug);
-          }
-        }
-      } catch (enrichmentError) {
-        console.error('❌ DebounceWorkerService: Error in progressive lead enrichment (non-blocking):', enrichmentError);
-      }
 
     } catch (error) {
       console.error('❌ DebounceWorkerService: Error updating conversation with structured response:', error);
@@ -1164,6 +1208,4 @@ class DebounceWorkerService {
 }
 
 export default new DebounceWorkerService();
-
-
 
