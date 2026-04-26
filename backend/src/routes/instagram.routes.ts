@@ -2130,6 +2130,12 @@ router.post('/conversations/:id/milestone/achieve', authenticateToken, async (re
       name: contact?.name,
       email: contact?.email,
       phoneNumber: contact?.phone,
+      instagramPsid: contact?.psid,
+      instagramUsername: contact?.metadata?.instagramData?.username,
+      leadScore: conversation.leadScoring?.currentScore,
+      leadStep: conversation.leadScoring?.currentStep?.stepName,
+      messageCount: conversation.messageCount,
+      lastActivityAt: conversation.timestamps?.lastActivity?.toISOString?.(),
     }, 'moca-instagram', milestoneAccount?.fidelidappSlug);
 
     console.log(`✅ Milestone achieved for conversation: ${id}`);

@@ -6,6 +6,12 @@ interface FidelidappLeadData {
   name?: string;
   email?: string;
   phoneNumber?: string;
+  instagramPsid?: string;
+  instagramUsername?: string;
+  leadScore?: number;
+  leadStep?: string;
+  messageCount?: number;
+  lastActivityAt?: string;
 }
 
 export function pushToFidelidapp(data: FidelidappLeadData, sourceTag: string = 'moca', accountSlug?: string): void {
