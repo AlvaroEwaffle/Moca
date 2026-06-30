@@ -1009,14 +1009,23 @@ export class InstagramWebhookService {
    * Create message record
    */
   private async createMessage(
-    messageData: InstagramMessage, 
-    conversationId: string, 
-    contactId: string, 
+    messageData: InstagramMessage,
+    conversationId: string,
+    contactId: string,
     accountId: string,
     instagramAccount?: any, // Optional: pass account to avoid extra query
     isManual?: boolean // Optional: true if message was sent manually by owner
   ): Promise<IMessage> {
     try {
+      // VALIDATION: Check for required message content before processing
+      const hasText = messageData.text?.trim();
+      const hasAttachments = messageData.attachments?.length > 0;
+
+      if (!hasText && !hasAttachments) {
+        console.error(`❌ [Message Validation] Skipping message with no text or attachments - MID: ${messageData.mid}`);
+        throw new Error(`Message validation failed: no text or attachments. MID: ${messageData.mid}`);
+      }
+
       // CRITICAL FIX #2: Get the InstagramAccount to compare with pageScopedId (not accountId)
       // Use passed account if available, otherwise query
       const account = instagramAccount || await InstagramAccount.findOne({ accountId });
@@ -1028,14 +1037,14 @@ export class InstagramWebhookService {
       // Compare sender PSID with account's pageScopedId (not accountId - they are different!)
       const isBotMessage = messageData.psid === account.pageScopedId;
       const messageRole = isBotMessage ? 'assistant' : 'user';
-      
+
       console.log(`🔍 [Message Role Detection] Creating message record:`);
       console.log(`🔍 [Message Role Detection] PSID=${messageData.psid}`);
       console.log(`🔍 [Message Role Detection] AccountID=${accountId}`);
       console.log(`🔍 [Message Role Detection] Account pageScopedId=${account.pageScopedId}`);
       console.log(`🔍 [Message Role Detection] Comparison: ${messageData.psid} === ${account.pageScopedId} = ${isBotMessage}`);
       console.log(`🔍 [Message Role Detection] Determined role: ${messageRole}`);
-      
+
       // Additional safety check: if role is assistant but we're processing it, log warning
       // This should NOT happen if our early checks are working, but it's a safety net
       // EXCEPT if this is a manual message (isManual=true), in which case it's intentional
@@ -1047,9 +1056,17 @@ export class InstagramWebhookService {
       } else if (isBotMessage && isManual) {
         console.log(`✅ [Message Role Detection] Creating manual message with role='assistant' (intentional)`);
       }
-      
+
+      // Build message text with guaranteed fallback
+      const textContent = messageData.text?.trim() || '';
+      const attachmentLabel = hasAttachments
+        ? `[${messageData.attachments![0].type ?? 'attachment'}]`
+        : '';
+      const finalText = textContent || attachmentLabel;
+
       console.log(`💾 [Message Creation] Storing recipientId: ${messageData.recipient?.id}`);
-      
+      console.log(`💾 [Message Creation] Text content: ${finalText.slice(0, 50)}...`);
+
       const message = new Message({
         mid: messageData.mid,
         conversationId,
@@ -1058,14 +1075,7 @@ export class InstagramWebhookService {
         recipientId: messageData.recipient?.id,
         role: messageRole,
         content: {
-          text: messageData.text || (messageData.attachments?.length
-            ? `[${messageData.attachments[0].type ?? 'attachment'}]`
-            : ''),
-          attachments: messageData.attachments?.map(att => ({
-            type: att.type as any,
-            url: att.url || '',
-            caption: undefined
-          })) || []
+          text: finalText // Always guaranteed to have a value after validation
         },
         metadata: {
           timestamp: new Date(messageData.timestamp),
