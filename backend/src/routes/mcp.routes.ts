@@ -774,21 +774,34 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
 
       const since = Math.floor(Date.now() / 1000) - days * 86400;
       const until = Math.floor(Date.now() / 1000);
-      let period: Record<string, unknown> | null = null;
+      // These two metrics can't share a request: `reach` is a day-series, while
+      // `profile_views` only answers to metric_type=total_value. Asking for both
+      // at once makes Graph reject the whole call (#100), so they go separately
+      // and each degrades on its own.
+      const period: Record<string, unknown> = {};
+
       try {
         const ins = await graphGet(
-          `${base}/${node}/insights?metric=reach,profile_views&period=day&since=${since}&until=${until}&access_token=${encodeURIComponent(token)}`,
+          `${base}/${node}/insights?metric=reach&period=day&since=${since}&until=${until}&access_token=${encodeURIComponent(token)}`,
         );
-        period = Object.fromEntries(
-          (ins.data || []).map((d: any) => [
-            d.name,
-            (d.values || []).reduce((sum: number, v: any) => sum + (Number(v.value) || 0), 0),
-          ]),
-        );
+        for (const d of ins.data || []) {
+          period[d.name] = (d.values || []).reduce((sum: number, v: any) => sum + (Number(v.value) || 0), 0);
+        }
       } catch (e) {
         // Account-level insights need instagram_manage_insights; without it the
         // profile counts are still useful, so report the gap rather than failing.
-        period = { error: e instanceof Error ? e.message : String(e) };
+        period.reachError = e instanceof Error ? e.message : String(e);
+      }
+
+      try {
+        const ins = await graphGet(
+          `${base}/${node}/insights?metric=profile_views&metric_type=total_value&period=day&since=${since}&until=${until}&access_token=${encodeURIComponent(token)}`,
+        );
+        for (const d of ins.data || []) {
+          period[d.name] = d.total_value?.value ?? null;
+        }
+      } catch (e) {
+        period.profileViewsError = e instanceof Error ? e.message : String(e);
       }
 
       return {
