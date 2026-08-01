@@ -178,7 +178,97 @@ const MCP_TOOLS = [
       required: ['accountId'],
     },
   },
+  // ─── Feed / contenido publicado ────────────────────────────────────────────
+  // Hasta acá el MCP solo veía DMs: quien opera una cuenta de Instagram estaba
+  // ciego al feed (qué se publicó, cómo rindió, quién comentó). Estos cuatro
+  // cierran ese hueco leyendo la Graph API con el token de la propia cuenta.
+  {
+    name: 'get_published_media',
+    description:
+      'Publicaciones recientes del feed con engagement (likes, comentarios) y alcance. Para saber qué se publicó y qué rindió, no solo los DMs.',
+    schema: {
+      type: 'object',
+      properties: {
+        accountId: { type: 'string', description: 'Instagram account ID (required)' },
+        limit: { type: 'number', description: 'Cuántas publicaciones. Default 12, máx 50.' },
+        withInsights: {
+          type: 'boolean',
+          description: 'Si true (default), agrega reach/saved/shares por post. Cuesta 1 request extra por post.',
+        },
+      },
+      required: ['accountId'],
+    },
+  },
+  {
+    name: 'get_account_insights',
+    description:
+      'Métricas de la cuenta: seguidores, nº de publicaciones y alcance/visitas al perfil del período. Para medir si el ritmo de publicación está moviendo la aguja.',
+    schema: {
+      type: 'object',
+      properties: {
+        accountId: { type: 'string', description: 'Instagram account ID (required)' },
+        days: { type: 'number', description: 'Ventana en días para el alcance. Default 28, máx 30 (límite de la API).' },
+      },
+      required: ['accountId'],
+    },
+  },
+  {
+    name: 'get_media_comments',
+    description:
+      'Comentarios de las publicaciones recientes, marcando cuáles NO tienen respuesta de la cuenta. Los comentarios sin responder son el agujero más caro de una cuenta de IG.',
+    schema: {
+      type: 'object',
+      properties: {
+        accountId: { type: 'string', description: 'Instagram account ID (required)' },
+        mediaLimit: { type: 'number', description: 'Cuántas publicaciones revisar. Default 8, máx 25.' },
+        onlyUnanswered: { type: 'boolean', description: 'Si true, devuelve solo los que esperan respuesta. Default false.' },
+      },
+      required: ['accountId'],
+    },
+  },
+  {
+    name: 'reply_to_comment',
+    description:
+      'Responde un comentario en el feed. A diferencia de send_message (que encola), esto va directo a la Graph API y es inmediato e irreversible.',
+    schema: {
+      type: 'object',
+      properties: {
+        accountId: { type: 'string', description: 'Instagram account ID (required)' },
+        commentId: { type: 'string', description: 'ID del comentario a responder (de get_media_comments)' },
+        message: { type: 'string', description: 'Texto de la respuesta. Máx 2200 caracteres.' },
+      },
+      required: ['accountId', 'commentId', 'message'],
+    },
+  },
 ];
+
+// ─── Graph API helpers (feed/contenido) ──────────────────────────────────────
+// Dos familias de token conviven en la DB y hablan con hosts distintos con los
+// mismos endpoints: EAA* = Facebook Login (cuenta ligada a una Página) y IGAA* =
+// Instagram Login (OAuth directo). Elegir el host por prefijo evita el
+// "Bad signature" que aparece si se pega el token de una familia al host de la otra.
+function graphBase(token: string): string {
+  const host = token.startsWith('IG') ? 'graph.instagram.com' : 'graph.facebook.com';
+  return `https://${host}/${process.env.GRAPH_VERSION || 'v21.0'}`;
+}
+
+async function accountToken(accountId: string): Promise<{ token: string; base: string; username: string }> {
+  const account = await InstagramAccount.findOne({ accountId }).select('accessToken accountName').lean();
+  if (!account) throw new Error(`Instagram account not found: ${accountId}`);
+  const token = (account as any).accessToken;
+  if (!token) throw new Error(`Account ${accountId} has no stored access token`);
+  return { token, base: graphBase(token), username: (account as any).accountName || '' };
+}
+
+async function graphGet(url: string): Promise<any> {
+  const res = await fetch(url);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = (body as any)?.error?.message || `HTTP ${res.status}`;
+    throw new Error(`Graph API: ${msg}`);
+  }
+  return body;
+}
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
@@ -622,6 +712,152 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
         connected: integration.status === 'connected' && integration.enabled,
         ...integration.toSafeObject(),
       };
+    }
+
+    case 'get_published_media': {
+      if (!args.accountId) throw new Error('accountId is required');
+      const { token, base, username } = await accountToken(String(args.accountId));
+      const limit = Math.min(Number(args.limit) || 12, 50);
+      const withInsights = args.withInsights !== false;
+
+      const fields = 'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count';
+      const page = await graphGet(
+        `${base}/${args.accountId}/media?fields=${fields}&limit=${limit}&access_token=${encodeURIComponent(token)}`,
+      );
+      const media: any[] = page.data || [];
+
+      if (withInsights) {
+        // Insights are per-media and have no batch endpoint. A post can also be too
+        // old or too new to have them — that must not sink the whole call, so each
+        // failure degrades to insights:null instead of throwing.
+        await Promise.all(
+          media.map(async (m) => {
+            try {
+              const ins = await graphGet(
+                `${base}/${m.id}/insights?metric=reach,saved,shares,total_interactions&access_token=${encodeURIComponent(token)}`,
+              );
+              m.insights = Object.fromEntries((ins.data || []).map((d: any) => [d.name, d.values?.[0]?.value ?? null]));
+            } catch {
+              m.insights = null;
+            }
+          }),
+        );
+      }
+
+      return { accountId: args.accountId, username, count: media.length, media };
+    }
+
+    case 'get_account_insights': {
+      if (!args.accountId) throw new Error('accountId is required');
+      const { token, base, username } = await accountToken(String(args.accountId));
+      const days = Math.min(Math.max(Number(args.days) || 28, 1), 30);
+
+      const profile = await graphGet(
+        `${base}/${args.accountId}?fields=username,followers_count,media_count&access_token=${encodeURIComponent(token)}`,
+      );
+
+      const since = Math.floor(Date.now() / 1000) - days * 86400;
+      const until = Math.floor(Date.now() / 1000);
+      let period: Record<string, unknown> | null = null;
+      try {
+        const ins = await graphGet(
+          `${base}/${args.accountId}/insights?metric=reach,profile_views&period=day&since=${since}&until=${until}&access_token=${encodeURIComponent(token)}`,
+        );
+        period = Object.fromEntries(
+          (ins.data || []).map((d: any) => [
+            d.name,
+            (d.values || []).reduce((sum: number, v: any) => sum + (Number(v.value) || 0), 0),
+          ]),
+        );
+      } catch (e) {
+        // Account-level insights need instagram_manage_insights; without it the
+        // profile counts are still useful, so report the gap rather than failing.
+        period = { error: e instanceof Error ? e.message : String(e) };
+      }
+
+      return {
+        accountId: args.accountId,
+        username: profile.username || username,
+        followers: profile.followers_count ?? null,
+        mediaCount: profile.media_count ?? null,
+        windowDays: days,
+        period,
+      };
+    }
+
+    case 'get_media_comments': {
+      if (!args.accountId) throw new Error('accountId is required');
+      const { token, base, username } = await accountToken(String(args.accountId));
+      const mediaLimit = Math.min(Number(args.mediaLimit) || 8, 25);
+      const onlyUnanswered = args.onlyUnanswered === true;
+
+      // The stored accountName can drift from the live handle; ask Graph so the
+      // "did WE reply?" check below compares against the real username.
+      let selfHandle = username;
+      try {
+        const me = await graphGet(`${base}/${args.accountId}?fields=username&access_token=${encodeURIComponent(token)}`);
+        if (me.username) selfHandle = me.username;
+      } catch { /* fall back to the stored name */ }
+
+      const page = await graphGet(
+        `${base}/${args.accountId}/media?fields=id,permalink,caption,timestamp&limit=${mediaLimit}&access_token=${encodeURIComponent(token)}`,
+      );
+
+      const out: any[] = [];
+      await Promise.all(
+        (page.data || []).map(async (m: any) => {
+          try {
+            const cs = await graphGet(
+              `${base}/${m.id}/comments?fields=id,text,username,timestamp,like_count,replies{id,username}&limit=50&access_token=${encodeURIComponent(token)}`,
+            );
+            for (const c of cs.data || []) {
+              // "Answered" = the account itself appears among the replies. Comparing
+              // against our own username is what distinguishes a real reply from
+              // other users chatting under the comment.
+              const replies = c.replies?.data || [];
+              const answeredByAccount = replies.some((r: any) => r.username && r.username === selfHandle);
+              const item = {
+                commentId: c.id,
+                mediaId: m.id,
+                permalink: m.permalink,
+                from: c.username,
+                text: c.text,
+                timestamp: c.timestamp,
+                likes: c.like_count ?? 0,
+                replyCount: replies.length,
+                answered: answeredByAccount,
+              };
+              if (!onlyUnanswered || !item.answered) out.push(item);
+            }
+          } catch {
+            /* a single unreadable post must not blind the whole sweep */
+          }
+        }),
+      );
+
+      out.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+      return { accountId: args.accountId, mediaChecked: (page.data || []).length, count: out.length, comments: out };
+    }
+
+    case 'reply_to_comment': {
+      if (!args.accountId) throw new Error('accountId is required');
+      if (!args.commentId) throw new Error('commentId is required');
+      if (!args.message) throw new Error('message is required');
+      const text = String(args.message).trim();
+      if (!text) throw new Error('message cannot be empty');
+      if (text.length > 2200) throw new Error('message exceeds 2200 character limit');
+
+      const { token, base } = await accountToken(String(args.accountId));
+      const res = await fetch(`${base}/${args.commentId}/replies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ message: text, access_token: token }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(`Graph API: ${(body as any)?.error?.message || `HTTP ${res.status}`}`);
+
+      // Unlike send_message, nothing is queued here — the reply is already live.
+      return { replied: true, replyId: (body as any).id, commentId: args.commentId };
     }
 
     default:
