@@ -101,7 +101,14 @@ export interface IInstagramAccount extends Document {
   pageId?: string; // Facebook Page ID (from GET /me/accounts, for webhook matching when available)
   alternateRecipientIds?: string[]; // IDs seen as recipient.id in webhooks (IGSID etc.) - resolved via API and cached
   accountName: string; // Instagram username
-  accessToken: string; // Instagram Graph API token
+  accessToken: string; // Instagram Graph API token (messaging/DMs)
+  // Feed/content operations can need a DIFFERENT token than messaging: publishing,
+  // insights and comments require instagram_content_publish / manage_insights /
+  // manage_comments, which the messaging token often lacks, and the two token
+  // families address different Graph nodes. Optional — the MCP feed tools fall
+  // back to accessToken when it isn't set. Kept separate so refreshing one
+  // credential never silently breaks the other.
+  contentAccessToken?: string;
   refreshToken?: string; // For token refresh
   tokenExpiry: Date; // Token expiration
   settings: {
@@ -178,6 +185,7 @@ const InstagramAccountSchema = new Schema<IInstagramAccount>({
   alternateRecipientIds: { type: [String], default: [] },
   accountName: { type: String, required: true },
   accessToken: { type: String, required: true },
+  contentAccessToken: { type: String },
   refreshToken: { type: String, required: false },
   tokenExpiry: { type: Date, required: true },
   settings: { type: InstagramSettingsSchema, default: () => ({}) },

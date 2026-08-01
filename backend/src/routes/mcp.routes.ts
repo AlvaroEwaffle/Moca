@@ -252,12 +252,28 @@ function graphBase(token: string): string {
   return `https://${host}/${process.env.GRAPH_VERSION || 'v21.0'}`;
 }
 
-async function accountToken(accountId: string): Promise<{ token: string; base: string; username: string }> {
-  const account = await InstagramAccount.findOne({ accountId }).select('accessToken accountName').lean();
+async function accountToken(
+  accountId: string,
+): Promise<{ token: string; base: string; username: string; node: string }> {
+  const account = await InstagramAccount.findOne({ accountId })
+    .select('accessToken contentAccessToken accountName pageScopedId')
+    .lean();
   if (!account) throw new Error(`Instagram account not found: ${accountId}`);
-  const token = (account as any).accessToken;
+  // Feed work needs content_publish / manage_insights / manage_comments scopes that
+  // the messaging token usually lacks. Prefer the dedicated content token when the
+  // account has one; fall back to the messaging token so accounts where both live
+  // in one credential keep working untouched.
+  const token = (account as any).contentAccessToken || (account as any).accessToken;
   if (!token) throw new Error(`Account ${accountId} has no stored access token`);
-  return { token, base: graphBase(token), username: (account as any).accountName || '' };
+
+  // `accountId` is the Instagram-Login IG_ID, which is NOT the node a Facebook-Login
+  // (EAA) token addresses — that one wants the Business account id we keep in
+  // pageScopedId. Using accountId for both is why an EAA account 400s on /media.
+  // Callers must address Graph via `node`, and keep using accountId for our own DB.
+  const isFacebookToken = !token.startsWith('IG');
+  const node = (isFacebookToken && (account as any).pageScopedId) || accountId;
+
+  return { token, base: graphBase(token), username: (account as any).accountName || '', node };
 }
 
 async function graphGet(url: string): Promise<any> {
@@ -716,13 +732,13 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
 
     case 'get_published_media': {
       if (!args.accountId) throw new Error('accountId is required');
-      const { token, base, username } = await accountToken(String(args.accountId));
+      const { token, base, username, node } = await accountToken(String(args.accountId));
       const limit = Math.min(Number(args.limit) || 12, 50);
       const withInsights = args.withInsights !== false;
 
       const fields = 'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count';
       const page = await graphGet(
-        `${base}/${args.accountId}/media?fields=${fields}&limit=${limit}&access_token=${encodeURIComponent(token)}`,
+        `${base}/${node}/media?fields=${fields}&limit=${limit}&access_token=${encodeURIComponent(token)}`,
       );
       const media: any[] = page.data || [];
 
@@ -749,11 +765,11 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
 
     case 'get_account_insights': {
       if (!args.accountId) throw new Error('accountId is required');
-      const { token, base, username } = await accountToken(String(args.accountId));
+      const { token, base, username, node } = await accountToken(String(args.accountId));
       const days = Math.min(Math.max(Number(args.days) || 28, 1), 30);
 
       const profile = await graphGet(
-        `${base}/${args.accountId}?fields=username,followers_count,media_count&access_token=${encodeURIComponent(token)}`,
+        `${base}/${node}?fields=username,followers_count,media_count&access_token=${encodeURIComponent(token)}`,
       );
 
       const since = Math.floor(Date.now() / 1000) - days * 86400;
@@ -761,7 +777,7 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
       let period: Record<string, unknown> | null = null;
       try {
         const ins = await graphGet(
-          `${base}/${args.accountId}/insights?metric=reach,profile_views&period=day&since=${since}&until=${until}&access_token=${encodeURIComponent(token)}`,
+          `${base}/${node}/insights?metric=reach,profile_views&period=day&since=${since}&until=${until}&access_token=${encodeURIComponent(token)}`,
         );
         period = Object.fromEntries(
           (ins.data || []).map((d: any) => [
@@ -787,7 +803,7 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
 
     case 'get_media_comments': {
       if (!args.accountId) throw new Error('accountId is required');
-      const { token, base, username } = await accountToken(String(args.accountId));
+      const { token, base, username, node } = await accountToken(String(args.accountId));
       const mediaLimit = Math.min(Number(args.mediaLimit) || 8, 25);
       const onlyUnanswered = args.onlyUnanswered === true;
 
@@ -795,12 +811,12 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
       // "did WE reply?" check below compares against the real username.
       let selfHandle = username;
       try {
-        const me = await graphGet(`${base}/${args.accountId}?fields=username&access_token=${encodeURIComponent(token)}`);
+        const me = await graphGet(`${base}/${node}?fields=username&access_token=${encodeURIComponent(token)}`);
         if (me.username) selfHandle = me.username;
       } catch { /* fall back to the stored name */ }
 
       const page = await graphGet(
-        `${base}/${args.accountId}/media?fields=id,permalink,caption,timestamp&limit=${mediaLimit}&access_token=${encodeURIComponent(token)}`,
+        `${base}/${node}/media?fields=id,permalink,caption,timestamp&limit=${mediaLimit}&access_token=${encodeURIComponent(token)}`,
       );
 
       const out: any[] = [];
