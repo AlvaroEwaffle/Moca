@@ -280,31 +280,44 @@ class SenderWorkerService {
       
       console.log(`🔄 SenderWorkerService: Attempt ${attempts}/${maxAttempts} for queue item: ${queueItem.id}`);
 
+      // The schema field is `errorMessage`, not `error`. Writing `error` meant
+      // mongoose stripped it and every history entry persisted as just
+      // {attempt, timestamp} — a failure log that records THAT it failed but
+      // never WHY. That is how @ewaffle.cl sat with a dead token for five months
+      // without anyone being able to see the reason.
+      const historyEntry = {
+        attempt: attempts,
+        timestamp: new Date(),
+        errorCode: /token|OAuth|190|expired/i.test(errorMessage) ? 'auth' : 'send',
+        errorMessage: String(errorMessage || 'unknown error'),
+      };
+      const errorHistory = [...(queueItem.metadata.errorHistory || []), historyEntry];
+
       if (attempts >= maxAttempts) {
-        // Mark as permanently failed
+        // Mark as permanently failed — and keep the reason. Previously the
+        // terminal path recorded no error at all, so the LAST (most relevant)
+        // failure was the one that vanished.
+        await OutboundQueue.findByIdAndUpdate(queueItem.id, {
+          'metadata.attempts': attempts,
+          'metadata.lastAttempt': new Date(),
+          'metadata.errorHistory': errorHistory,
+        });
         await this.updateQueueItemStatus(queueItem.id, 'failed');
         await this.updateFollowUpRecord(queueItem, 'failed');
-        console.log(`❌ SenderWorkerService: Queue item ${queueItem.id} permanently failed after ${maxAttempts} attempts`);
+        console.log(`❌ SenderWorkerService: Queue item ${queueItem.id} permanently failed after ${maxAttempts} attempts: ${errorMessage}`);
       } else {
         // Schedule retry
         const retryDelay = this.calculateRetryDelay(attempts, 'exponential');
         const nextAttempt = new Date(Date.now() + retryDelay);
-        
+
         await OutboundQueue.findByIdAndUpdate(queueItem.id, {
           'metadata.attempts': attempts,
           'metadata.lastAttempt': new Date(),
           'metadata.nextAttempt': nextAttempt,
-          'metadata.errorHistory': [
-            ...(queueItem.metadata.errorHistory || []),
-            {
-              timestamp: new Date(),
-              error: errorMessage,
-              attempt: attempts
-            }
-          ]
+          'metadata.errorHistory': errorHistory,
         });
 
-        console.log(`⏰ SenderWorkerService: Queue item ${queueItem.id} marked for retry at ${nextAttempt.toISOString()}`);
+        console.log(`⏰ SenderWorkerService: Queue item ${queueItem.id} retry at ${nextAttempt.toISOString()} — ${errorMessage}`);
       }
 
     } catch (error) {
