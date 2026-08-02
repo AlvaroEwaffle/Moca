@@ -34,6 +34,8 @@ interface InstagramAccountInfo {
 
 class InstagramApiService {
   private accessToken: string = '';
+  /** Set only when running through the Page fallback; also selects the Graph host. */
+  private pageId: string = '';
 
   constructor() {
     console.log('🔧 InstagramApiService: Initializing service');
@@ -55,11 +57,23 @@ class InstagramApiService {
 
       console.log(`✅ InstagramApiService: Found account: ${account.accountName}`);
 
+      // Reset per-account routing state — this service instance is reused.
+      this.pageId = '';
+
       // Check if token is expired and try to refresh it
       if (account.tokenExpiry <= new Date()) {
         console.log(`⚠️ InstagramApiService: Token expired for account: ${account.accountName}, attempting refresh...`);
         const refreshSuccess = await this.refreshAccessToken(account);
         if (!refreshSuccess) {
+          // An Instagram-Login token that has ALREADY expired cannot be refreshed —
+          // ig_refresh_token requires a still-valid token — so this is terminal for
+          // that path. Before giving up, try the Page route: Instagram messaging
+          // also works through the linked Facebook Page, and the Page token is
+          // derivable from the System User token we keep in contentAccessToken.
+          // This is what let @ewaffle.cl send again without a manual re-auth.
+          const viaPage = await this.initializeViaPage(account);
+          if (viaPage) return true;
+
           console.log(`❌ InstagramApiService: Failed to refresh token for account: ${account.accountName}`);
           return false;
         }
@@ -127,6 +141,56 @@ class InstagramApiService {
   }
 
   /**
+   * Fallback path: send through the linked Facebook Page instead of the Instagram
+   * Login token. Requires a Page access token, which a System User token can mint
+   * via /me/accounts — note a System User token itself is REJECTED for messaging
+   * ("Application does not have the capability"), so minting the Page token is not
+   * optional, it is the whole point.
+   *
+   * Returns true when this instance is ready to send via the Page.
+   */
+  private async initializeViaPage(account: any): Promise<boolean> {
+    const systemToken = account.contentAccessToken;
+    if (!systemToken) {
+      console.log(`ℹ️ InstagramApiService: No contentAccessToken for ${account.accountName}, cannot use Page fallback`);
+      return false;
+    }
+
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${encodeURIComponent(systemToken)}`,
+      );
+      const data: any = await res.json();
+      if (!res.ok || !Array.isArray(data.data)) {
+        console.log(`❌ InstagramApiService: Page lookup failed: ${JSON.stringify(data?.error || data).slice(0, 200)}`);
+        return false;
+      }
+
+      // Match the Page by its linked IG business account. pageScopedId is that id
+      // for Facebook-Login accounts; fall back to a stored pageId, then to the
+      // single assigned Page if there is exactly one.
+      const igBusinessId = account.pageScopedId || account.accountId;
+      const page =
+        data.data.find((p: any) => p.instagram_business_account?.id === igBusinessId) ||
+        data.data.find((p: any) => p.id === account.pageId) ||
+        (data.data.length === 1 ? data.data[0] : null);
+
+      if (!page?.access_token) {
+        console.log(`❌ InstagramApiService: No Page with a token matches account ${account.accountName}`);
+        return false;
+      }
+
+      this.accessToken = page.access_token;
+      this.pageId = page.id;
+      console.log(`✅ InstagramApiService: Using Page route for ${account.accountName} (page ${page.id})`);
+      return true;
+    } catch (error) {
+      console.error(`❌ InstagramApiService: Page fallback error for ${account.accountName}:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Send a message via Instagram Graph API
    */
   async sendMessage(psid: string, message: any): Promise<any> {
@@ -138,11 +202,16 @@ class InstagramApiService {
       throw new Error('No access token available');
     }
 
-    const url = `https://graph.instagram.com/v25.0/me/messages?access_token=${this.accessToken}`;
-    
-    const payload = {
+    // Page route and Instagram-Login route hit different hosts and nodes. When
+    // pageId is set we are on the Page fallback, which also wants messaging_type.
+    const url = this.pageId
+      ? `https://graph.facebook.com/v21.0/${this.pageId}/messages?access_token=${this.accessToken}`
+      : `https://graph.instagram.com/v25.0/me/messages?access_token=${this.accessToken}`;
+
+    const payload: Record<string, unknown> = {
       recipient: { id: psid },
-      message: message
+      message: message,
+      ...(this.pageId ? { messaging_type: 'RESPONSE' } : {}),
     };
 
     console.log(`📤 InstagramApiService: Sending message to PSID: ${psid}`);
