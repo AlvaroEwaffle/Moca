@@ -308,6 +308,10 @@ export class FollowUpWorkerService {
         conversationId: lead._id,
         contactId: lead.contactId._id,
         accountId: lead.accountId,
+        // Proactive follow-ups on WhatsApp will be rejected by the adapter when
+        // the 24h window has closed — correctly so, since re-engagement outside
+        // it requires an approved template, which this MVP does not send.
+        channel: lead.channel === 'whatsapp' ? 'whatsapp' : 'instagram',
         priority: 'normal',
         status: 'pending',
         content: {

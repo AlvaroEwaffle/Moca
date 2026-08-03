@@ -25,13 +25,18 @@ import {
 
 import { BACKEND_URL } from '@/utils/config';
 import { formatSafeDateTime, formatSafeTimeAgo, normalizeConversationSummary, normalizeMessage } from '@/utils/conversationDisplay';
+import ChannelBadge from '@/components/ChannelBadge';
+import { serviceWindowMessage, type Channel, type ServiceWindow } from '@/utils/channel';
 
 interface Conversation {
   _id: string;
+  channel?: Channel;
+  serviceWindow?: ServiceWindow | null;
   contact?: {
     name?: string;
     username?: string;
     psid?: string;
+    waId?: string;
     metadata?: any;
   };
   status: string;
@@ -119,16 +124,23 @@ const ConversationDetail: React.FC = () => {
     try {
       setError(null);
       const backendUrl = BACKEND_URL;
-      const response = await fetch(`${backendUrl}/api/instagram/conversations/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
+      const authHeaders = {
+        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+      };
+
+      // A conversation id in the URL carries no channel, and each channel scopes
+      // its route to its own accounts — so try Instagram, then WhatsApp. The
+      // 404 from the wrong one is the routing signal, not an error worth showing.
+      let response = await fetch(`${backendUrl}/api/instagram/conversations/${id}`, { headers: authHeaders });
+      if (response.status === 404) {
+        response = await fetch(`${backendUrl}/api/whatsapp/conversations/${id}`, { headers: authHeaders });
+      }
 
       if (response.ok) {
         const data = await response.json();
         const conversationData = data.data?.conversation;
         const messages = data.data?.messages || [];
+        const serviceWindow = data.data?.serviceWindow ?? null;
 
         // Validate that we have the required data
         if (!conversationData) {
@@ -140,6 +152,8 @@ const ConversationDetail: React.FC = () => {
         // Transform the conversation data to match our interface
         const transformedConversation = {
           ...conversationData,
+          channel: normalizedConversation.channel,
+          serviceWindow,
           // Map contact information correctly with safe access
           contact: {
             ...normalizedConversation.contact,
@@ -409,6 +423,7 @@ const ConversationDetail: React.FC = () => {
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
                   {conversation.contact?.name || conversation.contact?.username || 'Contacto'}
                 </h1>
+                <ChannelBadge channel={conversation.channel} />
                 {getStatusBadge(conversation.status)}
               </div>
               <p className="text-sm sm:text-base text-gray-600 break-words">
@@ -434,6 +449,18 @@ const ConversationDetail: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {/* WhatsApp service window — the operator needs this before typing,
+            not after a send is rejected. */}
+        {conversation.channel === 'whatsapp' && conversation.serviceWindow?.open === false && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <Clock className="h-5 w-5 flex-shrink-0 text-amber-600 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-900">Ventana de 24h cerrada</p>
+              <p className="text-sm text-amber-800">{serviceWindowMessage(conversation.serviceWindow)}</p>
+            </div>
+          </div>
+        )}
 
         {/* Key Metrics Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

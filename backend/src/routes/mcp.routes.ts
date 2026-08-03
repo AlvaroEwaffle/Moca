@@ -591,14 +591,15 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
       if (text.length === 0) throw new Error('message cannot be empty');
       if (text.length > 1000) throw new Error('message exceeds 1000 character limit');
 
-      // 1. Find conversation to get contactId and accountId
+      // 1. Find conversation to get contactId, accountId and channel
       const conversation = await Conversation.findById(args.conversationId)
-        .select('contactId accountId')
+        .select('contactId accountId channel')
         .lean();
       if (!conversation) throw new Error('Conversation not found');
 
       const contactId = (conversation as any).contactId;
       const accountId = (conversation as any).accountId;
+      const channel = (conversation as any).channel === 'whatsapp' ? 'whatsapp' : 'instagram';
       if (!contactId || !accountId) throw new Error('Conversation missing contactId or accountId');
 
       // 2. Create Message record
@@ -608,6 +609,7 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
         conversationId: args.conversationId,
         contactId,
         accountId,
+        channel,
         role: 'assistant',
         content: { text },
         metadata: {
@@ -625,6 +627,7 @@ async function executeTool(name: string, args: Record<string, any>): Promise<unk
         conversationId: args.conversationId,
         contactId,
         accountId,
+        channel,
         priority: 'high',
         status: 'pending',
         content: { text },

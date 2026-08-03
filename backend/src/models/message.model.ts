@@ -9,6 +9,16 @@ const MessageMetadataSchema = new Schema({
   isManual: { type: Boolean, default: false }, // True if message was sent manually by owner (not by bot)
   instagramResponse: {
     messageId: { type: String, required: false } // Instagram's message ID
+  },
+  // Meta's id for the outbound WhatsApp message (wamid.*). Kept separate from
+  // instagramResponse so a status callback can be correlated per channel without
+  // overloading one field with two different id namespaces.
+  whatsappResponse: {
+    messageId: { type: String, required: false },
+    status: { type: String, required: false }, // sent | delivered | read | failed
+    timestamp: { type: Date, required: false },
+    errorCode: { type: String, required: false },
+    errorMessage: { type: String, required: false }
   }
 });
 
@@ -19,10 +29,16 @@ const MessageContentSchema = new Schema({
 
 export interface IMessage extends Document {
   id: string;
-  mid: string; // Meta message ID (unique identifier)
+  /**
+   * Meta message ID. Instagram sends `mid.*`, WhatsApp sends `wamid.*`. Both are
+   * globally unique and both land here — the existing `unique: true` index is
+   * therefore the WhatsApp deduplication mechanism, no extra field needed.
+   */
+  mid: string;
   conversationId: string; // Reference to Conversation
   contactId: string; // Reference to Contact (for quick access)
-  accountId: string; // Reference to InstagramAccount
+  accountId: string; // InstagramAccount.accountId or WhatsappAccount.phoneNumberId
+  channel: 'instagram' | 'whatsapp';
   recipientId?: string; // Instagram recipient ID (which account received the message)
   role: 'user' | 'assistant' | 'system'; // Message sender role
   content: {
@@ -37,6 +53,13 @@ export interface IMessage extends Document {
     instagramResponse: {
       messageId?: string;
     };
+    whatsappResponse?: {
+      messageId?: string;
+      status?: string;
+      timestamp?: Date;
+      errorCode?: string;
+      errorMessage?: string;
+    };
   };
   status: 'received' | 'queued' | 'processing' | 'sent' | 'failed' | 'delivered' | 'read' | 'test';
   deliveryConfirmed: boolean; // Whether delivery was confirmed by Instagram
@@ -48,6 +71,7 @@ const MessageSchema = new Schema<IMessage>({
   conversationId: { type: String, required: true },
   contactId: { type: String, required: true },
   accountId: { type: String, required: true },
+  channel: { type: String, enum: ['instagram', 'whatsapp'], default: 'instagram' },
   recipientId: { type: String, required: false }, // Instagram recipient ID
   role: { type: String, enum: ['user', 'assistant', 'system'], required: true },
   content: { type: MessageContentSchema, required: true },
@@ -65,6 +89,8 @@ const MessageSchema = new Schema<IMessage>({
 MessageSchema.index({ conversationId: 1 });
 MessageSchema.index({ contactId: 1 });
 MessageSchema.index({ accountId: 1 });
+MessageSchema.index({ channel: 1 });
+MessageSchema.index({ 'metadata.whatsappResponse.messageId': 1 });
 MessageSchema.index({ recipientId: 1 });
 MessageSchema.index({ role: 1 });
 MessageSchema.index({ status: 1 });

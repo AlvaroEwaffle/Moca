@@ -21,6 +21,7 @@ import agentRoutes from './routes/agents.routes';
 import mcpRoutes from './routes/mcp.routes';
 import subscriptionRoutes from './routes/subscription.routes';
 import calendarOAuthRoutes from './routes/calendarOAuth.routes';
+import whatsappRoutes from './routes/whatsapp.routes';
 
 // Import services
 import debounceWorker from './services/debounceWorker.service';
@@ -38,6 +39,8 @@ console.log('🔧 [Environment Check] Loaded environment variables:', {
   INSTAGRAM_VERIFY_TOKEN: !!process.env.INSTAGRAM_VERIFY_TOKEN,
   INSTAGRAM_APP_SECRET: !!process.env.INSTAGRAM_APP_SECRET,
   INSTAGRAM_ACCESS_TOKEN: !!process.env.INSTAGRAM_ACCESS_TOKEN,
+  WHATSAPP_VERIFY_TOKEN: !!process.env.WHATSAPP_VERIFY_TOKEN,
+  WHATSAPP_APP_SECRET: !!(process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET),
   NODE_ENV: process.env.NODE_ENV
 });
 
@@ -174,6 +177,7 @@ app.get('/api/debug/logs', (req, res) => {
 // API Routes
 console.log('🔧 Setting up API routes...');
 app.use('/api/instagram', instagramRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/instagram/oauth', instagramOAuthRoutes);
 app.use('/api/instagram/comments', instagramCommentsRoutes);
 app.use('/api/auth', authRoutes);

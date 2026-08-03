@@ -3,6 +3,7 @@ import Conversation from '../models/conversation.model';
 import Message from '../models/message.model';
 import OutboundQueue from '../models/outboundQueue.model';
 import InstagramAccount from '../models/instagramAccount.model';
+import { resolveAccount } from './channels/accountResolver';
 import { IContact } from '../models/contact.model';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
@@ -177,13 +178,13 @@ class DebounceWorkerService {
         console.log(`✅ [Keyword Activation] Conversation ${conversation.id} was activated by keyword "${conversation.settings?.activationKeyword || 'unknown'}", allowing processing`);
       }
 
-      // Check if AI is enabled at account level (global toggle)
-      const account = await InstagramAccount.findOne({ 
-        accountId: conversation.accountId
-      }).lean();
-      
+      // Check if AI is enabled at account level (global toggle).
+      // Resolved per channel: a WhatsApp conversation's accountId is a phone
+      // number id and does not exist in the Instagram collection.
+      const account = await resolveAccount(conversation.accountId, conversation.channel);
+
       if (!account) {
-        console.log(`⚠️ Account ${conversation.accountId} not found`);
+        console.log(`⚠️ Account ${conversation.accountId} not found (channel: ${conversation.channel ?? 'instagram'})`);
         return false;
       }
       
@@ -403,7 +404,7 @@ class DebounceWorkerService {
       await this.enrichLeadProfileFromConversation(conversation);
       
       // Get user context and business information
-      const userContext = await this.getUserContext(conversation.contactId, conversation.accountId);
+      const userContext = await this.getUserContext(conversation.contactId, conversation.accountId, conversation.channel);
       
       // Generate response with full context
       const response = await this.generateContextualResponse(
@@ -443,7 +444,7 @@ class DebounceWorkerService {
       await this.enrichLeadProfileFromConversation(conversation);
       
       // Get user context and business information
-      const userContext = await this.getUserContext(conversation.contactId, conversation.accountId);
+      const userContext = await this.getUserContext(conversation.contactId, conversation.accountId, conversation.channel);
       
       // Create conversation context for structured response
       const conversationContext: ConversationContext = {
@@ -579,7 +580,7 @@ class DebounceWorkerService {
       console.log(`✅ DebounceWorkerService: Contact ${contact.id} enriched before AI response`);
 
       if (contact.email) {
-        const account = await InstagramAccount.findOne({ accountId: conversation.accountId });
+        const account = await resolveAccount(conversation.accountId, conversation.channel);
         pushToFidelidapp(
           {
             name: contact.name,
@@ -592,7 +593,9 @@ class DebounceWorkerService {
             messageCount: conversation.messageCount,
             lastActivityAt: conversation.timestamps?.lastActivity?.toISOString?.(),
           },
-          'moca-instagram',
+          // Attribution has to name the real channel, otherwise every WhatsApp
+          // lead lands in Fidelidapp reporting as an Instagram lead.
+          account?.channel === 'whatsapp' ? 'moca-whatsapp' : 'moca-instagram',
           account?.fidelidappSlug
         );
       }
@@ -604,7 +607,7 @@ class DebounceWorkerService {
   /**
    * Get user context and business information
    */
-  private async getUserContext(contactId: string, accountId: string): Promise<any> {
+  private async getUserContext(contactId: string, accountId: string, channel?: string | null): Promise<any> {
     try {
       const contact = await Contact.findById(contactId);
       if (!contact) {
@@ -612,45 +615,50 @@ class DebounceWorkerService {
         return {};
       }
 
-      // Get Instagram account settings for agent behavior
-      const instagramAccount = await InstagramAccount.findOne({ accountId, isActive: true });
+      // Account settings drive the agent's prompt, tone and key information.
+      // Resolved per channel so a WhatsApp conversation gets its own account's
+      // persona instead of an empty one.
+      const account = await resolveAccount(accountId, channel, { activeOnly: true });
       let agentSettings = {};
       let accountMcpConfig: { enabled: boolean; servers: any[] } | undefined = undefined;
-      
-      if (instagramAccount && instagramAccount.settings) {
+
+      if (account && account.settings) {
         agentSettings = {
-          systemPrompt: instagramAccount.settings.systemPrompt,
-          toneOfVoice: instagramAccount.settings.toneOfVoice,
-          keyInformation: instagramAccount.settings.keyInformation,
-          fallbackRules: instagramAccount.settings.fallbackRules
+          systemPrompt: account.settings.systemPrompt,
+          toneOfVoice: account.settings.toneOfVoice,
+          keyInformation: account.settings.keyInformation,
+          fallbackRules: account.settings.fallbackRules
         };
-        console.log(`✅ DebounceWorkerService: Found agent settings for account: ${instagramAccount.accountName}`);
-        
+        console.log(`✅ DebounceWorkerService: Found agent settings for ${account.channel} account: ${account.accountName}`);
+
         // Get account-specific MCP configuration if available
-        if (instagramAccount.mcpTools) {
-          accountMcpConfig = instagramAccount.mcpTools;
-          console.log(`🔧 DebounceWorkerService: Found account-specific MCP config for account: ${instagramAccount.accountName} (enabled: ${accountMcpConfig.enabled}, servers: ${accountMcpConfig.servers?.length || 0})`);
+        if (account.mcpTools) {
+          accountMcpConfig = account.mcpTools;
+          console.log(`🔧 DebounceWorkerService: Found account-specific MCP config for account: ${account.accountName} (enabled: ${accountMcpConfig.enabled}, servers: ${accountMcpConfig.servers?.length || 0})`);
         }
       } else {
         console.log(`⚠️ DebounceWorkerService: No agent settings found for account: ${accountId}`);
       }
 
+      const ownerEmail = account?.raw?.userEmail;
+
       return {
         contactName: contact.name,
         contactEmail: contact.email,
         leadBusinessName: contact.businessInfo?.company,
-        agentBusinessName: instagramAccount?.accountName || 'Business',
+        agentBusinessName: account?.accountName || 'Business',
         specialization: contact.businessInfo?.sector || 'General',
         preferences: contact.preferences || {},
         agentBehavior: agentSettings,
         accountMcpConfig: accountMcpConfig,
         accountId,
-        accountName: instagramAccount?.accountName,
-        ownerEmail: instagramAccount?.userEmail,
+        channel: account?.channel ?? 'instagram',
+        accountName: account?.accountName,
+        ownerEmail,
         isFidelidappSalesAccount:
-          instagramAccount?.accountName?.toLowerCase() === 'fidelidapp' ||
-          instagramAccount?.userEmail?.toLowerCase() === 'alvaro@fidelidapp.cl' ||
-          instagramAccount?.fidelidappSlug?.toLowerCase() === 'fidelidappcl'
+          account?.accountName?.toLowerCase() === 'fidelidapp' ||
+          ownerEmail?.toLowerCase() === 'alvaro@fidelidapp.cl' ||
+          account?.fidelidappSlug?.toLowerCase() === 'fidelidappcl'
       };
     } catch (error) {
       console.error(`❌ DebounceWorkerService: Error getting user context:`, error);
@@ -901,12 +909,19 @@ class DebounceWorkerService {
         }
       }
 
+      // Carry the conversation's channel onto everything derived from it. Without
+      // this the queue item defaults to Instagram and a WhatsApp reply would be
+      // handed to the wrong adapter — the AI answer is channel-agnostic, but the
+      // delivery path is not.
+      const channel = conversation.channel === 'whatsapp' ? 'whatsapp' : 'instagram';
+
       // Create bot message record
       const botMessage = new Message({
         mid: `bot_${Date.now()}`,
         conversationId: conversation.id,
         contactId: conversation.contactId,
         accountId: conversation.accountId,
+        channel,
         role: 'assistant',
         status: testMode ? 'test' : 'queued',
         content: {
@@ -937,6 +952,7 @@ class DebounceWorkerService {
           conversationId: conversation.id,
           contactId: conversation.contactId,
           accountId: conversation.accountId,
+          channel,
           priority: 'normal',
           content: {
             type: 'text',

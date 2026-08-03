@@ -1,10 +1,11 @@
 import OutboundQueue from '../models/outboundQueue.model';
 import Message from '../models/message.model';
 import Conversation from '../models/conversation.model';
-import InstagramAccount from '../models/instagramAccount.model';
 import LeadFollowUp from '../models/leadFollowUp.model';
 import { IOutboundQueue } from '../models/outboundQueue.model';
-import instagramService from './instagramApi.service';
+import { getChannelAdapter, ChannelSendError } from './channels';
+import { ChannelAccount } from './channels/types';
+import { resolveChannel } from '../types/channel';
 import { notifyError } from '../utils/slack';
 
 class SenderWorkerService {
@@ -110,21 +111,24 @@ class SenderWorkerService {
    */
   private async processQueueItem(queueItem: IOutboundQueue): Promise<boolean> {
     try {
-      // Check rate limits
-      const canSend = await this.checkRateLimits(queueItem);
-      if (!canSend.canSend) {
+      const channel = resolveChannel(queueItem.channel);
+      const adapter = getChannelAdapter(channel);
+
+      // Resolve the sending account through the adapter — Instagram reads
+      // InstagramAccount, WhatsApp reads WhatsappAccount, and rate limiting
+      // below no longer needs to know which.
+      const account = await adapter.getAccount(queueItem.accountId);
+      if (!account) {
+        console.log(`❌ SenderWorkerService: ${channel} account not found for queue item ${queueItem.id}: ${queueItem.accountId}`);
+        await this.handleError(queueItem, `${channel} account not found: ${queueItem.accountId}`);
         return false;
       }
 
-      // Initialize Instagram service
-      console.log(`🔧 SenderWorkerService: Initializing Instagram service for account: ${queueItem.accountId}`);
-      const initialized = await instagramService.initialize(queueItem.accountId);
-      if (!initialized) {
-        console.log(`❌ SenderWorkerService: Failed to initialize Instagram service for queue item ${queueItem.id}`);
-        await this.handleError(queueItem, 'Instagram service initialization failed');
+      // Check rate limits
+      const canSend = await this.checkRateLimits(queueItem, account);
+      if (!canSend.canSend) {
         return false;
       }
-      console.log(`✅ SenderWorkerService: Instagram service initialized successfully for account: ${queueItem.accountId}`);
 
       // Get contact information
       const contact = await this.getContact(queueItem.contactId);
@@ -134,51 +138,55 @@ class SenderWorkerService {
         return false;
       }
 
-      // Send the message
-      let response;
-      try {
-        console.log(`📤 SenderWorkerService: Sending message to PSID: ${contact.psid}`);
-        
-        // For now, just send text messages
-        response = await instagramService.sendTextMessage(contact.psid, queueItem.content.text);
+      // Conversation is needed by adapters that enforce a service window
+      // (WhatsApp reads timestamps.lastInboundAt off it).
+      const conversation = await this.getConversation(queueItem.conversationId);
 
-        console.log(`✅ SenderWorkerService: Message sent successfully: ${response.message_id}`);
-        
+      // Send the message
+      try {
+        console.log(`📤 SenderWorkerService: Sending ${channel} message to ${adapter.describeRecipient(contact)}`);
+
+        const result = await adapter.sendText({
+          account,
+          contact,
+          conversation,
+          text: queueItem.content.text
+        });
+
+        console.log(`✅ SenderWorkerService: Message sent successfully: ${result.externalId ?? 'no external id'}`);
+
         // Update message status
-        await this.updateMessageStatus(queueItem.messageId, 'sent', response.message_id);
-        
+        await this.updateMessageStatus(queueItem.messageId, 'sent', result.externalId, adapter);
+
         // Update queue item status
         await this.updateQueueItemStatus(queueItem.id, 'sent');
 
         // Keep follow-up analytics/unblocking state in sync for synthetic follow-up messages
         await this.updateFollowUpRecord(queueItem, 'sent');
-        
+
         // Update conversation metadata
         await this.updateConversationMetadata(queueItem.conversationId);
 
         return true; // Successfully processed
 
       } catch (error) {
-        console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, error instanceof Error ? error.message : String(error));
-        notifyError({ service: 'SenderWorker', message: 'Failed to send Instagram message', error, context: { queueItemId: queueItem.id } });
-        
-        // Check for permanent failures (don't retry these)
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        if (errorMessage.includes('The requested user cannot be found')) {
-          console.log(`🚫 SenderWorkerService: User not found for PSID ${contact.psid}, marking as failed permanently`);
-          await this.updateQueueItemStatus(queueItem.id, 'failed');
-          await this.updateMessageStatus(queueItem.messageId, 'failed');
-          await this.updateFollowUpRecord(queueItem, 'failed');
+        console.error(`❌ SenderWorkerService: Error sending message for queue item ${queueItem.id}:`, errorMessage);
+        notifyError({
+          service: 'SenderWorker',
+          message: `Failed to send ${channel} message`,
+          error,
+          context: { queueItemId: queueItem.id, channel }
+        });
+
+        // Permanent failures are decided by the adapter, which knows its own
+        // API's error semantics. Retrying them can never succeed.
+        if (error instanceof ChannelSendError && error.permanent) {
+          console.log(`🚫 SenderWorkerService: Permanent ${channel} failure (${error.code}) for ${adapter.describeRecipient(contact)} — not retrying`);
+          await this.recordPermanentFailure(queueItem, error);
           return false;
         }
-        if (errorMessage.includes('outside of allowed window') || errorMessage.includes('error_subcode":2534022')) {
-          console.log(`🚫 SenderWorkerService: Instagram 24h window expired for PSID ${contact.psid}, marking as failed permanently`);
-          await this.updateQueueItemStatus(queueItem.id, 'failed');
-          await this.updateMessageStatus(queueItem.messageId, 'failed');
-          await this.updateFollowUpRecord(queueItem, 'failed');
-          return false;
-        }
-        
+
         await this.handleError(queueItem, errorMessage);
         return false;
       }
@@ -191,16 +199,42 @@ class SenderWorkerService {
   }
 
   /**
+   * Mark a queue item dead without consuming retries, keeping the reason.
+   *
+   * The old terminal path recorded no error at all, so the most relevant
+   * failure — the last one — was exactly the one that vanished. Anything that
+   * ends a message's life now writes down why.
+   */
+  private async recordPermanentFailure(queueItem: IOutboundQueue, error: ChannelSendError): Promise<void> {
+    try {
+      const historyEntry = {
+        attempt: (queueItem.metadata?.attempts ?? 0) + 1,
+        timestamp: new Date(),
+        errorCode: error.code,
+        errorMessage: error.message
+      };
+
+      await OutboundQueue.findByIdAndUpdate(queueItem.id, {
+        'metadata.lastAttempt': new Date(),
+        'metadata.errorHistory': [...(queueItem.metadata?.errorHistory || []), historyEntry]
+      });
+    } catch (updateError) {
+      console.error('❌ SenderWorkerService: Error recording permanent failure:', updateError);
+    }
+
+    await this.updateQueueItemStatus(queueItem.id, 'failed');
+    await this.updateMessageStatus(queueItem.messageId, 'failed');
+    await this.updateFollowUpRecord(queueItem, 'failed');
+  }
+
+  /**
    * Check rate limits before sending
    */
-  private async checkRateLimits(queueItem: IOutboundQueue): Promise<{ canSend: boolean; reason?: string }> {
+  private async checkRateLimits(
+    queueItem: IOutboundQueue,
+    account: ChannelAccount
+  ): Promise<{ canSend: boolean; reason?: string }> {
     try {
-      // Get account rate limits
-      const account = await InstagramAccount.findOne({ accountId: queueItem.accountId });
-      if (!account) {
-        return { canSend: false, reason: 'Account not found' };
-      }
-
       // Check global rate limit (simplified implementation)
       const now = new Date();
       const oneSecondAgo = new Date(now.getTime() - 1000);
@@ -259,10 +293,27 @@ class SenderWorkerService {
         return null;
       }
 
-      console.log(`✅ SenderWorkerService: Contact found: ${contact.psid}`);
+      console.log(`✅ SenderWorkerService: Contact found: ${contact.id}`);
       return contact;
     } catch (error) {
       console.error(`❌ SenderWorkerService: Error getting contact:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Load the conversation for adapters that need its state.
+   *
+   * Returns null rather than throwing: synthetic follow-up queue items can
+   * reference a conversation that no longer exists, and for Instagram the
+   * conversation is not consulted at all.
+   */
+  private async getConversation(conversationId: string): Promise<any | null> {
+    try {
+      if (!conversationId) return null;
+      return await Conversation.findById(conversationId);
+    } catch (error) {
+      console.error(`❌ SenderWorkerService: Error getting conversation ${conversationId}:`, error);
       return null;
     }
   }
@@ -354,7 +405,12 @@ class SenderWorkerService {
   /**
    * Update message status
    */
-  private async updateMessageStatus(messageId: string, status: string, externalId?: string): Promise<void> {
+  private async updateMessageStatus(
+    messageId: string,
+    status: string,
+    externalId?: string,
+    adapter?: { buildSentUpdate(externalId?: string): Record<string, any> }
+  ): Promise<void> {
     console.log(`📝 SenderWorkerService: Updating message status: ${messageId} -> ${status}`);
 
     try {
@@ -364,13 +420,9 @@ class SenderWorkerService {
         return;
       }
 
-      const updateData: any = { status };
-      if (externalId) {
-        updateData['metadata.instagramResponse.messageId'] = externalId;
-        updateData['metadata.instagramResponse.status'] = 'sent';
-        updateData['metadata.instagramResponse.timestamp'] = new Date();
-        updateData['metadata.deliveryConfirmed'] = true;
-      }
+      // The adapter decides where the external id lands, so an Instagram
+      // message_id never overwrites a wamid or vice versa.
+      const updateData: any = { status, ...(adapter?.buildSentUpdate(externalId) ?? {}) };
 
       await Message.findByIdAndUpdate(messageId, updateData);
       console.log(`✅ SenderWorkerService: Message status updated: ${messageId}`);

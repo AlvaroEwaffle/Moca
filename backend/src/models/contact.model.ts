@@ -29,6 +29,14 @@ export interface IContact extends Document {
   psid?: string; // Instagram PSID (unique identifier for Instagram contacts)
   email?: string; // Contact email (unique identifier for Gmail contacts)
   phone?: string; // Contact phone number (extracted from messages)
+  /**
+   * WhatsApp id as Meta reports it (`contacts[].wa_id` / `messages[].from`) —
+   * digits only, no '+'. This is the send target for the Cloud API, and it is
+   * NOT the same thing as `phone`: `phone` is a free-text number harvested from
+   * message bodies by the contact extractor, while waId is Meta-authoritative.
+   * Keeping them apart is what stops an extracted typo from redirecting a send.
+   */
+  waId?: string;
   channel?: 'instagram' | 'gmail' | 'whatsapp'; // Channel source
   name?: string; // Display name
   lastActivity: Date; // Last interaction timestamp
@@ -51,6 +59,7 @@ const ContactSchema = new Schema<IContact>({
   psid: { type: String, required: false, sparse: true },
   email: { type: String, required: false, sparse: true },
   phone: { type: String, required: false },
+  waId: { type: String, required: false, sparse: true },
   channel: { 
     type: String, 
     enum: ['instagram', 'gmail', 'whatsapp'], 
@@ -67,10 +76,30 @@ const ContactSchema = new Schema<IContact>({
   toObject: { virtuals: true }
 });
 
-// Compound unique indexes: psid is unique per channel (only for Instagram), email is unique per channel (only for Gmail)
-// This prevents duplicate key errors when psid is null for Gmail contacts
-ContactSchema.index({ psid: 1, channel: 1 }, { unique: true, sparse: true, partialFilterExpression: { psid: { $exists: true, $ne: null } } });
-ContactSchema.index({ email: 1, channel: 1 }, { unique: true, sparse: true, partialFilterExpression: { email: { $exists: true, $ne: null } } });
+// Compound unique indexes: one contact per external id per channel. The partial
+// filter keeps contacts that lack the id out of the constraint entirely, so a
+// Gmail contact with no psid never collides with another one.
+//
+// Two spec rules are easy to get wrong and both fail *silently* in production —
+// Mongoose logs the rejection and the app keeps running, so a "unique" index can
+// simply not exist for months:
+//
+//   1. `sparse` and `partialFilterExpression` cannot both be set. MongoDB
+//      rejects the spec outright. partialFilterExpression alone already skips
+//      the documents sparse would have skipped.
+//   2. partialFilterExpression supports only a small operator subset —
+//      $exists / $eq / $gt / $gte / $lt / $lte / $type / $and. `$ne` is NOT
+//      allowed. `$type: 'string'` is the right way to say "present and not
+//      null", and it is stricter than $exists, which would still match an
+//      explicit null.
+//
+// Ordering matters too: Mongoose builds indexes in series and stops at the
+// first rejection, so one bad spec takes out every index declared after it.
+// waId goes first because it is the new one — if legacy duplicate psids ever
+// block that index from building, WhatsApp uniqueness still gets enforced.
+ContactSchema.index({ waId: 1, channel: 1 }, { unique: true, partialFilterExpression: { waId: { $type: 'string' } } });
+ContactSchema.index({ psid: 1, channel: 1 }, { unique: true, partialFilterExpression: { psid: { $type: 'string' } } });
+ContactSchema.index({ email: 1, channel: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } } });
 ContactSchema.index({ channel: 1 });
 ContactSchema.index({ 'metadata.lastSeen': -1 });
 ContactSchema.index({ 'businessInfo.sector': 1 });

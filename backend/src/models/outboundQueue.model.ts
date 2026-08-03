@@ -27,7 +27,8 @@ export interface IOutboundQueue extends Document {
   messageId: string; // Reference to Message
   conversationId: string; // Reference to Conversation
   contactId: string; // Reference to Contact (for quick access)
-  accountId: string; // Reference to InstagramAccount
+  accountId: string; // InstagramAccount.accountId or WhatsappAccount.phoneNumberId
+  channel: 'instagram' | 'whatsapp'; // Selects the ChannelAdapter used to send
   priority: 'low' | 'normal' | 'high' | 'urgent';
   status: 'pending' | 'processing' | 'sent' | 'failed' | 'cancelled';
   metadata: {
@@ -56,6 +57,7 @@ const OutboundQueueSchema = new Schema<IOutboundQueue>({
   conversationId: { type: String, required: true },
   contactId: { type: String, required: true },
   accountId: { type: String, required: true },
+  channel: { type: String, enum: ['instagram', 'whatsapp'], default: 'instagram' },
   priority: { type: String, enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
   status: { type: String, enum: ['pending', 'processing', 'sent', 'failed', 'cancelled'], default: 'pending' },
   metadata: { type: QueueItemMetadataSchema, default: () => ({}) },
@@ -73,6 +75,7 @@ const OutboundQueueSchema = new Schema<IOutboundQueue>({
 OutboundQueueSchema.index({ conversationId: 1 });
 OutboundQueueSchema.index({ contactId: 1 });
 OutboundQueueSchema.index({ accountId: 1 });
+OutboundQueueSchema.index({ channel: 1 });
 OutboundQueueSchema.index({ priority: 1 });
 OutboundQueueSchema.index({ status: 1 });
 OutboundQueueSchema.index({ 'metadata.scheduledFor': 1 });

@@ -64,18 +64,30 @@ export const getContactDisplay = (source: any) => {
   const username = cleanString(source?.username || contact.username || instagramData.username).replace(/^@/, '');
   const name = cleanString(source?.displayName || contact.displayName || contact.name);
   const psid = cleanString(source?.psid || contact.psid);
-  const fallback = psid ? `Instagram ${psid.slice(-6)}` : "Contacto sin nombre";
+  const waId = cleanString(source?.waId || contact.waId);
+  const channel = (source?.channel || contact.channel) === 'whatsapp' ? 'whatsapp' : 'instagram';
+
+  // WhatsApp contacts have no username or PSID — falling through to the
+  // Instagram label would print "Instagram <phone digits>" on a WhatsApp thread.
+  const fallback = channel === 'whatsapp'
+    ? (waId ? `+…${waId.slice(-4)}` : "Contacto de WhatsApp")
+    : (psid ? `Instagram ${psid.slice(-6)}` : "Contacto sin nombre");
 
   return {
     name: name || (username ? `@${username}` : fallback),
     username,
     psid,
+    waId,
+    channel,
     profilePicture: contact.profilePicture
   };
 };
 
 export const normalizeConversationSummary = (conv: any) => {
-  const contact = getContactDisplay(conv);
+  const channel = conv?.channel === 'whatsapp' ? 'whatsapp' : 'instagram';
+  // Pass the conversation's channel down so the contact fallback label matches
+  // the thread even when the populated contact document omits its own channel.
+  const contact = getContactDisplay({ ...conv, channel: conv?.channel ?? conv?.contactId?.channel });
   const lastMessage = conv?.lastMessage || null;
   const fallbackTimestamp = conv?.lastActivity || conv?.timestamps?.lastActivity || conv?.updatedAt || conv?.createdAt;
   const timestamps = {
@@ -89,6 +101,8 @@ export const normalizeConversationSummary = (conv: any) => {
     id: conv?._id || conv?.id,
     contactId: conv?.contactId,
     accountId: conv?.accountId,
+    channel,
+    serviceWindow: conv?.serviceWindow ?? null,
     status: conv?.status || 'open',
     lastMessage: lastMessage ? {
       ...lastMessage,

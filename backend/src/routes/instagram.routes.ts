@@ -424,12 +424,17 @@ router.post('/conversations/:id/messages', authenticateToken, async (req, res) =
       });
     }
 
-    // Create bot message
+    // Create bot message.
+    // The channel is carried from the conversation rather than assumed: the
+    // account filter above already scopes this route to Instagram, but a queue
+    // item that states its own channel cannot be mis-delivered if that filter
+    // ever changes.
     const message = new Message({
       mid: `manual_${Date.now()}_${conversationId}`,
       conversationId,
       contactId: conversation.contactId,
       accountId: conversation.accountId,
+      channel: conversation.channel,
       role: 'assistant',
       content: {
         text: content.text,
@@ -458,6 +463,7 @@ router.post('/conversations/:id/messages', authenticateToken, async (req, res) =
       conversationId,
       contactId: conversation.contactId,
       accountId: conversation.accountId,
+      channel: conversation.channel,
       priority,
       status: 'pending',
       content: message.content,
@@ -784,6 +790,7 @@ router.post('/conversations/bulk-message', authenticateToken, async (req, res) =
               conversationId,
               contactId: contact._id || contact.id,
               accountId: conversation.accountId,
+              channel: conversation.channel,
               role: 'assistant',
               content: {
                 text: messageText.trim(),
@@ -814,6 +821,7 @@ router.post('/conversations/bulk-message', authenticateToken, async (req, res) =
               conversationId,
               contactId: contact._id || contact.id,
               accountId: conversation.accountId,
+              channel: conversation.channel,
               priority,
               status: 'pending',
               content: {

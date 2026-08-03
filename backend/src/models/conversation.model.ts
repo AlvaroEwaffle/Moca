@@ -5,7 +5,8 @@ const ConversationTimestampsSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
   lastUserMessage: { type: Date, default: Date.now },
   lastBotMessage: { type: Date, default: Date.now },
-  lastActivity: { type: Date, default: Date.now }
+  lastActivity: { type: Date, default: Date.now },
+  lastInboundAt: { type: Date, required: false }
 });
 
 // Conversation context sub-schema
@@ -105,13 +106,26 @@ const ConversationMilestoneSchema = new Schema({
 export interface IConversation extends Document {
   id: string;
   contactId: string | any; // Reference to Contact (ObjectId or populated object)
-  accountId: string; // Reference to InstagramAccount
+  /**
+   * Channel account key. For Instagram this is InstagramAccount.accountId; for
+   * WhatsApp it is WhatsappAccount.phoneNumberId. Same field, resolved by
+   * `channel` — that is what keeps every existing accountId query working.
+   */
+  accountId: string;
+  channel: 'instagram' | 'whatsapp';
   status: 'open' | 'scheduled' | 'closed' | 'archived';
   timestamps: {
     createdAt: Date;
     lastUserMessage: Date;
     lastBotMessage: Date;
     lastActivity: Date;
+    /**
+     * Last inbound message from the contact. Instagram already derives its
+     * window from lastUserMessage; WhatsApp needs an explicit marker because the
+     * 24h customer service window is enforced by Meta and a send outside it is
+     * a hard, non-retryable rejection.
+     */
+    lastInboundAt?: Date;
   };
   context: {
     topic?: string;
@@ -187,6 +201,7 @@ export interface IConversation extends Document {
 const ConversationSchema = new Schema<IConversation>({
   contactId: { type: Schema.Types.ObjectId, ref: 'Contact', required: true },
   accountId: { type: String, required: true },
+  channel: { type: String, enum: ['instagram', 'whatsapp'], default: 'instagram' },
   status: { type: String, enum: ['open', 'scheduled', 'closed', 'archived'], default: 'open' },
   timestamps: { type: ConversationTimestampsSchema, default: () => ({}) },
   context: { type: ConversationContextSchema, default: () => ({}) },
@@ -208,6 +223,8 @@ const ConversationSchema = new Schema<IConversation>({
 // Indexes for performance
 ConversationSchema.index({ contactId: 1 });
 ConversationSchema.index({ accountId: 1 });
+ConversationSchema.index({ channel: 1 });
+ConversationSchema.index({ channel: 1, accountId: 1 });
 ConversationSchema.index({ status: 1 });
 ConversationSchema.index({ 'timestamps.lastActivity': -1 });
 ConversationSchema.index({ 'timestamps.createdAt': -1 });

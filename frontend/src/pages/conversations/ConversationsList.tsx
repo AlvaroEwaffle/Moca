@@ -16,12 +16,16 @@ import { useToast } from "@/hooks/use-toast";
 import { Search, MessageCircle, Clock, User, Filter, RefreshCw, Eye, Target, Calendar, Link as LinkIcon, Presentation, CheckCircle, XCircle, Info, LayoutGrid, Key, Send, Loader2, AlertTriangle, Bot, TrendingUp } from "lucide-react";
 import { Helmet } from "react-helmet";
 import LeadScoreIndicator from "@/components/LeadScoreIndicator";
+import ChannelBadge from "@/components/ChannelBadge";
 import { formatSafeTimeAgo, normalizeConversationSummary } from "@/utils/conversationDisplay";
+import { CHANNEL_API_BASE, resolveChannel, type Channel, type ServiceWindow } from "@/utils/channel";
 
 interface Conversation {
   id: string;
   contactId: string;
   accountId: string;
+  channel?: Channel;
+  serviceWindow?: ServiceWindow | null;
   status: 'open' | 'closed' | 'archived';
   lastMessage: {
     text: string;
@@ -114,10 +118,14 @@ const ConversationsList = () => {
 
   const handleAgentToggle = async (conversationId: string, enabled: boolean) => {
     console.log(`🔧 [Frontend] Toggle agent for conversation ${conversationId}: ${enabled}`);
-    
+
     try {
       const backendUrl = BACKEND_URL;
-      const response = await fetch(`${backendUrl}/api/instagram/conversations/${conversationId}/agent`, {
+      // Each channel owns its own route tree — sending a WhatsApp conversation
+      // to the Instagram endpoint would 404 on the account-scope check.
+      const conversation = conversations.find(conv => conv.id === conversationId);
+      const apiBase = CHANNEL_API_BASE[resolveChannel(conversation?.channel)];
+      const response = await fetch(`${backendUrl}${apiBase}/conversations/${conversationId}/agent`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -187,22 +195,38 @@ const ConversationsList = () => {
   const fetchConversations = async () => {
     try {
       const backendUrl = BACKEND_URL;
-      const response = await fetch(`${backendUrl}/api/instagram/conversations`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
+      const authHeaders = {
+        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+      };
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📥 Conversations data:', data);
-        
-        const transformedConversations = (data.data?.conversations || []).map(normalizeConversationSummary);
-        
-        setConversations(transformedConversations);
-      } else {
-        console.error('❌ Failed to fetch conversations:', response.status, response.statusText);
+      // One inbox, two channels. allSettled rather than all: a user with no
+      // WhatsApp number configured must still see their Instagram threads
+      // instead of an empty list.
+      const [instagramResult, whatsappResult] = await Promise.allSettled([
+        fetch(`${backendUrl}/api/instagram/conversations`, { headers: authHeaders }),
+        fetch(`${backendUrl}/api/whatsapp/conversations`, { headers: authHeaders })
+      ]);
+
+      const collected: any[] = [];
+
+      for (const [label, result] of [['instagram', instagramResult], ['whatsapp', whatsappResult]] as const) {
+        if (result.status !== 'fulfilled') {
+          console.error(`❌ Failed to reach ${label} conversations:`, result.reason);
+          continue;
+        }
+        if (!result.value.ok) {
+          console.error(`❌ Failed to fetch ${label} conversations:`, result.value.status, result.value.statusText);
+          continue;
+        }
+        const data = await result.value.json();
+        collected.push(...(data.data?.conversations || []));
       }
+
+      const transformedConversations = collected
+        .map(normalizeConversationSummary)
+        .sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0));
+
+      setConversations(transformedConversations);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     } finally {
@@ -658,6 +682,13 @@ const ConversationsList = () => {
                             <span className="text-gray-700 text-sm font-medium">
                               {conversation.contact?.username ? `@${conversation.contact.username}` : conversation.contact?.name || 'Contacto sin nombre'}
                             </span>
+                            <ChannelBadge channel={conversation.channel} />
+                            {conversation.channel === 'whatsapp' && conversation.serviceWindow?.open === false && (
+                              <Badge variant="outline" className="text-xs flex items-center gap-1 bg-amber-50 text-amber-700 border-amber-200">
+                                <Clock className="w-3 h-3" />
+                                Ventana 24h cerrada
+                              </Badge>
+                            )}
                             {getStatusBadge(conversation.status)}
                             {conversation.milestone && getMilestoneBadge(conversation.milestone)}
                             {conversation.settings?.activatedByKeyword && conversation.settings?.activationKeyword && (
