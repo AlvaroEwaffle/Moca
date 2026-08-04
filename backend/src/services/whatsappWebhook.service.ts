@@ -40,16 +40,19 @@ export class WhatsappWebhookService {
 
   constructor() {
     this.verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
-    // Meta signs with the APP secret, which is app-wide, not per-product. This
-    // deployment runs both Instagram and WhatsApp off the same app
-    // (Moca Bot Manager), so INSTAGRAM_APP_SECRET already holds the right
-    // value — falling back to it means WhatsApp needs no second copy of the
-    // same secret. The explicit names still win if the products are ever split
-    // across two apps.
+    // Meta signs with the APP secret, which is app-wide, not per-product.
+    //
+    // The fallback is FACEBOOK_APP_SECRET and deliberately NOT
+    // INSTAGRAM_APP_SECRET. Verified against Graph: FACEBOOK_APP_SECRET is the
+    // secret of the app that owns the WhatsApp product (Moca Bot Manager,
+    // 1281735870117085); INSTAGRAM_APP_SECRET belongs to a different app and is
+    // rejected with "Invalid OAuth access token signature". Falling back to the
+    // wrong one would fail every signature check silently — inbound messages
+    // would just never be processed.
     this.appSecret =
       process.env.WHATSAPP_APP_SECRET ||
       process.env.META_APP_SECRET ||
-      process.env.INSTAGRAM_APP_SECRET ||
+      process.env.FACEBOOK_APP_SECRET ||
       '';
   }
 

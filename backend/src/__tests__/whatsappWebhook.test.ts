@@ -101,10 +101,10 @@ describe('WhatsappWebhookService.validateSignature', () => {
   it('rejects when no app secret is configured', async () => {
     const original = process.env.WHATSAPP_APP_SECRET;
     const originalMeta = process.env.META_APP_SECRET;
-    const originalIg = process.env.INSTAGRAM_APP_SECRET;
+    const originalFb = process.env.FACEBOOK_APP_SECRET;
     process.env.WHATSAPP_APP_SECRET = '';
     process.env.META_APP_SECRET = '';
-    process.env.INSTAGRAM_APP_SECRET = '';
+    process.env.FACEBOOK_APP_SECRET = '';
 
     const noSecret = new WhatsappWebhookService();
     const payload = JSON.stringify({ object: 'whatsapp_business_account' });
@@ -112,16 +112,16 @@ describe('WhatsappWebhookService.validateSignature', () => {
 
     process.env.WHATSAPP_APP_SECRET = original;
     process.env.META_APP_SECRET = originalMeta;
-    process.env.INSTAGRAM_APP_SECRET = originalIg;
+    process.env.FACEBOOK_APP_SECRET = originalFb;
   });
 
-  it('falls back to INSTAGRAM_APP_SECRET — both products run off one Meta app', async () => {
+  it('falls back to FACEBOOK_APP_SECRET — the app that owns the WhatsApp product', async () => {
     const original = process.env.WHATSAPP_APP_SECRET;
     const originalMeta = process.env.META_APP_SECRET;
-    const originalIg = process.env.INSTAGRAM_APP_SECRET;
+    const originalFb = process.env.FACEBOOK_APP_SECRET;
     process.env.WHATSAPP_APP_SECRET = '';
     process.env.META_APP_SECRET = '';
-    process.env.INSTAGRAM_APP_SECRET = APP_SECRET;
+    process.env.FACEBOOK_APP_SECRET = APP_SECRET;
 
     const fallback = new WhatsappWebhookService();
     const payload = JSON.stringify({ object: 'whatsapp_business_account', entry: [] });
@@ -129,7 +129,7 @@ describe('WhatsappWebhookService.validateSignature', () => {
 
     process.env.WHATSAPP_APP_SECRET = original;
     process.env.META_APP_SECRET = originalMeta;
-    process.env.INSTAGRAM_APP_SECRET = originalIg;
+    process.env.FACEBOOK_APP_SECRET = originalFb;
   });
 });
 
