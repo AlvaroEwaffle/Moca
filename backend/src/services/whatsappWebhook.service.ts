@@ -40,10 +40,17 @@ export class WhatsappWebhookService {
 
   constructor() {
     this.verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
-    // Meta signs with the APP secret, which is app-wide — the same app can own
-    // both the Instagram and WhatsApp products, so fall back to a shared
-    // META_APP_SECRET before giving up.
-    this.appSecret = process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || '';
+    // Meta signs with the APP secret, which is app-wide, not per-product. This
+    // deployment runs both Instagram and WhatsApp off the same app
+    // (Moca Bot Manager), so INSTAGRAM_APP_SECRET already holds the right
+    // value — falling back to it means WhatsApp needs no second copy of the
+    // same secret. The explicit names still win if the products are ever split
+    // across two apps.
+    this.appSecret =
+      process.env.WHATSAPP_APP_SECRET ||
+      process.env.META_APP_SECRET ||
+      process.env.INSTAGRAM_APP_SECRET ||
+      '';
   }
 
   /**
