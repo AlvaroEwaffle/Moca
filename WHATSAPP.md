@@ -105,6 +105,24 @@ Instagram conserva textual sus dos casos permanentes (`The requested user cannot
 
 ## 6. Configuración
 
+### 6.0 Estado real (verificado 2026-08-04)
+
+| Activo | Valor | Estado |
+|---|---|---|
+| App Meta | `Moca Bot Manager` — `1281735870117085` | ✅ modo Desarrollo, producto WhatsApp activo |
+| Negocio de la app | `Ewaffle` — `2226698160801992` | ✅ **verificado** (PRESTACION DE SERVICIOS EWAFFLE LIMITADA, 7-ago-2025) |
+| WABA en uso | `467378403121814` ("Fidelidapp Whatsapp") | ⚠️ pertenece a `Negocio de Alvaro Villena` (`154699255486233`), **no verificado** |
+| Número de prueba | `+1 555-729-2995` — Phone Number ID `582404224952439` | ✅ CONNECTED, CLOUD_API, TIER_250 |
+| Webhook | `https://moca-production.up.railway.app/api/whatsapp/webhook`, campo `messages` | ✅ suscrito, handshake verificado |
+| App suscrita al WABA | Moca Bot Manager | ✅ |
+| Cuenta en Moca | `whatsappaccounts` / `6a72048a5d29eb788623c304` | ✅ `aiEnabled: "test"` |
+
+**Smoke test contra producción (2026-08-04):** webhook firmado → contacto + conversación + mensaje creados, `lastInboundAt` estampado, y 4 entregas del mismo webhook (3 válidas + 1 con firma falsa) produjeron **1 sola** conversación y **1 solo** mensaje. Datos de prueba eliminados después.
+
+**Secreto de firma:** el fallback es `FACEBOOK_APP_SECRET`, verificado contra Graph como el secreto de la app dueña del producto WhatsApp. `INSTAGRAM_APP_SECRET` es de **otra** app y Graph lo rechaza — usarlo haría fallar toda validación de firma en silencio.
+
+**Pendiente para producción:** el WABA vive en un negocio distinto al del System User (`AlvaroSystem`, `122153329202993072`, admin de Ewaffle), y Meta no deja asignar el activo entre negocios. Hasta resolverlo, la cuenta corre con un token de usuario temporal (24h). Ver §11.
+
 ### 6.1 Lo que hay que tener en Meta
 
 Este es el **camino crítico** — es trámite administrativo y puede tardar días. No depende del código.
@@ -214,12 +232,28 @@ cd backend && npx vitest run
 
 ## 11. Antes de producción
 
-- [ ] Activos de Meta listos (§6.1) — camino crítico
-- [ ] Env vars en Railway
-- [ ] Número dado de alta con `aiEnabled: "test"`
-- [ ] `test-connection` OK
-- [ ] Webhook verificado y suscrito a `messages`
-- [ ] Smoke E2E: mensaje real → conversación única → respuesta → `delivered`/`read`
-- [ ] Verificar que Instagram sigue enviando (misma cola, mismo worker)
-- [ ] PRS-1
-- [ ] Recién ahí: `aiEnabled: "on"`
+Hecho:
+
+- [x] Activos de Meta (§6.0) — el negocio ya estaba verificado, no hubo trámite
+- [x] `WHATSAPP_VERIFY_TOKEN` en Railway (el app secret sale de `FACEBOOK_APP_SECRET`)
+- [x] Número dado de alta en Moca con `aiEnabled: "test"`
+- [x] Webhook verificado, suscrito a `messages`, WABA suscrito a la app
+- [x] Smoke E2E del camino de entrada contra producción, incluida deduplicación
+
+Pendiente:
+
+- [ ] **Token permanente.** El actual es de usuario y dura 24h. El System User
+      `AlvaroSystem` (admin de Ewaffle) no alcanza el WABA porque este pertenece
+      a `Negocio de Alvaro Villena`, y Meta rechaza asignar el activo entre
+      negocios. Dos salidas: (a) crear un System User dentro de
+      `Negocio de Alvaro Villena` y generar el token ahí, o (b) crear un WABA
+      nuevo bajo Ewaffle — que además es el negocio verificado, lo que hace
+      falta para escalar límites y aprobar display name.
+- [ ] Número real: agregarlo al WABA elegido. No puede estar registrado en la
+      app de WhatsApp; si estuvo en Espresso/Baileys hay que liberarlo antes.
+- [ ] Destinatarios de prueba para validar la salida (en Desarrollo, Meta solo
+      entrega a números registrados en la lista de la app).
+- [ ] Pasar la app a modo Live.
+- [ ] Verificar que Instagram sigue enviando (misma cola, mismo worker).
+- [ ] PRS-1.
+- [ ] Recién ahí: `aiEnabled: "on"`.
